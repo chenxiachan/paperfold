@@ -108,6 +108,6 @@ This writes one self-contained HTML file to `out/2201.11903/` that opens anywher
 
 <div align="center">
 
-[Apache 2.0](./LICENSE) © 2026 Xia Chen · [Development](docs/DEVELOPMENT.md) · [Feedback](https://github.com/chenxiachan/paperfold/issues)
+[Apache 2.0](./LICENSE) © 2026 Xia Chen · [Development](docs/DEVELOPMENT.md) · [Contributing](CONTRIBUTING.md) · [Feedback](https://github.com/chenxiachan/paperfold/issues)
 
 </div>

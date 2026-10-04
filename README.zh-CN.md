@@ -108,6 +108,6 @@ python3 -m adr export 2201.11903
 
 <div align="center">
 
-[Apache 2.0](./LICENSE) © 2026 Xia Chen · [开发文档](docs/DEVELOPMENT.md) · [反馈](https://github.com/chenxiachan/paperfold/issues)
+[Apache 2.0](./LICENSE) © 2026 Xia Chen · [开发文档](docs/DEVELOPMENT.md) · [参与贡献](CONTRIBUTING.md) · [反馈](https://github.com/chenxiachan/paperfold/issues)
 
 </div>
