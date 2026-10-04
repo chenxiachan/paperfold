@@ -1,0 +1,5 @@
+beautifulsoup4
+lxml
+Pillow
+# only for the Anthropic API (Claude Code, Codex, Pi and OpenAI-compatible providers need nothing more):
+# anthropic

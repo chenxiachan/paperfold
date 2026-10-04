@@ -1,0 +1,155 @@
+"""What has been generated for each paper, as versioned layers on disk.
+
+  papers/<id>/source.html, meta.json     the arXiv HTML, fetched once
+  papers/<id>/layers/en.json             the English ladder and the argument links
+  papers/<id>/layers/tr-<lang>.json      one translation, stamped with the English version it was built on
+  papers/.trash/<id>-<time>/             a paper the reader deleted (moved there whole, notes included; not listed)
+
+A model samples differently on every run, so the same paper does not come out the same twice.
+The layers are what makes a paper read the same every time it is opened: a reader is assembled
+from them without any model call, and "regenerate" replaces one layer with a new version.
+A translation whose English base has since been regenerated is reported as stale.
+"""
+import json
+import os
+import time
+from pathlib import Path
+
+from . import ladder
+from .parse import parse
+
+ROOT = Path(__file__).resolve().parent.parent   # the code: adr/, web/
+# the reader's papers and exports: the project folder when run from it, the app's data folder when packaged
+DATA = Path(os.environ.get("PAPERFOLD_DATA") or ROOT)
+HOME = Path.home() / ".paperfold"            # the reader's settings and keys, outside the project folder
+OLD_HOME = Path.home() / ".dynamic-reader"   # where they were kept before the name PaperFold (read, never removed)
+
+
+def pdir(pid):
+    return DATA / "papers" / pid
+
+
+def _file(pid, name):
+    return pdir(pid) / "layers" / f"{name}.json"
+
+
+def read(pid, name):
+    f = _file(pid, name)
+    return json.loads(f.read_text()) if f.exists() else None
+
+
+def write(pid, name, data):
+    f = _file(pid, name)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False))
+    tmp.replace(f)
+
+
+def stamp():
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def save_en(doc, model):
+    write(doc["meta"]["id"], "en", {
+        "version": stamp(), "model": model,
+        "units": {uid: u["lad"] for uid, u in doc["units"].items() if "lad" in u},
+        "chunks": {c["id"]: c.get("lad") for c in doc["chunks"]},
+        "edges": [e for e in doc["edges"] if e["rel"] != "ref"],
+    })
+
+
+def save_tr(doc, lang, base, model):
+    write(doc["meta"]["id"], f"tr-{lang}", {
+        "version": stamp(), "base": base, "model": model,
+        "units": {uid: u["tr"][lang] for uid, u in doc["units"].items() if lang in u.get("tr", {})},
+        "chunks": {c["id"]: c["tr"][lang] for c in doc["chunks"] if lang in c.get("tr", {})},
+        "title": doc["meta"].get("titles", {}).get(lang),
+    })
+
+
+def apply_en(doc, en):
+    for uid, u in doc["units"].items():
+        u["lad"] = en["units"].get(uid) or ladder.local(u, doc["atoms"])
+    for c in doc["chunks"]:
+        c["lad"] = en["chunks"].get(c["id"])
+    have = {(e["f"], e["t"]) for e in en["edges"]}
+    doc["edges"] = [e for e in doc["edges"] if (e["f"], e["t"]) not in have] + [
+        e for e in en["edges"] if e["f"] in doc["units"] and (e["tk"] != "unit" or e["t"] in doc["units"])]
+
+
+def apply_tr(doc, lang, tr):
+    for uid, z in tr["units"].items():
+        if uid in doc["units"]:
+            doc["units"][uid].setdefault("tr", {})[lang] = z
+    for c in doc["chunks"]:
+        if c["id"] in tr["chunks"]:
+            c.setdefault("tr", {})[lang] = tr["chunks"][c["id"]]
+    if tr.get("title"):
+        doc["meta"].setdefault("titles", {})[lang] = tr["title"]
+
+
+def languages(pid):
+    d = pdir(pid) / "layers"
+    return sorted(f.stem[3:] for f in d.glob("tr-*.json")) if d.exists() else []
+
+
+def parsed(pid):
+    d = pdir(pid)
+    return parse((d / "source.html").read_text(), json.loads((d / "meta.json").read_text()))
+
+
+def assemble(pid):
+    """The paper as the reader needs it, from the layers alone (no model call)."""
+    doc = parsed(pid)
+    en = read(pid, "en")
+    meta = doc["meta"]
+    meta["langs"], meta["stale"], meta["versions"] = [], [], {}
+    if en:
+        apply_en(doc, en)
+        meta["langs"].append("en")
+        meta["versions"]["en"] = en["version"]
+    else:
+        for u in doc["units"].values():
+            u["lad"] = ladder.local(u, doc["atoms"])
+    for lang in languages(pid):
+        tr = read(pid, f"tr-{lang}")
+        apply_tr(doc, lang, tr)
+        meta["langs"].append(lang)
+        meta["versions"][lang] = tr["version"]
+        if not en or tr.get("base") != en["version"]:
+            meta["stale"].append(lang)
+    return doc
+
+
+def papers():
+    """Every paper on disk, newest layer first."""
+    out = []
+    root = DATA / "papers"
+    for d in root.iterdir() if root.exists() else []:
+        mf = d / "meta.json"
+        if d.name.startswith(".") or not mf.exists():
+            continue
+        meta = json.loads(mf.read_text())
+        en = read(d.name, "en")
+        langs_ = (["en"] if en else []) + languages(d.name)
+        titles = {}
+        for lang in languages(d.name):
+            t = (read(d.name, f"tr-{lang}") or {}).get("title")
+            if t:
+                titles[lang] = t
+        mtimes = [f.stat().st_mtime for f in (d / "layers").glob("*.json")] if (d / "layers").exists() else []
+        nf = d / "notes.json"
+        out.append({"id": d.name, "title": meta["title"], "titles": titles, "authors": meta.get("authors", []),
+                    "langs": langs_, "updated": max(mtimes) if mtimes else mf.stat().st_mtime,
+                    "notes": len(json.loads(nf.read_text()).get("notes", [])) if nf.exists() else 0})
+    return sorted(out, key=lambda p: -p["updated"])
+
+
+def trash(pid):
+    """Delete a paper from the list: its folder (source, layers, model replies, notes) moves to papers/.trash, from
+    where it can be moved back by hand. Nothing is erased."""
+    to = DATA / "papers" / ".trash" / f"{pid}-{time.strftime('%Y%m%d-%H%M%S')}"
+    to.parent.mkdir(parents=True, exist_ok=True)
+    pdir(pid).rename(to)
+    return to

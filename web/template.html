@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" class="{{CLASS}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 44 44%27%3E%3Crect width=%2744%27 height=%2744%27 rx=%2710%27 fill=%27%23FAF9F7%27/%3E%3Crect x=%278%27 y=%2711%27 width=%2728%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27/%3E%3Crect x=%278%27 y=%2720%27 width=%2719%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27 opacity=%270.4%27/%3E%3Crect x=%278%27 y=%2729%27 width=%2710%27 height=%275%27 rx=%272.5%27 fill=%27%23E08A3C%27/%3E%3C/svg%3E">
+<title>{{TITLE}}</title>
+{{HEAD}}
+</head>
+<body>
+{{SIDEBAR}}
+<header class="topbar">
+  <div class="brand"><svg viewBox="0 0 20 20" aria-hidden="true"><rect class="m1" x="2" y="3" width="16" height="2.4" rx="1.2"/><rect class="m2" x="2" y="8.8" width="11" height="2.4" rx="1.2"/><rect class="m3" x="2" y="14.6" width="5" height="2.4" rx="1.2"/></svg><span>PaperFold</span><a id="arxiv-link" target="_blank" rel="noopener"></a></div>
+  <div class="legend" id="legend"></div>
+  <div class="tagline"></div>
+  <div class="langpick"><button type="button" id="langbtn" class="langbtn" aria-haspopup="menu" aria-expanded="false"></button><div id="langmenu" class="langmenu" role="menu" hidden></div></div>
+</header>
+<main id="doc" class="doc" data-level="4"></main>
+<div id="ghosts" aria-hidden="true"></div>
+<footer class="zoom">
+  <button type="button" id="back" class="backpill" hidden></button>
+  <nav class="zoombar" id="zoombar" aria-label="Zoom level"></nav>
+  <div class="hint" id="hint"></div>
+</footer>
+<script type="application/json" id="paper-data">{{DATA}}</script>
+{{SCRIPTS}}
+</body>
+</html>

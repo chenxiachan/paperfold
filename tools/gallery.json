@@ -1,0 +1,82 @@
+{
+  "langs": ["en", "zh", "de"],
+  "papers": [
+    {
+      "id": "2201.11903",
+      "field": {"en": "Artificial intelligence", "zh": "人工智能", "de": "Künstliche Intelligenz"},
+      "title": {"de": "Chain-of-Thought-Prompting ruft Schlussfolgern in großen Sprachmodellen hervor"},
+      "why": {
+        "en": "A few examples that spell out their reasoning make large language models far better at multi-step problems. Chain-of-thought prompting starts here.",
+        "zh": "给大模型几个写出推理步骤的示例，它解多步问题的能力就大幅提升。思维链提示从这里开始。",
+        "de": "Ein paar Beispiele mit ausgeschriebenen Denkschritten machen große Sprachmodelle bei mehrstufigen Aufgaben deutlich besser. Hier beginnt das Chain-of-Thought-Prompting."
+      }
+    },
+    {
+      "id": "2211.09055",
+      "field": {"en": "Mathematics", "zh": "数学", "de": "Mathematik"},
+      "title": {"de": "Eine konstante untere Schranke für die Vermutung über vereinigungsabgeschlossene Mengenfamilien"},
+      "why": {
+        "en": "Frankl's conjecture says that in any family of sets closed under union, some element lies in at least half the sets. This 9-page paper gave the first constant bound, 1%, with an argument from information theory, and set off a rush of improvements.",
+        "zh": "Frankl 猜想说：在任何对并集封闭的集合族里，总有一个元素属于至少一半的集合。这篇 9 页的论文用信息论的方法首次给出常数下界 1%，随后引发了一连串改进。",
+        "de": "Frankls Vermutung besagt, dass in jeder unter Vereinigung abgeschlossenen Mengenfamilie ein Element in mindestens der Hälfte der Mengen liegt. Diese neunseitige Arbeit lieferte mit einem informationstheoretischen Argument die erste konstante Schranke, 1 %, und löste eine Welle von Verbesserungen aus."
+      }
+    },
+    {
+      "id": "1801.00862",
+      "field": {"en": "Quantum computing", "zh": "量子计算", "de": "Quantencomputing"},
+      "why": {
+        "en": "The essay that named the NISQ era: what quantum computers with 50 to 100 noisy qubits may do, and what noise will keep them from doing.",
+        "zh": "为 NISQ 时代命名的文章：五十到一百个含噪量子比特的量子计算机能做什么，噪声又让它们做不到什么。",
+        "de": "Der Essay, der der NISQ-Ära ihren Namen gab: was Quantencomputer mit 50 bis 100 verrauschten Qubits leisten können und was das Rauschen ihnen verwehrt."
+      }
+    },
+    {
+      "id": "2212.12794",
+      "field": {"en": "Weather forecasting", "zh": "天气预报", "de": "Wettervorhersage"},
+      "title": {"zh": "GraphCast：学习高技巧的全球中期天气预报", "de": "GraphCast: Treffsichere globale Mittelfrist-Wettervorhersage lernen"},
+      "why": {
+        "en": "A graph neural network makes a 10-day global forecast in under a minute and beats the most accurate operational deterministic system on 90% of 1380 verification targets.",
+        "zh": "一个图神经网络在一分钟内做出全球 10 天天气预报，在 1380 项检验指标中的 90% 上胜过最准确的业务确定性预报系统。",
+        "de": "Ein Graph-Netz erstellt eine globale 10-Tage-Vorhersage in unter einer Minute und übertrifft das genaueste operative deterministische System bei 90 % von 1380 Prüfgrößen."
+      }
+    },
+    {
+      "id": "2212.13138",
+      "field": {"en": "Medicine", "zh": "医学", "de": "Medizin"},
+      "why": {
+        "en": "A language model scores above the pass mark on US medical licensing questions, and clinicians then grade where its answers still fall short of their own.",
+        "zh": "语言模型在美国医师执照考试题上超过及格线；随后由医生逐条评判，它的回答离医生还差在哪里。",
+        "de": "Ein Sprachmodell liegt bei Fragen der US-Ärzteprüfung über der Bestehensgrenze. Danach prüfen Ärztinnen und Ärzte, wo seine Antworten noch hinter ihren eigenen zurückbleiben."
+      }
+    },
+    {
+      "id": "2206.13517",
+      "field": {"en": "Biology", "zh": "生物学", "de": "Biologie"},
+      "why": {
+        "en": "Language models trained on over a billion protein sequences, up to 6.4 billion parameters, write new proteins and predict how well a variant works with no extra training.",
+        "zh": "在十亿多条蛋白质序列上训练、最大 64 亿参数的语言模型，能写出新的蛋白质，并且不经额外训练就能预测一个变体好不好用。",
+        "de": "Sprachmodelle mit bis zu 6,4 Milliarden Parametern, trainiert auf über einer Milliarde Proteinsequenzen, entwerfen neue Proteine und sagen ohne weiteres Training voraus, wie gut eine Variante funktioniert."
+      }
+    },
+    {
+      "id": "2303.10130",
+      "field": {"en": "Economics", "zh": "经济学", "de": "Ökonomie"},
+      "title": {"zh": "GPTs are GPTs：大语言模型对劳动力市场潜在影响的早期观察", "de": "GPTs are GPTs: Ein früher Blick auf die möglichen Arbeitsmarktfolgen großer Sprachmodelle"},
+      "why": {
+        "en": "How much of the US workforce large language models could reach: about 80% of workers have at least a tenth of their tasks exposed, and higher-paid jobs more so.",
+        "zh": "大语言模型可能波及多少美国人的工作：约 80% 的劳动者至少有十分之一的工作任务可能受到影响，收入越高的职业暴露越多。",
+        "de": "Wie weit große Sprachmodelle in die US-Arbeitswelt reichen könnten: Bei rund 80 % der Beschäftigten wäre mindestens ein Zehntel der Aufgaben betroffen, bei besser bezahlten Berufen mehr."
+      }
+    },
+    {
+      "id": "2308.04079",
+      "field": {"en": "Computer graphics", "zh": "计算机图形学", "de": "Computergrafik"},
+      "title": {"zh": "用于实时辐射场渲染的 3D 高斯泼溅"},
+      "why": {
+        "en": "Scenes rebuilt from photos as millions of 3D Gaussians render new views in real time at 1080p, at the quality of the best neural methods of the day.",
+        "zh": "把照片重建的场景表示成数百万个三维高斯，以 1080p 实时渲染新视角，画质与当时最好的神经渲染方法相当。",
+        "de": "Aus Fotos rekonstruierte Szenen als Millionen von 3D-Gaußfunktionen zeigen neue Ansichten in Echtzeit bei 1080p, in der Qualität der besten neuronalen Verfahren ihrer Zeit."
+      }
+    }
+  ]
+}

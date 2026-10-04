@@ -1,0 +1,188 @@
+"""The model call, behind one function, for every model in the catalog (models.py):
+
+  agent  claude-code  `claude -p --json-schema`               (structured output)
+         codex        `codex exec --output-schema`            (structured output)
+         pi           `pi -p --mode json`                     (JSON asked for in the prompt)
+  api    anthropic    the official SDK (`pip install anthropic`), structured output
+         openai       any OpenAI-compatible endpoint (llm_openai.py), JSON mode
+
+Replies are cached on disk by a hash of everything that shapes them, so a rebuild costs nothing until
+the prompt, the schema, the model or its effort changes. `force` skips the cache read: that is what
+"regenerate" means, a new sample from the model.
+"""
+import hashlib
+import json
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+
+from . import agents
+
+SYSTEM = ("You compress the sections of research papers into nested zoom levels for a reading interface. "
+          "You are precise about what each passage claims, keep the authors' terminology, and answer with JSON only.")
+# server-side refusal fallback ("default" routing) is accepted on these
+_FALLBACK_OK = {"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
+
+
+def spec_of(model):
+    """A model id (or a resolved spec) to a spec; a bare 'sonnet' is Claude Code's, as the command line has always meant."""
+    if isinstance(model, dict) and "kind" in model:
+        return model
+    from .models import resolve
+    return resolve(model)
+
+
+def label(model):
+    return spec_of(model)["id"]
+
+
+def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, system=SYSTEM):
+    """(system: the generation's role unless a caller has another, as the questions about a paper do)"""
+    spec = spec_of(model)
+    effort = spec.get("effort")
+    if spec.get("runtime") == "claude-code" and not effort:
+        parts = [system, prompt, schema, spec["model"]]  # the key the cache was first written with stays valid
+    else:
+        parts = [system, prompt, schema, spec["id"]] + ([effort] if effort else [])
+    key = hashlib.sha256(json.dumps(parts).encode()).hexdigest()[:24]
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    f = cache_dir / f"{key}.json"
+    if f.exists() and not force:
+        return json.loads(f.read_text()), True
+    note = None
+    try:
+        out, cost = _once(prompt, schema, spec, timeout, system)
+    except Exception as e:
+        # A reasoning level is a request, never a condition: whatever went wrong with it set (a flag or field an API no
+        # longer takes, a level a model does not have), the call is made once more the model's own way.
+        if not effort:
+            raise
+        note = f"reasoning level {effort} dropped: {str(e)[:200]}"
+        out, cost = _once(prompt, schema, {**spec, "effort": None}, timeout, system)
+    rec = {"out": out, "cost": cost, "models": [spec["id"]] + ([effort] if effort else [])}
+    if note:
+        rec["note"] = note
+    f.write_text(json.dumps(rec, ensure_ascii=False, indent=1))
+    return rec, False
+
+
+def _once(prompt, schema, spec, timeout, system):
+    effort = spec.get("effort")
+    if spec["kind"] == "agent":
+        if spec["runtime"] == "claude-code":
+            return _claude(prompt, schema, spec["model"], effort, timeout, system)
+        if spec["runtime"] == "codex":
+            return agents.run_codex(spec["model"], prompt, schema, system, effort, timeout)
+        return agents.run_pi(spec["model"], prompt, schema, system, effort, timeout)
+    if spec["protocol"] == "anthropic":
+        return _anthropic(prompt, schema, spec, timeout, system)
+    from .llm_openai import call as openai_call
+    return openai_call(prompt, schema, spec, system, timeout)
+
+
+def _claude(prompt, schema, model, effort, timeout, system=SYSTEM):
+    path = agents.path_of("claude-code")
+    if not path:
+        raise RuntimeError("Claude Code was not found on this computer")
+    cmd = [path, "-p", "--model", model, "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+           "--output-format", "json", "--json-schema", json.dumps(schema), "--system-prompt", system]
+    env = agents.child_env()
+    if effort == "off":   # Claude Code has no such level: no thinking is a thinking budget of nothing
+        env = {**env, "MAX_THINKING_TOKENS": "0"}
+    elif effort:
+        cmd += ["--effort", effort]
+    # The reader's own Claude Code settings and CLAUDE.md stay out (instructions for their work, ~900 tokens a call,
+    # and a default effort meant for coding); a scratch folder has no project ones. Where Claude Code needs the user
+    # settings to sign in, the call is made again with them.
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run(cmd + ["--setting-sources", "project,local"], input=prompt, capture_output=True, text=True,
+                           timeout=timeout, env=env, cwd=tmp)
+        if r.returncode:
+            r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout, env=env, cwd=tmp)
+    if r.returncode:
+        raise RuntimeError(f"claude -p exited {r.returncode}: {(r.stderr or r.stdout)[-1500:]}")
+    d = json.loads(r.stdout)
+    if d.get("is_error"):
+        raise RuntimeError(f"claude -p error: {str(d.get('result'))[:1500]}")
+    out = d.get("structured_output")
+    if out is None:
+        m = re.search(r"\{.*\}", d.get("result") or "", re.S)
+        out = json.loads(m.group(0)) if m else None
+    if out is None:
+        raise RuntimeError("no JSON in reply")
+    return out, d.get("total_cost_usd")
+
+
+def _closed(schema):
+    """Structured outputs want every object closed."""
+    if isinstance(schema, dict):
+        s = {k: _closed(v) for k, v in schema.items()}
+        if s.get("type") == "object":
+            s.setdefault("additionalProperties", False)
+        return s
+    if isinstance(schema, list):
+        return [_closed(x) for x in schema]
+    return schema
+
+
+def _anthropic_levels(model, level):
+    """(thinking, effort) for a reasoning level on the Claude API, by model (the API's models notes), most fitting
+    first; the next is tried when the API refuses one. None: as before this setting, medium effort."""
+    if model.startswith("claude-haiku"):   # no effort parameter; no thinking unless given a budget
+        if level in (None, "off"):
+            return [(None, None)]
+        return [({"type": "enabled", "budget_tokens": {"low": 2048, "medium": 6000, "high": 16000}[level]}, None), (None, None)]
+    if level is None:
+        return [(None, "medium")]
+    if level == "off":
+        if re.match(r"claude-(opus-5-5|fable|mythos)", model):   # thinking cannot be switched off: the least of it
+            first = [(None, "low")]
+        elif re.match(r"claude-sonnet-5", model):                # off is spelled between_tools there
+            first = [({"type": "between_tools"}, "low")]
+        else:
+            first = [({"type": "disabled"}, "low")]
+        return first + [(None, "low"), (None, None)]
+    return [({"type": "adaptive"}, level), (None, level), (None, None)]
+
+
+def _anthropic(prompt, schema, spec, timeout, system=SYSTEM):
+    try:
+        import anthropic
+    except ImportError:
+        raise RuntimeError("The Anthropic API needs the SDK: pip install anthropic")
+    model = spec["model"]
+    # no key stored: the SDK resolves ANTHROPIC_API_KEY or an `ant auth login` profile itself
+    client = anthropic.Anthropic(api_key=spec.get("api_key") or None, timeout=timeout)
+    extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in _FALLBACK_OK else {}
+    try:
+        for thinking, effort in _anthropic_levels(model, spec.get("effort")):
+            output_config = {"format": {"type": "json_schema", "schema": _closed(schema)}}
+            if effort:
+                output_config["effort"] = effort
+            try:
+                with client.beta.messages.stream(model=model, max_tokens=64000, system=system,
+                                                 messages=[{"role": "user", "content": prompt}], output_config=output_config,
+                                                 **({"thinking": thinking} if thinking else {}), **extra) as stream:
+                    msg = stream.get_final_message()
+                break
+            except anthropic.BadRequestError as e:   # this model does not take this level as spelled: the next way
+                last = e
+        else:
+            raise last
+    except anthropic.AuthenticationError:
+        raise RuntimeError("Anthropic API: the key was rejected")
+    except anthropic.NotFoundError:
+        raise RuntimeError(f"Anthropic API: model {model} not found")
+    except anthropic.RateLimitError:
+        raise RuntimeError("Anthropic API: rate limited, try again in a minute")
+    except anthropic.APIStatusError as e:
+        raise RuntimeError(f"Anthropic API error {e.status_code}: {e.message}")
+    except anthropic.APIConnectionError:
+        raise RuntimeError("Anthropic API: could not connect")
+    if msg.stop_reason == "refusal":
+        raise RuntimeError("Anthropic API: the request was declined")
+    if msg.stop_reason == "max_tokens":
+        raise RuntimeError("Anthropic API: the reply was cut off at max_tokens")
+    text = next(b.text for b in msg.content if b.type == "text")
+    return json.loads(text), None

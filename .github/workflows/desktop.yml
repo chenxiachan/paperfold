@@ -1,0 +1,48 @@
+# The macOS app, signed and notarized, as ThoughtDAG's desktop build does it (same certificate and Apple account:
+# add the same four secrets to this repository). Triggered by a version tag, or by hand. Without the secrets the
+# build is unsigned (electron-builder skips signing when CSC_LINK is empty) and Gatekeeper will warn on it.
+name: desktop
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    # macos-15, not macos-latest: the macos-26 image breaks electron-builder's temporary signing keychain
+    # (ThoughtDAG's finding, 2026-09-06)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci || npm install
+        working-directory: desktop
+      - run: npm run dist:mac
+        working-directory: desktop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paperfold-mac
+          path: |
+            desktop/out/*.dmg
+            desktop/out/*.zip
+          if-no-files-found: error
+      - name: Attach to the release of the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes "PaperFold $TAG"
+          gh release upload "$TAG" desktop/out/*.dmg desktop/out/*.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
