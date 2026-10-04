@@ -1,10 +1,14 @@
 """Reader pages. The same reader in two modes:
   app     served by the local server, with the sidebar, the language menu that can generate, settings
   static  one self-contained file (python -m adr export): CSS, JS, data and images all inside
+
+A page asks no other server for anything. Its fonts (Inter, Source Serif 4) and KaTeX are kept in web/vendor: the app
+serves them, a gallery keeps them beside its pages (assets), and a single file carries them inside.
 """
 import base64
 import io
 import json
+import re
 import urllib.parse
 from html import escape
 
@@ -14,9 +18,34 @@ from . import store
 from .fetch import fetch_images
 
 WEB = store.ROOT / "web"
-FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
-         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&'
-         'family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&display=swap">')
+VENDOR = WEB / "vendor"
+APP_ASSETS = "/static/vendor/"
+
+
+def _data(f, kind):
+    return f"url(data:{kind};base64,{base64.b64encode(f.read_bytes()).decode()})"
+
+
+def fonts_head(base=None):
+    """The fonts, from base (the app's /static/vendor/, a gallery's assets/) or, with none, inside the page: there the
+    Latin faces only, the rest falling back to the system's."""
+    if base:
+        return f'<link rel="stylesheet" href="{base}fonts/fonts.css">'
+    css = (VENDOR / "fonts" / "fonts.css").read_text()
+    faces = [m.group(0) for m in re.finditer(r"/\* latin \*/\n@font-face \{.*?\}", css, re.S)]
+    return "<style>" + "\n".join(re.sub(r"url\(([\w.-]+\.woff2)\)", lambda u: _data(VENDOR / "fonts" / u.group(1), "font/woff2"), f)
+                                 for f in faces) + "</style>"
+
+
+def _katex_inside():
+    css = re.sub(r"url\((fonts/[\w-]+\.woff2)\)", lambda u: _data(VENDOR / "katex" / u.group(1), "font/woff2"),
+                 (VENDOR / "katex" / "katex.min.css").read_text())
+    return f'<style id="katex-css">{css}</style><script>{(VENDOR / "katex" / "katex.min.js").read_text()}</script>'
+
+
+def _has_tex(doc):
+    """Math the model wrote that matches no formula of the paper ({"x": latex}): only that needs KaTeX."""
+    return '"x":' in json.dumps([doc["units"], doc["chunks"]])
 
 
 def data_uri(f, max_side=1600):
@@ -45,25 +74,30 @@ def inline_images(doc):
                 b["html"] = b["html"].replace(f'src="{src}"', f'src="{uri}"')
 
 
-def payload(doc, app):
+def payload(doc, app, katex=None):
     data = {k: doc[k] for k in ("meta", "atoms", "units", "chunks", "blocks", "bib", "edges", "alias")}
     data["app"] = app
+    data["katex"] = katex   # where the reader finds KaTeX: a folder, "inside" the page, or nowhere (math stays as written)
     return json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
 
-def page(doc, app=False):
+def page(doc, app=False, assets=None):
+    """assets: for a static page published beside a folder holding web/vendor's fonts/ and katex/ (a gallery)."""
     inline_images(doc)
     t = (WEB / "template.html").read_text()
     if app:
-        head = FONTS + '<link rel="stylesheet" href="/static/reader.css"><link rel="stylesheet" href="/static/app.css">'
+        head = fonts_head(APP_ASSETS) + '<link rel="stylesheet" href="/static/reader.css"><link rel="stylesheet" href="/static/app.css">'
         scripts = '<script src="/static/i18n.js"></script><script src="/static/reader.js"></script><script src="/static/app.js"></script>'
-        side, cls = '<aside id="sidebar" class="collapsed"></aside>', "app"
+        side, cls, katex = '<aside id="sidebar" class="collapsed"></aside>', "app", APP_ASSETS + "katex/"
     else:
-        head = FONTS + f"<style>{(WEB / 'reader.css').read_text()}</style>"
+        head = fonts_head(assets) + f"<style>{(WEB / 'reader.css').read_text()}</style>"
         scripts = f"<script>{(WEB / 'i18n.js').read_text()}</script><script>{(WEB / 'reader.js').read_text()}</script>"
-        side, cls = "", "static"
+        side, cls, katex = "", "static", (assets + "katex/") if assets else None
+        if not assets and _has_tex(doc):
+            head += _katex_inside()
+            katex = "inside"
     return (t.replace("{{TITLE}}", escape(doc["meta"]["title"])).replace("{{HEAD}}", head).replace("{{CLASS}}", cls)
-             .replace("{{SIDEBAR}}", side).replace("{{SCRIPTS}}", scripts).replace("{{DATA}}", payload(doc, app)))
+             .replace("{{SIDEBAR}}", side).replace("{{SCRIPTS}}", scripts).replace("{{DATA}}", payload(doc, app, katex)))
 
 
 def export(pid):

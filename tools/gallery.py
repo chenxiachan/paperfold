@@ -209,11 +209,15 @@ def main():
         if a.review:
             (store.DATA / "review").mkdir(exist_ok=True)
             (store.DATA / "review" / f"{pid}.json").write_text(json.dumps(review(doc, want), ensure_ascii=False, indent=1))
-        (out / "index.html").write_text(build.page(doc, app=False))
+        (out / "index.html").write_text(build.page(doc, app=False, assets="../assets/"))
         cards.append((e, p, meta, lic))
         print(f"  + {pid}: {p['title'][:60]}")
+    # the pages' fonts and KaTeX, beside them: a visitor's browser asks no other server for anything
+    shutil.rmtree(site / "assets", ignore_errors=True)
+    for part in ("fonts", "katex"):
+        shutil.copytree(build.VENDOR / part, site / "assets" / part)
     for d in site.iterdir():   # a paper taken off the list leaves the site too
-        if d.is_dir() and d.name not in {c[0]["id"] for c in cards}:
+        if d.is_dir() and d.name != "assets" and d.name not in {c[0]["id"] for c in cards}:
             shutil.rmtree(d)
             print(f"  - {d.name}: removed from the site")
     (site / "index.html").write_text(index(cards, want))

@@ -160,6 +160,14 @@ explains) show as margin notes at Full, Brief and Key; on the Topic map, hoverin
 keeps its linked chips lit and lets the rest step back. Hovering a reference previews its target; clicking jumps there
 and a Back pill returns.
 
+## No other server
+
+A page asks no other server for anything: no font service, no CDN. The fonts (Inter, Source Serif 4, as woff2 subsets)
+and KaTeX live in `web/vendor/`. The app serves them from `/static/vendor/`; a gallery copies them into its `assets/`
+beside the pages; a single exported file carries the Latin faces inside, and KaTeX too when the model wrote math that
+matches no formula of the paper. (Loading Google Fonts sends a visitor's IP address to Google, which a German court
+found unlawful without consent in 2022.)
+
 ## Smoothness is a rule
 
 No change may make the zoom less smooth. Measure before and after with the GPU at 2x pixels, reading the frames the

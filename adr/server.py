@@ -32,13 +32,23 @@ import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from . import agents, bridges, build, langs, llm, models, notes, pipeline, providers, store
 from .fetch import paper_id
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript"}
+# fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
+VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
+                ".txt": "text/plain; charset=utf-8"}
+
+
+def vendor_file(rel):
+    """A file of web/vendor by its path under /static/vendor/, or None: nothing outside it, nothing but those kinds."""
+    root = (build.WEB / "vendor").resolve()
+    f = (root / rel).resolve()
+    return f if rel and root in f.parents and f.is_file() and f.suffix in VENDOR_TYPES else None
 
 
 def models_payload():
@@ -122,17 +132,17 @@ def landing_page(jobs):
     boot = {"papers": store.papers(), "jobs": jobs.list(), "model": models.label(chosen, s) if chosen else "",
             "bridge": bridges.bridge_status(), "langs": [[code, v[1]] for code, v in langs.LANGS.items()]}
     t = (build.WEB / "app.html").read_text()
-    return t.replace("{{HEAD}}", build.FONTS).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
+    return t.replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS)).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
 
 
 def make_handler(jobs):
     class Handler(BaseHTTPRequestHandler):
-        def send(self, code, body, ctype="application/json; charset=utf-8"):
+        def send(self, code, body, ctype="application/json; charset=utf-8", cache="no-store"):
             data = body if isinstance(body, bytes) else body.encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
             self.end_headers()
             self.wfile.write(data)
 
@@ -175,6 +185,10 @@ def make_handler(jobs):
                     return self.send(200, reader_page(m.group(1)), "text/html; charset=utf-8")
                 if u.path.startswith("/static/") and u.path[8:] in STATIC:
                     return self.send(200, (build.WEB / u.path[8:]).read_bytes(), STATIC[u.path[8:]] + "; charset=utf-8")
+                if u.path.startswith("/static/vendor/"):
+                    f = vendor_file(unquote(u.path[len("/static/vendor/"):]))
+                    if f:
+                        return self.send(200, f.read_bytes(), VENDOR_TYPES[f.suffix], cache="max-age=86400")
                 if u.path == "/api/papers":
                     return self.json(store.papers())
                 if u.path == "/api/jobs":

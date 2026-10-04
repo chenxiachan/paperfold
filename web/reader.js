@@ -205,14 +205,16 @@
     return html;
   }
 
-  // ── math the model wrote that matches no formula of the unit: KaTeX, loaded on demand ──
-  let katexReady = null, katexLib = null;
+  // ── math the model wrote that matches no formula of the unit: KaTeX, from where the page keeps it (D.katex: the
+  //    app's or a gallery's folder, or "inside" the page), never from another server; without it, the source stays ──
+  let katexReady = null, katexLib = window.katex || null;
   function tex(el, src) {
     if (katexLib) { try { katexLib.render(src, el, { throwOnError: false }); } catch { /* keep the source */ } return; }   // loaded: at once, so it is measured drawn
     katexReady ??= new Promise((res) => {
+      if (!D.katex || D.katex === 'inside') { res(null); return; }
       const css = document.createElement('link'); css.rel = 'stylesheet';
-      css.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css'; document.head.appendChild(css);
-      const js = document.createElement('script'); js.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js';
+      css.href = `${D.katex}katex.min.css`; document.head.appendChild(css);
+      const js = document.createElement('script'); js.src = `${D.katex}katex.min.js`;
       js.onload = () => { katexLib = window.katex; res(window.katex); }; js.onerror = () => res(null); document.head.appendChild(js);
     });
     katexReady.then((k) => { if (k) try { k.render(src, el, { throwOnError: false }); } catch { /* keep the source */ } });
@@ -853,13 +855,14 @@
     return sheet;
   }
   function mirrorLang() { zhost.setAttribute('lang', document.documentElement.lang); zhost.dataset.lang = lang; }
-  // KaTeX's stylesheet, once the page has loaded it, is wanted inside too (drawn formulas in the copies and the sandbox)
+  // KaTeX's stylesheet, once the page has it (loaded, or carried inside), is wanted inside too (drawn formulas in the
+  // copies and the sandbox)
   let katexInside = false;
   function katexCss() {
-    const link = !katexInside && document.querySelector('link[href*="katex"]');
-    if (!link) return false;
+    const sheet = !katexInside && document.querySelector('link[href*="katex"], style#katex-css');
+    if (!sheet) return false;
     katexInside = true;
-    zroot.append(link.cloneNode());
+    zroot.append(sheet.cloneNode(true));
     return true;
   }
   const caps = [null, null, null, null, null];   // level -> keyframe
