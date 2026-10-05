@@ -223,20 +223,34 @@ def _caption(el):
 CDN = "https://cdn.ncbi.nlm.nih.gov/pmc/"
 
 
-def _graphic(el):
-    """An image by its file name, or where PubMed Central keeps it: its XML names the blob in a processing instruction
-    (<?cloudpmc-path blobs/...?>, or <?image-cloudpmc-urn urn:cdn:blobs/...?>)."""
-    g = el.find(lambda t: _local(t) == "graphic")
+def _hwp(el):
+    return next((v for k, v in el.attrs.items() if k == "hwp:id"), "")
+
+
+def _graphic(el, inline=False):
+    """An image by its file name; where PubMed Central keeps it (its XML names the blob in a processing instruction,
+    <?cloudpmc-path blobs/...?> or <?image-cloudpmc-urn urn:cdn:blobs/...?>); or, in bioRxiv's and medRxiv's XML, by
+    the HighWire id their site serves it under: a figure's or table's "F1.large.jpg", any other "embed/graphic-6.gif"
+    (biorxiv.py finds those)."""
+    g = el.find(lambda t: _local(t) in ("graphic", "inline-graphic"))
     if g is None:
         return ""
     href = next((v for k, v in g.attrs.items() if k.split(":")[-1] == "href"), "")
+    if _hwp(el) and _local(el) in ("fig", "table-wrap"):
+        href = f"{_hwp(el)}.large.jpg"
+    elif _hwp(g):
+        href = f"embed/{_hwp(g)}.gif"
     for pi in g.children:
         if isinstance(pi, ProcessingInstruction):
             m = re.match(r"\s*(?:cloudpmc-path\s+|image-cloudpmc-urn\s+urn:cdn:)(blobs/\S+)", str(pi))
             if m:
                 href = CDN + m.group(1)
                 break
-    return f'<img src="{escape(href)}" alt="">' if href else ""
+    if not href:
+        return ""
+    # an image in a line of text (a formula drawn as a picture) stays in the line: parse.py reads it as an atom
+    cls = ' class="pf-inline"' if inline else ""
+    return f'<img src="{escape(href)}" alt=""{cls}>'
 
 
 def _figure(fig):
@@ -284,7 +298,12 @@ def _formula(el, display):
     if tex_src:
         cls = "math display" if display else "math inline"
         return f'<span class="{cls}">{escape(tex_src)}</span>'
-    return _graphic(el)
+    img = _graphic(el, inline=not display)   # a formula only as a picture (bioRxiv, medRxiv)
+    if not display or not img:
+        return img
+    return (f'<table class="ltx_equation ltx_eqn_table"{_id(el)}><tr class="ltx_equation ltx_eqn_row">'
+            f'<td class="ltx_eqn_cell ltx_eqn_center_padleft"></td><td class="ltx_eqn_cell ltx_align_center">{img}</td>'
+            f'<td class="ltx_eqn_cell ltx_eqn_center_padright"></td></tr></table>')
 
 
 def _mathml(math):
@@ -326,6 +345,10 @@ def _node(n):
         return f'<a href="{escape(href)}">{_inline(n)}</a>'
     if name == "break":
         return "<br>"
+    if name == "sup" and _cites_only(n):   # superscript citations (¹ or ²⁻⁴): a citation, drawn raised
+        links = "".join(f'<a href="#{escape(c["rid"].split()[0])}">{_inline(c)}</a>' if isinstance(c, Tag) else escape(str(c))
+                        for c in n.children)
+        return f'<cite class="ltx_cite"><sup>{links}</sup></cite>'
     if name == "name":   # <surname>Montell</surname><given-names>DJ</given-names>: "Montell DJ"
         return escape(" ".join(_text(n.find(lambda t: _local(t) == k)) for k in ("surname", "given-names")
                                if n.find(lambda t: _local(t) == k) is not None))
@@ -335,6 +358,14 @@ def _node(n):
             return ", ".join(_node(c) for c in names) + ". "
     tag = INLINE.get(name)
     return f"<{tag}>{_inline(n)}</{tag}>" if tag else _inline(n)
+
+
+def _cites_only(sup):
+    """A superscript that holds citations and nothing else but the commas and dashes between them."""
+    tags = [c for c in sup.children if isinstance(c, Tag)]
+    rest = "".join(str(c) for c in sup.children if not isinstance(c, Tag))
+    return bool(tags) and all(_local(c) == "xref" and c.get("ref-type") == "bibr" and c.get("rid") for c in tags) \
+        and not re.sub(r"[\s,;–—-]", "", rest)
 
 
 def _inline(el):

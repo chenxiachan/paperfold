@@ -19,6 +19,12 @@ SECTION_LEVEL = {
 BLOCKISH = {"div", "table", "figure", "img", "ul", "ol", "svg", "object", "pre"}
 
 
+def blockish(el):
+    """A block inside el, which keeps it from being read as text. An image marked as part of a line (pf-inline: a
+    formula some JATS draws as a picture, semantic.py) is not one."""
+    return el.find(lambda t: t.name in BLOCKISH and not (t.name == "img" and "pf-inline" in t.get("class", [])))
+
+
 class Doc:
     def __init__(self, meta):
         self.meta, self.atoms, self.units, self.chunks, self.blocks = meta, {}, {}, [], []
@@ -116,7 +122,7 @@ def flatten(node, doc, toks, font=None):
                 toks[-1]["s"] = 1
         elif "ltx_note" in cls:
             atom(doc, toks, ch, "note", text="")
-        elif ch.name in ("span", "em", "strong", "b", "i") and not ch.find(BLOCKISH):
+        elif ch.name in ("span", "em", "strong", "b", "i") and not blockish(ch):
             flatten(ch, doc, toks, font_of(ch, font))
         else:
             atom(doc, toks, ch, "html", text=text_of(ch))
@@ -226,7 +232,7 @@ def lst(el, doc, depth=0):
         parts = [c for ch in li.find_all(recursive=False) if ch is not tag
                  for c in (ch.find_all(recursive=False) if "ltx_para" in ch.get("class", []) else [ch])]
         for ch in parts:
-            if ch.name == "p" and "ltx_p" in ch.get("class", []) and not ch.find(BLOCKISH):
+            if ch.name == "p" and "ltx_p" in ch.get("class", []) and not blockish(ch):
                 for uid in add_units(doc, ch, "item", list=el.get("id") or "list", depth=depth, marker=marker if first else ""):
                     doc.add({"k": "u", "u": uid})
                     first = False
@@ -276,7 +282,7 @@ def block(ch, doc):
         doc.target(ch, "eq", eid)
         doc.add({"k": "eq", "id": eid, "html": str(ch)})
     elif ch.name == "p" and "ltx_p" in cls:
-        ids = [] if ch.find(BLOCKISH) else add_units(doc, ch, "para")
+        ids = [] if blockish(ch) else add_units(doc, ch, "para")
         for uid in ids:
             doc.add({"k": "u", "u": uid})
         if not ids:

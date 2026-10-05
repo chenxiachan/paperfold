@@ -74,7 +74,7 @@ def fetch(pid):
     try:
         xml = _get(f"{API}/{pid.upper()}/fullTextXML").decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
-        if e.code == 404:
+        if e.code in (404, 500):   # Europe PMC answers a missing full text with a 500
             raise RuntimeError("no-fulltext")
         raise
     html, m = jats.to_html(xml)

@@ -28,9 +28,10 @@ OLD_HOME = Path.home() / ".dynamic-reader"   # where they were kept before the n
 
 
 # a paper's id: an arXiv id; or, stored when it was first opened, a document from this computer (local.py:
-# md-<title words>-<hash>) or a paper from Europe PMC (epmc.py: pmc<n>, ppr<n>)
+# md-<title words>-<hash>), a paper from Europe PMC (epmc.py: pmc<n>, ppr<n>) or a preprint from bioRxiv or medRxiv
+# (biorxiv.py: biorxiv-<DOI suffix>)
 ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}")
-IMPORTED_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*|pmc\d{4,9}|ppr\d{4,9}")
+IMPORTED_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*|pmc\d{4,9}|ppr\d{4,9}|(?:biorxiv|medrxiv)-[0-9.]{3,40}")
 
 
 def valid_id(pid):
@@ -43,9 +44,10 @@ def is_imported(pid):
 
 def resolve(ref):
     """The id a reference names (ValueError when it names none): a stored document's id as it is; an arXiv id or
-    link; a PubMed Central or Europe PMC preprint id or link; a DOI, looked up in Europe PMC (ValueError("no-fulltext")
-    when it holds no open full text)."""
-    from . import epmc   # (epmc stores through this module)
+    link; a bioRxiv or medRxiv link or DOI (read from the server itself: its own text, its newest version); a PubMed
+    Central or Europe PMC preprint id or link; any other DOI, looked up in Europe PMC (ValueError("no-fulltext") when
+    it holds no open full text)."""
+    from . import biorxiv, epmc   # (they store through this module)
     ref = (ref or "").strip()
     if ref.startswith("md-"):
         if not (IMPORTED_ID.fullmatch(ref) and (pdir(ref) / "meta.json").exists()):
@@ -53,6 +55,12 @@ def resolve(ref):
         return ref
     if re.search(r"arxiv\.org|^(arxiv:)?\d{4}\.\d{4,5}(v\d+)?$|10\.48550/", ref, re.I):
         return paper_id(ref)
+    if IMPORTED_ID.fullmatch(ref):
+        return ref
+    server, bdoi = biorxiv.ref_of(ref)
+    if bdoi:
+        server, _ = biorxiv.find(bdoi, server)
+        return biorxiv.pid_of(server, bdoi)
     pid, doi = epmc.ref_of(ref)
     if pid:
         return pid

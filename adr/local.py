@@ -38,8 +38,8 @@ class Images:
     """Where each image of the document is kept (img/NN-name): copied from beside the file, downloaded, or decoded
     from a data URI. One that cannot be had is left out (the page shows its name)."""
 
-    def __init__(self, folder, base):
-        self.folder, self.base, self.seen = folder, base, {}
+    def __init__(self, folder, base, get=None):
+        self.folder, self.base, self.seen, self.get = folder, base, {}, get   # get(url) -> (bytes, url): a source's own
 
     def resolve(self, src):
         if src in self.seen:
@@ -64,6 +64,9 @@ class Images:
             return base64.b64decode(m.group(2)), f"image.{m.group(1)}"
         if re.match(r"https?://", src, re.I):
             path = urllib.parse.urlparse(src).path
+            if self.get:
+                data, _ = self.get(src)
+                return (data if data[:4] != b"<!DO" and data[:5] != b"<html" else None), path.rsplit("/", 1)[-1] or "image"
             with urllib.request.urlopen(urllib.request.Request(src, headers=UA), timeout=20) as r:
                 if not (r.headers.get("Content-Type") or "").startswith("image/"):
                     return None, ""

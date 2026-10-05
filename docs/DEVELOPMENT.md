@@ -197,7 +197,17 @@ Europe PMC (`epmc.py`) is where papers beyond arXiv are fetched: a PMC id (an op
 preprint whose full text it holds: bioRxiv, medRxiv, Research Square and others), any link holding one, or a DOI, looked
 up there (`no-fulltext` when it holds no open full text). One request for the XML through its public REST API; figures
 from PubMed Central's CDN (the XML names each one's blob in a processing instruction) or, for a preprint, Europe PMC's
-file service. Stored as `papers/pmc<n>/` or `papers/ppr<n>/`, with `source.xml`, once.
+file service. Stored as `papers/pmc<n>/` or `papers/ppr<n>/`, with `source.xml`, once. A full text it does not hold
+comes back as an HTTP 500, read as `no-fulltext`.
+
+bioRxiv and medRxiv (`biorxiv.py`) are read from the servers themselves: Europe PMC holds the full text of about one
+bioRxiv preprint in seventeen. A link or DOI (prefixes 10.1101 and 10.64898) is looked up in their API, which gives each
+version's JATS; the newest version whose XML has a body is read (a version just posted carries the abstract alone).
+Their XML draws tables and display formulas as pictures, shown as such; a formula pictured inside a line stays in it
+(`pf-inline`, an atom). Figures are served under their HighWire ids (`F1.large.jpg`), other pictures from the site's
+`embed/` folder. Every request to www.biorxiv.org and www.medrxiv.org waits seven seconds after the last, as their
+robots.txt asks (faster, their firewall blocks the reader's address for a while), so a paper with many pictures takes a
+minute or two; the job's progress counts them. Stored as `papers/biorxiv-<DOI suffix>/` or `papers/medrxiv-…/`.
 
 The model is still told it reads a paper, and the levels are made in English first: a document in another language
 is read with English levels over its own text. Making the levels in the document's language is the next step.
@@ -232,6 +242,7 @@ adr/markdown.py a Markdown file → semantic HTML (front matter, footnotes, math
 adr/local.py    documents from this computer: stored as papers (md-…), with their images
 adr/jats.py     JATS XML → semantic HTML (PubMed Central, Europe PMC, bioRxiv, PLOS, eLife)
 adr/epmc.py     papers from Europe PMC by PMC or PPR id, link or DOI (pmc…, ppr…)
+adr/biorxiv.py  preprints from bioRxiv and medRxiv, from their own JATS (biorxiv-…, medrxiv-…)
 adr/tokens.py   tokenizer, sentence splitter, LCS alignment
 adr/ladder.py   one model call per section; validation; written words aligned to source words for the morph
 adr/links.py    argument links, one call over the whole paper

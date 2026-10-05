@@ -4,7 +4,7 @@ Every step reports through `progress(stage, done, total)`; the server turns that
 """
 import urllib.error
 
-from . import epmc, ladder, links, llm, models, store, translate
+from . import biorxiv, epmc, ladder, links, llm, models, store, translate
 from .fetch import fetch
 
 
@@ -19,6 +19,8 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
     if store.is_imported(pid):   # stored when it was opened (local.py), or fetched once from Europe PMC (epmc.py)
         if pid.startswith(("pmc", "ppr")):
             epmc.fetch(pid)
+        elif pid.startswith(("biorxiv-", "medrxiv-")):
+            biorxiv.fetch(pid, progress)
         d = store.pdir(pid)
     else:
         try:
