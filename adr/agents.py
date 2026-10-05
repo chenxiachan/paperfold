@@ -81,8 +81,20 @@ def search_dirs():
 
 
 def child_env():
-    """Children get the widened PATH, so a node-based CLI finds node."""
-    return {**os.environ, "PATH": os.pathsep.join(search_dirs())}
+    """Children get the widened PATH, so a node-based CLI finds node, and USER and LOGNAME even where the server was
+    started without them (launchd, cron, env -i): Claude Code finds its sign-in in the keychain under USER, and
+    without it says it is not logged in."""
+    env = {**os.environ, "PATH": os.pathsep.join(search_dirs())}
+    if not (env.get("USER") and env.get("LOGNAME")):
+        try:
+            import pwd   # not on Windows, where neither is needed
+            name = pwd.getpwuid(os.getuid()).pw_name
+        except (ImportError, KeyError):
+            name = None
+        for k in ("USER", "LOGNAME"):
+            if name and not env.get(k):
+                env[k] = name
+    return env
 
 
 def locate(binary, extra=()):
