@@ -188,6 +188,17 @@ is never rewritten, since its layers belong to the text they were made from. `py
 from the command line (images found beside the file); the landing sends the file's text (`POST /api/import`), so
 images given by a relative path are left out there and shown by name.
 
+JATS XML (`jats.py`), the format of PubMed Central, Europe PMC, bioRxiv and medRxiv, PLOS and eLife: sections keep
+their titles (and their markup), figures and tables their labels and captions, formulas the MathML the publisher wrote
+(its TeX, where given, as alttext), citations and cross-references link to their targets, the reference list becomes the
+bibliography. Figures an archive keeps apart (`<floats-group>`) are placed after the paragraph that first cites them.
+
+Europe PMC (`epmc.py`) is where papers beyond arXiv are fetched: a PMC id (an open-access article), a PPR id (a
+preprint whose full text it holds: bioRxiv, medRxiv, Research Square and others), any link holding one, or a DOI, looked
+up there (`no-fulltext` when it holds no open full text). One request for the XML through its public REST API; figures
+from PubMed Central's CDN (the XML names each one's blob in a processing instruction) or, for a preprint, Europe PMC's
+file service. Stored as `papers/pmc<n>/` or `papers/ppr<n>/`, with `source.xml`, once.
+
 The model is still told it reads a paper, and the levels are made in English first: a document in another language
 is read with English levels over its own text. Making the levels in the document's language is the next step.
 
@@ -219,6 +230,8 @@ adr/parse.py    LaTeXML → units (paragraph, list item, caption) as token strea
 adr/semantic.py any semantic HTML → the HTML parse.py reads; the sanitizing boundary
 adr/markdown.py a Markdown file → semantic HTML (front matter, footnotes, math)
 adr/local.py    documents from this computer: stored as papers (md-…), with their images
+adr/jats.py     JATS XML → semantic HTML (PubMed Central, Europe PMC, bioRxiv, PLOS, eLife)
+adr/epmc.py     papers from Europe PMC by PMC or PPR id, link or DOI (pmc…, ppr…)
 adr/tokens.py   tokenizer, sentence splitter, LCS alignment
 adr/ladder.py   one model call per section; validation; written words aligned to source words for the morph
 adr/links.py    argument links, one call over the whole paper

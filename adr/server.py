@@ -4,7 +4,8 @@
   GET  /p/<id>?lang=xx        a paper in the reader
   GET  /api/papers            the papers on disk
   GET  /api/jobs              generation jobs (queued, running, recently finished)
-  POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time
+  POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time. paper: an arXiv id or
+                              link, a PMC or PPR id, a DOI (Europe PMC, epmc.py), or a stored document's id
   POST /api/import            {name, text}: store a Markdown file as a paper (local.py); its id, to generate
   GET  /api/models            every model this computer can reach: local agents and API providers
   POST /api/models/select     {model, effort}: the model generations use
@@ -221,8 +222,8 @@ def make_handler(jobs):
                         return self.json({"error": f"unknown language {lang}"}, 400)
                     try:
                         job = jobs.submit(body.get("paper", ""), lang, body.get("force"))
-                    except ValueError:
-                        return self.json({"error": "bad-ref"}, 400)
+                    except ValueError as e:   # not a paper's reference, or (a DOI) none Europe PMC can read in full
+                        return self.json({"error": "no-fulltext" if str(e) == "no-fulltext" else "bad-ref"}, 400)
                     return self.json(job)
                 if u.path == "/api/import":
                     text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]

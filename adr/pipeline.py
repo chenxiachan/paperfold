@@ -4,7 +4,7 @@ Every step reports through `progress(stage, done, total)`; the server turns that
 """
 import urllib.error
 
-from . import ladder, links, llm, models, store, translate
+from . import epmc, ladder, links, llm, models, store, translate
 from .fetch import fetch
 
 
@@ -16,7 +16,9 @@ def task(cfg, name):
 def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=lambda *a: None):
     pid = store.resolve(ref)
     progress("fetch", 0, 1)
-    if store.is_local(pid):   # a document from this computer: stored when it was opened (local.py)
+    if store.is_imported(pid):   # stored when it was opened (local.py), or fetched once from Europe PMC (epmc.py)
+        if pid.startswith(("pmc", "ppr")):
+            epmc.fetch(pid)
         d = store.pdir(pid)
     else:
         try:

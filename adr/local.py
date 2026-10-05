@@ -84,6 +84,15 @@ def import_text(text, name="document.md", base=None):
     html, fm = markdown.to_html(text)
     title, html = markdown.take_title(html, fm, name)
     pid = make_id(title, text)
+    meta = {"id": pid, "version": "", "title": title, "authors": fm["authors"], "date": fm["date"],
+            "abs_url": "", "html_url": "", "license": fm["license"] if re.match(r"https?://", fm["license"]) else "",
+            "source": {"kind": kind, "name": Path(name).name}, "label": Path(name).name}
+    return store_doc(pid, html, meta, "source.md", text, lambda folder: Images(folder, base).resolve)
+
+
+def store_doc(pid, html, meta, raw_name, raw, resolver):
+    """A document's semantic HTML stored as a paper: normalized (with its images, through resolver(img folder)) into
+    papers/<pid>/, written whole or not at all. A paper already stored stays as it is."""
     d = store.pdir(pid)
     if (d / "meta.json").exists() and (d / "source.html").exists():
         return pid
@@ -91,12 +100,8 @@ def import_text(text, name="document.md", base=None):
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     try:
-        src = semantic.normalize(html, resolve_img=Images(tmp / "img", base).resolve)
-        (tmp / "source.html").write_text(src)
-        (tmp / "source.md").write_text(text)
-        meta = {"id": pid, "version": "", "title": title, "authors": fm["authors"], "date": fm["date"],
-                "abs_url": "", "html_url": "", "license": fm["license"] if re.match(r"https?://", fm["license"]) else "",
-                "source": {"kind": kind, "name": Path(name).name}, "label": Path(name).name}
+        (tmp / "source.html").write_text(semantic.normalize(html, resolve_img=resolver(tmp / "img")))
+        (tmp / raw_name).write_text(raw)
         (tmp / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
         shutil.rmtree(d, ignore_errors=True)
         tmp.rename(d)

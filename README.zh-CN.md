@@ -62,9 +62,9 @@ python3 -m pip install -r requirements.txt
 python3 -m adr serve
 ```
 
-在浏览器里打开 `http://localhost:3017`（最后一条命令会打印这个地址）。第一次使用先[连接一个模型](#连接模型)，然后粘贴 arXiv 链接或打开一个 Markdown 文件，选择语言。
+在浏览器里打开 `http://localhost:3017`（最后一条命令会打印这个地址）。第一次使用先[连接一个模型](#连接模型)，然后粘贴论文链接（arXiv、PubMed Central 或 DOI）或打开一个 Markdown 文件，选择语言。
 
-需要 Python 3.9 或更新的版本（macOS 自带的就可以）。arXiv 论文要有 arXiv 生成的 HTML 版本，2023 年底以来的论文大多都有；Markdown 文件没有这个要求。
+需要 Python 3.9 或更新的版本（macOS 自带的就可以）。arXiv 论文要有 arXiv 生成的 HTML 版本，2023 年底以来的论文大多都有；其他论文要在 [Europe PMC](https://europepmc.org) 有开放全文（PubMed Central 的开放获取文章，以及 bioRxiv、medRxiv 等平台的预印本）；Markdown 文件没有这个要求。
 
 ## 连接模型
 

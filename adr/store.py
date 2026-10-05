@@ -27,26 +27,37 @@ HOME = Path.home() / ".paperfold"            # the reader's settings and keys, o
 OLD_HOME = Path.home() / ".dynamic-reader"   # where they were kept before the name PaperFold (read, never removed)
 
 
-# a paper's id: an arXiv id, or a document from this computer (local.py: md-<title words>-<hash>)
+# a paper's id: an arXiv id; or, stored when it was first opened, a document from this computer (local.py:
+# md-<title words>-<hash>) or a paper from Europe PMC (epmc.py: pmc<n>, ppr<n>)
 ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}")
-LOCAL_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*")
+IMPORTED_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*|pmc\d{4,9}|ppr\d{4,9}")
 
 
 def valid_id(pid):
-    return bool(ARXIV_ID.fullmatch(pid or "") or (LOCAL_ID.fullmatch(pid or "") and len(pid) <= 80))
+    return bool(ARXIV_ID.fullmatch(pid or "") or (IMPORTED_ID.fullmatch(pid or "") and len(pid) <= 80))
 
 
-def is_local(pid):
-    return bool(LOCAL_ID.fullmatch(pid or ""))
+def is_imported(pid):
+    return bool(IMPORTED_ID.fullmatch(pid or ""))
 
 
 def resolve(ref):
-    """The id a reference names: a stored document's id as it is, else an arXiv id or link (ValueError otherwise)."""
+    """The id a reference names (ValueError when it names none): a stored document's id as it is; an arXiv id or
+    link; a PubMed Central or Europe PMC preprint id or link; a DOI, looked up in Europe PMC (ValueError("no-fulltext")
+    when it holds no open full text)."""
+    from . import epmc   # (epmc stores through this module)
     ref = (ref or "").strip()
-    if is_local(ref):
-        if not (pdir(ref) / "meta.json").exists():
+    if ref.startswith("md-"):
+        if not (IMPORTED_ID.fullmatch(ref) and (pdir(ref) / "meta.json").exists()):
             raise ValueError(f"no such document: {ref}")
         return ref
+    if re.search(r"arxiv\.org|^(arxiv:)?\d{4}\.\d{4,5}(v\d+)?$|10\.48550/", ref, re.I):
+        return paper_id(ref)
+    pid, doi = epmc.ref_of(ref)
+    if pid:
+        return pid
+    if doi:
+        return epmc.by_doi(doi)
     return paper_id(ref)
 
 

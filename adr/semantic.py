@@ -24,14 +24,15 @@ MATHML = {"math", "semantics", "annotation", "annotation-xml", "mrow", "mi", "mn
           "mprescripts", "none", "mtable", "mtr", "mlabeledtr", "mtd", "mstyle", "mpadded", "mphantom", "menclose",
           "merror", "mfenced"}
 ATTRS = {"id", "class", "title", "lang", "dir", "href", "src", "alt", "colspan", "rowspan", "start", "value"}
-INLINE_SPAN = {"mark", "u", "small", "abbr", "q", "ins", "cite"}   # read as text; their look is not worth an atom
+INLINE_SPAN = {"mark", "u", "small", "abbr", "q", "ins"}   # read as text; their look is not worth an atom
 BLOCK = {"p", "ul", "ol", "dl", "table", "figure", "pre", "blockquote", "hr", "div", "section",
          "h1", "h2", "h3", "h4", "h5", "h6"}
 
 SECTION_CLASS = ["ltx_section", "ltx_subsection", "ltx_subsubsection", "ltx_paragraph"]
 HEAD_NUM = re.compile(r"^\s*((?:\d+\.)*\d+\.?|[A-Z]\.(?:\d+\.?)*|[IVX]+\.)\s+(?=\S)")
-CAPTION = re.compile(r"^\s*((?:Figure|Fig\.?|Table|Tab\.?|Abbildung|Abb\.|Tabelle|Figura|Tabla|Tableau|图|圖|表)"
-                     r"\s*[A-Z]?\d+(?:\.\d+)*[a-z]?)\s*[:.：]\s*", re.I)
+CAPTION = re.compile(r"^\s*((?:(?:Extended Data|Supplementary|Supplemental|Appendix)\s+)?"
+                     r"(?:Figure|Fig\.?|Table|Tab\.?|Abbildung|Abb\.|Tabelle|Figura|Tabla|Tableau|图|圖|表)"
+                     r"\s*S?[A-Z]?\d+(?:\.\d+)*[a-z]?)\s*[:.：]\s*", re.I)
 TABLE_NOTE = re.compile(r"^\s*(?:Table|Tabelle|表)\s*[:：]\s*", re.I)   # Pandoc's caption line: "Table: ..."
 ABSTRACT = re.compile(r"^(abstract|summary|tl;?dr|摘要|概要|zusammenfassung|résumé|resumen|riassunto|аннотация)$", re.I)
 REFERENCES = re.compile(r"^(references|bibliography|works cited|literature( cited)?|sources|参考文献|參考文獻|"
@@ -429,6 +430,8 @@ def _sections(soup, art, blocks):
                     sid, k = f"{base}-{k}", k + 1
                 used.add(sid)
                 anchors[slug(text)] = sid
+                if b.get("id"):   # a source's own id for the section (JATS: <sec id="sec2">), which its links use
+                    anchors[b["id"]] = sid
                 sec = soup.new_tag("section", attrs={"class": SECTION_CLASS[depth], "id": sid})
             h = soup.new_tag(f"h{rank}", attrs={"class": "ltx_title ltx_title_section"})
             for x in list(b.contents):
@@ -470,8 +473,8 @@ def _bibliography(soup, sec):
             items.append(ch)
         ch.extract()
     ul = soup.new_tag("ul", attrs={"class": "ltx_biblist"})
-    for n, it in enumerate(items, 1):
-        li = soup.new_tag("li", attrs={"class": "ltx_bibitem", "id": f"bib{n}"})
+    for n, it in enumerate(items, 1):   # a work keeps the id its citations point at (JATS: <ref id="B3">)
+        li = soup.new_tag("li", attrs={"class": "ltx_bibitem", "id": it.get("id") or f"bib{n}"})
         for x in list(it.contents):
             li.append(x.extract() if isinstance(x, Tag) else NavigableString(str(x)))
         ul.append(li)

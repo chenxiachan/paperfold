@@ -135,7 +135,7 @@
     }
   }
   const errText = (msg) => (msg === 'no-html' ? t().no_html : msg === 'bad-ref' ? t().bad_ref : msg === 'no-model' ? t().no_model
-    : msg === 'not-markdown' || msg === 'empty' ? t().md_only : msg);
+    : msg === 'not-markdown' || msg === 'empty' ? t().md_only : msg === 'no-fulltext' ? t().no_fulltext : msg);
 
   // ── on a reader page: generate a language, or regenerate the current one ──
   if (PAPER) {
@@ -250,7 +250,7 @@
       e.preventDefault();
       err.hidden = true;
       const ref = document.getElementById('ref').value.trim();
-      if (!/\d{4}\.\d{4,5}/.test(ref)) { fail(t().bad_ref); return; }
+      if (!/\d{4}\.\d{4,5}|PMC\d{4,}|PPR\d{4,}|10\.\d{4,9}\/\S/i.test(ref)) { fail(t().bad_ref); return; }   // arXiv, Europe PMC, a DOI
       if (!modelName) { fail(t().no_model); return; }   // connect a model first (the card below)
       start(ref);
     };
