@@ -207,7 +207,9 @@ Their XML draws tables and display formulas as pictures, shown as such; a formul
 (`pf-inline`, an atom). Figures are served under their HighWire ids (`F1.large.jpg`), other pictures from the site's
 `embed/` folder. Every request to www.biorxiv.org and www.medrxiv.org waits seven seconds after the last, as their
 robots.txt asks (faster, their firewall blocks the reader's address for a while), so a paper with many pictures takes a
-minute or two; the job's progress counts them. Stored as `papers/biorxiv-<DOI suffix>/` or `papers/medrxiv-…/`.
+minute or two; the job's progress counts them. Stored as `papers/biorxiv-<DOI suffix>/` or `papers/medrxiv-…/`. When a site
+still turns this computer away (HTTP 403 for the XML), the preprint is read from Europe PMC if it holds the full text,
+under the same id; else the job says so.
 
 The model is still told it reads a paper, and the levels are made in English first: a document in another language
 is read with English levels over its own text. Making the levels in the document's language is the next step.

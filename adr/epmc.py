@@ -66,20 +66,23 @@ def image_resolver(pid, folder):
     return resolve
 
 
-def fetch(pid):
-    """Store a paper from Europe PMC (once). Its id: pmc… or ppr…."""
+def fetch(pid, eid=None, about=None):
+    """Store a paper from Europe PMC (once). Its id: pmc… or ppr…. eid: the Europe PMC id to read when the paper is
+    stored under an id of another source (a medRxiv preprint whose site turned the reader away); about: meta fields
+    that source gives (its link, its name)."""
     d = store.pdir(pid)
     if (d / "meta.json").exists() and (d / "source.html").exists():
         return pid
+    eid = eid or pid
     try:
-        xml = _get(f"{API}/{pid.upper()}/fullTextXML").decode("utf-8", "replace")
+        xml = _get(f"{API}/{eid.upper()}/fullTextXML").decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         if e.code in (404, 500):   # Europe PMC answers a missing full text with a 500
             raise RuntimeError("no-fulltext")
         raise
     html, m = jats.to_html(xml)
-    kind = "PMC" if pid.startswith("pmc") else "PPR"
-    meta = {"id": pid, "version": "", "title": m["title"] or pid.upper(), "authors": m["authors"], "date": m["date"],
-            "abs_url": f"https://europepmc.org/article/{kind}/{pid.upper()}", "html_url": "", "license": m["license"],
-            "doi": m["doi"], "source": {"kind": "europepmc", "name": pid.upper()}, "label": pid.upper()}
-    return local.store_doc(pid, html, meta, "source.xml", xml, lambda folder: image_resolver(pid, folder))
+    kind = "PMC" if eid.startswith("pmc") else "PPR"
+    meta = {"id": pid, "version": "", "title": m["title"] or eid.upper(), "authors": m["authors"], "date": m["date"],
+            "abs_url": f"https://europepmc.org/article/{kind}/{eid.upper()}", "html_url": "", "license": m["license"],
+            "doi": m["doi"], "source": {"kind": "europepmc", "name": eid.upper()}, "label": eid.upper(), **(about or {})}
+    return local.store_doc(pid, html, meta, "source.xml", xml, lambda folder: image_resolver(eid, folder))

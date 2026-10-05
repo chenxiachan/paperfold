@@ -20,7 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import jats, local, store
+from . import epmc, jats, local, store
 from .fetch import UA
 
 API = "https://api.biorxiv.org/details/{server}/{doi}"
@@ -85,6 +85,19 @@ def image_resolver(content, folder, progress=None, total=0):
     return resolve
 
 
+def _from_europepmc(pid, server, rec):
+    """The preprint as Europe PMC holds it (its full text converted from the PDF), stored under this preprint's id."""
+    name = "bioRxiv" if server == "biorxiv" else "medRxiv"
+    refused = RuntimeError(f"{name} refused this computer for now (its firewall), and Europe PMC holds no full text of this "
+                           "preprint. Try again later.")
+    try:
+        eid = epmc.by_doi(rec["doi"])
+        return epmc.fetch(pid, eid, {"abs_url": f"https://www.{server}.org/content/{rec['doi']}v{rec.get('version', '')}",
+                                     "label": f"{name} {rec['doi']} · Europe PMC {eid.upper()}", "doi": rec["doi"]})
+    except (ValueError, RuntimeError):   # no full text there either (some it lists are PDFs only, answered with a 500)
+        raise refused
+
+
 def _has_body(xml):
     """The XML of a version whose full text is not ready yet holds the abstract and an empty body."""
     m = re.search(r"<body\b[^>]*>(.*?)</body>", xml, re.S)
@@ -111,7 +124,9 @@ def fetch(pid, progress=None):
             continue
         try:
             xml, final = _get(rec["jatsxml"])
-        except urllib.error.HTTPError:
+        except urllib.error.HTTPError as e:
+            if e.code == 403:   # the site's firewall turned this computer away: Europe PMC's copy, if it holds one
+                return _from_europepmc(pid, server, found[-1])
             continue
         xml = xml.decode("utf-8", "replace")
         if _has_body(xml):
