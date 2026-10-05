@@ -1,5 +1,9 @@
 beautifulsoup4
 lxml
 Pillow
+# Markdown files: the parser with its tables, footnotes and math, and LaTeX to MathML
+markdown-it-py
+mdit-py-plugins
+latex2mathml
 # only for the Anthropic API (Claude Code, Codex, Pi and OpenAI-compatible providers need nothing more):
 # anthropic

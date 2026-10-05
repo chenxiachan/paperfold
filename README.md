@@ -62,9 +62,9 @@ python3 -m pip install -r requirements.txt
 python3 -m adr serve
 ```
 
-Open `http://localhost:3017`, which the last command prints. The first time, [connect a model](#connect-a-model); then paste an arXiv link and pick a language.
+Open `http://localhost:3017`, which the last command prints. The first time, [connect a model](#connect-a-model); then paste an arXiv link, or open a Markdown file, and pick a language.
 
-You need Python 3.9 or newer (the one macOS ships with works), and a paper with an arXiv HTML version, as most papers since late 2023 have.
+You need Python 3.9 or newer (the one macOS ships with works). An arXiv paper needs its HTML version, as most papers since late 2023 have; a Markdown file needs nothing.
 
 ## Connect a model
 

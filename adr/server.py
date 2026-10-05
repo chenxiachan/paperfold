@@ -5,6 +5,7 @@
   GET  /api/papers            the papers on disk
   GET  /api/jobs              generation jobs (queued, running, recently finished)
   POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time
+  POST /api/import            {name, text}: store a Markdown file as a paper (local.py); its id, to generate
   GET  /api/models            every model this computer can reach: local agents and API providers
   POST /api/models/select     {model, effort}: the model generations use
   POST /api/agents/scan       look for agents again (also done at startup)
@@ -34,8 +35,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import agents, bridges, build, langs, llm, models, notes, pipeline, providers, store
-from .fetch import paper_id
+from . import agents, bridges, build, langs, llm, local, models, notes, pipeline, providers, store
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript"}
@@ -75,7 +75,7 @@ class Jobs:
         threading.Thread(target=self.work, daemon=True).start()
 
     def submit(self, ref, lang, force):
-        pid = paper_id(ref)
+        pid = store.resolve(ref)
         for j in self.items.values():  # the same request already waiting or running is that job
             if j["pid"] == pid and j["lang"] == lang and j["status"] in ("queued", "running"):
                 return j
@@ -175,8 +175,8 @@ def make_handler(jobs):
                             f'<div style="text-align:center"><h2>{"✓ OpenRouter" if key else "OpenRouter ✕"}</h2></div>'
                             f'<script>location.replace({json.dumps(to)})</script>')
                     return self.send(200, page, "text/html; charset=utf-8")
-                m = re.fullmatch(r"/p/(\d{4}\.\d{4,5})", u.path)
-                if m:
+                m = re.fullmatch(r"/p/([\w.-]+)", u.path)
+                if m and store.valid_id(m.group(1)):
                     if not (store.pdir(m.group(1)) / "source.html").exists():
                         self.send_response(302)
                         self.send_header("Location", "/")
@@ -195,8 +195,8 @@ def make_handler(jobs):
                     return self.json(jobs.list())
                 if u.path in ("/api/models", "/api/settings"):
                     return self.json(models_payload())
-                m = re.fullmatch(r"/api/notes/(\d{4}\.\d{4,5})", u.path)
-                if m and (store.pdir(m.group(1)) / "meta.json").exists():
+                m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
+                if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
                 if u.path == "/favicon.ico":
                     return self.send(204, b"", "image/x-icon")
@@ -210,7 +210,10 @@ def make_handler(jobs):
             if origin and urlparse(origin).hostname not in ("localhost", "127.0.0.1"):
                 return self.json({"error": "forbidden"}, 403)  # another site may not drive this server
             try:
-                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                size = int(self.headers.get("Content-Length") or 0)
+                if size > 12_000_000:   # a Markdown file is far smaller; this is a request gone wrong
+                    return self.json({"error": "too-large"}, 413)
+                body = json.loads(self.rfile.read(size) or b"{}")
                 s = models.load_settings()
                 if u.path == "/api/generate":
                     lang = body.get("lang") or "en"
@@ -221,8 +224,17 @@ def make_handler(jobs):
                     except ValueError:
                         return self.json({"error": "bad-ref"}, 400)
                     return self.json(job)
-                m = re.fullmatch(r"/api/notes/(\d{4}\.\d{4,5})", u.path)
-                if m and (store.pdir(m.group(1)) / "meta.json").exists():
+                if u.path == "/api/import":
+                    text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]
+                    if not text.strip():
+                        return self.json({"error": "empty"}, 400)
+                    try:
+                        pid = local.import_text(text, name)
+                    except ValueError:
+                        return self.json({"error": "not-markdown"}, 400)
+                    return self.json({"paper": pid, "title": json.loads((store.pdir(pid) / "meta.json").read_text())["title"]})
+                m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
+                if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     try:
                         if body.get("op") == "delete":
                             return self.json(notes.delete(m.group(1), str(body.get("id", ""))))
@@ -239,7 +251,7 @@ def make_handler(jobs):
                     return self.json({"url": bridges.openrouter_start(callback, str(body.get("back") or "/"), bool(body.get("desktop")))})
                 if u.path == "/api/papers/delete":
                     pid = str(body.get("paper", ""))
-                    if not re.fullmatch(r"\d{4}\.\d{4,5}", pid) or not (store.pdir(pid) / "meta.json").exists():
+                    if not store.valid_id(pid) or not (store.pdir(pid) / "meta.json").exists():
                         return self.json({"error": "no such paper"}, 404)
                     if any(j["pid"] == pid and j["status"] in ("queued", "running") for j in jobs.list()):
                         return self.json({"error": "busy"}, 409)
@@ -248,7 +260,7 @@ def make_handler(jobs):
                     return self.json(store.papers())
                 if u.path == "/api/ask":
                     pid = str(body.get("paper", ""))
-                    if not re.fullmatch(r"\d{4}\.\d{4,5}", pid) or not (store.pdir(pid) / "meta.json").exists():
+                    if not store.valid_id(pid) or not (store.pdir(pid) / "meta.json").exists():
                         return self.json({"error": "no such paper"}, 404)
                     try:
                         return self.json(notes.ask(pid, str(body.get("id", "")), str(body.get("question", "")).strip()[:2000],

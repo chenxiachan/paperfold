@@ -274,10 +274,13 @@
     home.append(...[...brand.children].filter((x) => x.tagName !== 'A'));
     brand.prepend(home);
   }
+  // where a paper comes from, in a few words: arXiv:2201.11903v6, or a document's file name
+  const sourceName = (m) => m.label || `arXiv:${m.id}${m.version || ''}`;
   function build() {
     const m = D.meta;
     const link = document.getElementById('arxiv-link');
-    link.href = m.abs_url; link.textContent = `arXiv:${m.id}${m.version} ↗`;
+    if (m.abs_url) { link.href = m.abs_url; link.textContent = `${sourceName(m)} ↗`; }
+    else { link.removeAttribute('href'); link.textContent = sourceName(m); }
     docEl.append(paperHead);
     const chunksEl = h('div', 'chunks');
     docEl.append(chunksEl);
@@ -301,6 +304,7 @@
         const cur = h('section', `chunk l${c.level}${c.units.length ? '' : ' empty'}`);
         cur.dataset.chunk = c.id; cur.id = c.id;
         const hd = h('h2', 'hd'); hd.dataset.id = `h:${c.id}`;
+        hd.hidden = !c.num && !c.title;   // a document's opening text has no heading of its own
         const st = h('p', 'stake');
         cur.append(hd, st);
         headEls.push([c, hd, st]);
@@ -2345,10 +2349,11 @@
   // each question a callout; every one links back to its place in the reader
   function notesMarkdown() {
     const m = D.meta, t = T[ui], q = (s) => JSON.stringify(String(s || ''));
-    const out = ['---', `title: ${q(m.title)}`, `authors: ${JSON.stringify(m.authors || [])}`, `arxiv: ${q(m.id + (m.version || ''))}`,
-      `url: ${m.abs_url}`, `license: ${m.license || ''}`, ...(D.app ? [`reader: ${location.origin}/p/${m.id}`] : []),
+    const out = ['---', `title: ${q(m.title)}`, `authors: ${JSON.stringify(m.authors || [])}`,
+      m.abs_url ? `arxiv: ${q(m.id + (m.version || ''))}` : `source: ${q(sourceName(m))}`,
+      ...(m.abs_url ? [`url: ${m.abs_url}`] : []), `license: ${m.license || ''}`, ...(D.app ? [`reader: ${location.origin}/p/${m.id}`] : []),
       `exported: ${new Date().toISOString().slice(0, 10)}`, 'tags: [paper]', 'format: paperfold/notes@1', '---', '',
-      `# ${m.title}`, '', `${(m.authors || []).map(flipName).join(', ')} · [arXiv:${m.id}${m.version || ''}](${m.abs_url})`, ''];
+      `# ${m.title}`, '', [(m.authors || []).map(flipName).join(', '), m.abs_url ? `[${sourceName(m)}](${m.abs_url})` : sourceName(m)].filter(Boolean).join(' · '), ''];
     let sec = null;
     const quote = (s) => s.split('\n').map((l) => `> ${l}`);
     for (const n of inOrder()) {
@@ -2410,7 +2415,7 @@
     }
     const pr = h('div', 'printout');
     pr.innerHTML = `<header><h1>${esc(m.title)}</h1><p>${esc((m.authors || []).map(flipName).join(', '))}</p>` +
-      `<p><a href="${esc(m.abs_url)}">arXiv:${esc(m.id + (m.version || ''))}</a> · ${esc(t.n_notes)} · ${new Date().toISOString().slice(0, 10)}</p></header>${body}` +
+      `<p>${m.abs_url ? `<a href="${esc(m.abs_url)}">${esc(sourceName(m))}</a>` : esc(sourceName(m))} · ${esc(t.n_notes)} · ${new Date().toISOString().slice(0, 10)}</p></header>${body}` +
       `<footer class="pf-mark">${LOGO}<span>Made with ${BRAND}</span><a href="${REPO}">${REPO.replace('https://', '')}</a></footer>`;
     texify(pr);
     document.body.append(pr);

@@ -190,14 +190,16 @@ def build(doc, lang, cfg, cache_dir, jobs=4, log=print, progress=None, force=Fal
                     warnings.append(f"{uid}: no translation")
             if k == 0:   # the section's title and lines, and the paper's title, from its first part
                 sec = out.get("section") or {}
-                c.setdefault("tr", {})[lang] = {"title": unmark(clean(sec.get("title")), doc["atoms"]) or c["title"],
+                # an untitled section (a document's opening text) stays untitled: the model would name it
+                title = (unmark(clean(sec.get("title")), doc["atoms"]) or c["title"]) if c["title"] else ""
+                c.setdefault("tr", {})[lang] = {"title": title,
                                                  "lad": section_ladder(sec, langs.budget(lang)["topic"], doc, c)}
                 if out.get("paper_title"):
                     meta["titles"][lang] = clean(out["paper_title"])
             log(f"  {'·' if cached else '✓'} {lang} {c['id']:<14} {len(us):>2} units{f' (part {k + 1})' if k else ''}")
     if tasks and len(errors) == len(tasks):
         raise RuntimeError(str(errors[0]))
-    bare = [c for c in doc["chunks"] if lang not in c.get("tr", {})]
+    bare = [c for c in doc["chunks"] if lang not in c.get("tr", {}) and c["title"]]
     if meta["titles"].get(lang) == meta["title"]:
         meta["titles"].pop(lang)  # the section call sometimes hands the English title back
     titles = [c["title"] for c in bare] + ([] if meta["titles"].get(lang) else [meta["title"]])

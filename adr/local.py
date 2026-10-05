@@ -1,0 +1,110 @@
+"""Documents from this computer, kept as arXiv papers are: papers/<id>/ holds source.html (the normalized HTML that
+parse.py reads), the file as it came (source.md), meta.json, and img/ with the images it shows.
+
+A document's id is its title and a hash of its text: the same file opened twice is one paper, and an edited file is a
+new one, since the stored layers belong to the text they were made from. A document already stored is not written
+again: its source stays the one its layers were made from.
+"""
+import base64
+import hashlib
+import json
+import re
+import shutil
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+from . import markdown, semantic, store
+from .fetch import UA
+
+IMG_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+MAX_IMG = 15_000_000
+KINDS = {".md": "markdown", ".markdown": "markdown", ".mdown": "markdown", ".txt": "markdown"}
+
+
+def make_id(title, text):
+    words = re.findall(r"[a-z0-9]+", title.lower())
+    stem, n = [], 0
+    for w in words:
+        if n + len(w) > 40:
+            break
+        stem.append(w)
+        n += len(w) + 1
+    h = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+    return "md-" + "-".join(stem + [h])
+
+
+class Images:
+    """Where each image of the document is kept (img/NN-name): copied from beside the file, downloaded, or decoded
+    from a data URI. One that cannot be had is left out (the page shows its name)."""
+
+    def __init__(self, folder, base):
+        self.folder, self.base, self.seen = folder, base, {}
+
+    def resolve(self, src):
+        if src in self.seen:
+            return self.seen[src]
+        try:
+            data, name = self._read(src)
+        except Exception:
+            data, name = None, ""
+        where = None
+        if data and len(data) <= MAX_IMG:
+            name = re.sub(r"[^\w.\-]", "_", name)[-60:] or "image"
+            fn = f"{len(self.seen) + 1:02d}-{name}"
+            self.folder.mkdir(parents=True, exist_ok=True)
+            (self.folder / fn).write_bytes(data)
+            where = f"img/{fn}"
+        self.seen[src] = where
+        return where
+
+    def _read(self, src):
+        m = re.match(r"data:image/(png|jpe?g|gif|webp);base64,(.+)$", src, re.S)
+        if m:
+            return base64.b64decode(m.group(2)), f"image.{m.group(1)}"
+        if re.match(r"https?://", src, re.I):
+            path = urllib.parse.urlparse(src).path
+            with urllib.request.urlopen(urllib.request.Request(src, headers=UA), timeout=20) as r:
+                if not (r.headers.get("Content-Type") or "").startswith("image/"):
+                    return None, ""
+                return r.read(MAX_IMG + 1), path.rsplit("/", 1)[-1] or "image"
+        if self.base is None or re.match(r"^[a-z][a-z0-9+.-]*:", src, re.I):
+            return None, ""
+        f = (self.base / urllib.parse.unquote(src.split("#")[0].split("?")[0])).resolve()
+        if f.suffix.lower() not in IMG_EXT or not f.is_file() or f.stat().st_size > MAX_IMG:
+            return None, ""
+        return f.read_bytes(), f.name
+
+
+def import_text(text, name="document.md", base=None):
+    """Store a document given as text (base: the folder its relative image paths start from, if known). Returns its id."""
+    kind = KINDS.get(Path(name).suffix.lower())
+    if kind is None:
+        raise ValueError(f"not a Markdown file: {name}")
+    html, fm = markdown.to_html(text)
+    title, html = markdown.take_title(html, fm, name)
+    pid = make_id(title, text)
+    d = store.pdir(pid)
+    if (d / "meta.json").exists() and (d / "source.html").exists():
+        return pid
+    tmp = d.with_name(d.name + ".tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    try:
+        src = semantic.normalize(html, resolve_img=Images(tmp / "img", base).resolve)
+        (tmp / "source.html").write_text(src)
+        (tmp / "source.md").write_text(text)
+        meta = {"id": pid, "version": "", "title": title, "authors": fm["authors"], "date": fm["date"],
+                "abs_url": "", "html_url": "", "license": fm["license"] if re.match(r"https?://", fm["license"]) else "",
+                "source": {"kind": kind, "name": Path(name).name}, "label": Path(name).name}
+        (tmp / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+        shutil.rmtree(d, ignore_errors=True)
+        tmp.rename(d)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return pid
+
+
+def import_file(path):
+    p = Path(path).expanduser().resolve()
+    return import_text(p.read_text(encoding="utf-8", errors="replace"), p.name, p.parent)

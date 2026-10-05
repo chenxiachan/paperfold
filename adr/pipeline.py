@@ -1,11 +1,11 @@
-"""Generate a paper in a language: fetch, parse, the English ladder and links (once), the translation.
+"""Generate a paper in a language: fetch (an arXiv paper), parse, the English ladder and links (once), the translation.
 
 Every step reports through `progress(stage, done, total)`; the server turns that into a progress bar.
 """
 import urllib.error
 
 from . import ladder, links, llm, models, store, translate
-from .fetch import fetch, paper_id
+from .fetch import fetch
 
 
 def task(cfg, name):
@@ -14,14 +14,17 @@ def task(cfg, name):
 
 
 def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=lambda *a: None):
-    pid = paper_id(ref)
+    pid = store.resolve(ref)
     progress("fetch", 0, 1)
-    try:
-        d = fetch(pid, store.DATA)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            raise RuntimeError("no-html")  # the app shows its own sentence for this
-        raise
+    if store.is_local(pid):   # a document from this computer: stored when it was opened (local.py)
+        d = store.pdir(pid)
+    else:
+        try:
+            d = fetch(pid, store.DATA)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise RuntimeError("no-html")  # the app shows its own sentence for this
+            raise
     progress("parse", 0, 1)
     doc = store.parsed(pid)
     cache = d / "llm-cache"

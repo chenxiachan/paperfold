@@ -22,7 +22,8 @@ python3 -m pip install -r requirements.txt   # beautifulsoup4, lxml, Pillow
 python3 -m adr serve                    # http://localhost:3017  (ThoughtDAG keeps 3001)
 ```
 
-The landing takes an arXiv link or ID and a language; the sidebar lists every paper generated so far. In a paper,
+The landing takes an arXiv link or ID, or a Markdown file (the bar's mark opens one, or drop it on the page), and a
+language; the sidebar lists every paper generated so far. In a paper,
 the language menu switches between generated languages, generates a new one, or regenerates the current one.
 Two languages. The paper is read in one (the menu at the top right, 12 languages: English, 简体中文, 繁體中文,
 日本語, 한국어, Español, Français, Deutsch, Português, Italiano, Русский, हिन्दी): its text, and the names of its own
@@ -160,6 +161,36 @@ explains) show as margin notes at Full, Brief and Key; on the Topic map, hoverin
 keeps its linked chips lit and lets the rest step back. Hovering a reference previews its target; clicking jumps there
 and a Back pill returns.
 
+## Other sources: one parser, through semantic HTML
+
+arXiv's LaTeXML page is read by `parse.py`. Every other source is first written as plain semantic HTML (headings,
+paragraphs, lists, tables, figures with captions, math, footnotes), and `semantic.normalize` rewrites that HTML in
+the shape LaTeXML gives arXiv's pages: sections with titles, `ltx_p` paragraphs, figures and tables with their
+captions and labels, equation tables, footnotes inside the text, a references section as a bibliography. So every
+source is cut into units by the same code and drawn by the same reader; a new format is a converter to semantic HTML,
+nothing more. Text before the first heading becomes an untitled first section with the id `abstract`, so it is the
+context every model call is given, as an abstract is.
+
+`normalize` is also where a document is made safe. The reader runs on the local server's origin, so a script in a
+file could drive that server: only the elements and attributes a document needs are kept, links only to `#`, http(s)
+and mailto, images only as files the import stored. Markdown is rendered with HTML in it shown as text.
+
+Markdown (`markdown.py`): CommonMark with GitHub's tables and strikethrough, footnotes, definition lists, YAML front
+matter (title, authors, license) and math, `$...$` and `$$...$$` by Pandoc's rules and `\(...\)`, `\[...\]` as chat
+models write them; formulas become MathML with their LaTeX as `alttext`, as LaTeXML writes them. A lone image is a
+figure, its caption the paragraph after it ("Figure 1: ...") or its alt text; a "Table 1: ..." paragraph next to a
+table is its caption; a numbered heading ("2.1 Methods") keeps its number apart.
+
+A document is stored by `local.py` as a paper is: `papers/md-<title words>-<hash>/` with `source.html` (normalized),
+`source.md`, `meta.json` and `img/`, the images copied from beside the file, downloaded, or decoded, once. The id
+carries a hash of the text, so the same file opened twice is one paper and an edited file a new one; a stored document
+is never rewritten, since its layers belong to the text they were made from. `python3 -m adr notes.md` does the same
+from the command line (images found beside the file); the landing sends the file's text (`POST /api/import`), so
+images given by a relative path are left out there and shown by name.
+
+The model is still told it reads a paper, and the levels are made in English first: a document in another language
+is read with English levels over its own text. Making the levels in the document's language is the next step.
+
 ## No other server
 
 A page asks no other server for anything: no font service, no CDN. The fonts (Inter, Source Serif 4, as woff2 subsets)
@@ -185,6 +216,9 @@ Frame intervals from requestAnimationFrame in a default headless browser hide mo
 ```
 adr/fetch.py    arXiv HTML + metadata, figure images
 adr/parse.py    LaTeXML → units (paragraph, list item, caption) as token streams; math, citations, refs stay atomic
+adr/semantic.py any semantic HTML → the HTML parse.py reads; the sanitizing boundary
+adr/markdown.py a Markdown file → semantic HTML (front matter, footnotes, math)
+adr/local.py    documents from this computer: stored as papers (md-…), with their images
 adr/tokens.py   tokenizer, sentence splitter, LCS alignment
 adr/ladder.py   one model call per section; validation; written words aligned to source words for the morph
 adr/links.py    argument links, one call over the whole paper

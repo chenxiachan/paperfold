@@ -1,6 +1,6 @@
 """What has been generated for each paper, as versioned layers on disk.
 
-  papers/<id>/source.html, meta.json     the arXiv HTML, fetched once
+  papers/<id>/source.html, meta.json     the arXiv HTML, fetched once (or a document from this computer, local.py)
   papers/<id>/layers/en.json             the English ladder and the argument links
   papers/<id>/layers/tr-<lang>.json      one translation, stamped with the English version it was built on
   papers/.trash/<id>-<time>/             a paper the reader deleted (moved there whole, notes included; not listed)
@@ -12,10 +12,12 @@ A translation whose English base has since been regenerated is reported as stale
 """
 import json
 import os
+import re
 import time
 from pathlib import Path
 
 from . import ladder
+from .fetch import paper_id
 from .parse import parse
 
 ROOT = Path(__file__).resolve().parent.parent   # the code: adr/, web/
@@ -23,6 +25,29 @@ ROOT = Path(__file__).resolve().parent.parent   # the code: adr/, web/
 DATA = Path(os.environ.get("PAPERFOLD_DATA") or ROOT)
 HOME = Path.home() / ".paperfold"            # the reader's settings and keys, outside the project folder
 OLD_HOME = Path.home() / ".dynamic-reader"   # where they were kept before the name PaperFold (read, never removed)
+
+
+# a paper's id: an arXiv id, or a document from this computer (local.py: md-<title words>-<hash>)
+ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}")
+LOCAL_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*")
+
+
+def valid_id(pid):
+    return bool(ARXIV_ID.fullmatch(pid or "") or (LOCAL_ID.fullmatch(pid or "") and len(pid) <= 80))
+
+
+def is_local(pid):
+    return bool(LOCAL_ID.fullmatch(pid or ""))
+
+
+def resolve(ref):
+    """The id a reference names: a stored document's id as it is, else an arXiv id or link (ValueError otherwise)."""
+    ref = (ref or "").strip()
+    if is_local(ref):
+        if not (pdir(ref) / "meta.json").exists():
+            raise ValueError(f"no such document: {ref}")
+        return ref
+    return paper_id(ref)
 
 
 def pdir(pid):

@@ -134,7 +134,8 @@
       if ((await api('/api/openrouter/minted')).minted) { openSettings({ minted: true }); return; }
     }
   }
-  const errText = (msg) => (msg === 'no-html' ? t().no_html : msg === 'bad-ref' ? t().bad_ref : msg === 'no-model' ? t().no_model : msg);
+  const errText = (msg) => (msg === 'no-html' ? t().no_html : msg === 'bad-ref' ? t().bad_ref : msg === 'no-model' ? t().no_model
+    : msg === 'not-markdown' || msg === 'empty' ? t().md_only : msg);
 
   // ── on a reader page: generate a language, or regenerate the current one ──
   if (PAPER) {
@@ -179,6 +180,8 @@
     document.getElementById('ui-lang-box').title = T.ui_lang;
     ui.setAttribute('aria-label', T.ui_lang);
     document.getElementById('go-t').textContent = T.generate;
+    const of = document.getElementById('open-file');
+    of.title = T.open_md; of.setAttribute('aria-label', T.open_md);
     document.getElementById('open-settings').textContent = T.settings;
     document.getElementById('model-label').textContent = modelLabel();
     renderConnect();
@@ -227,25 +230,54 @@
     };
     document.getElementById('open-settings').onclick = openSettings;
     const form = document.getElementById('newform'), err = document.getElementById('err'), card = document.getElementById('jobcard');
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      err.hidden = true;
-      const ref = document.getElementById('ref').value.trim();
-      if (!/\d{4}\.\d{4,5}/.test(ref)) { err.textContent = t().bad_ref; err.hidden = false; return; }
-      if (!modelName) { err.textContent = t().no_model; err.hidden = false; return; }   // connect a model first (the card below)
+    const fail = (msg) => { err.textContent = msg; err.hidden = false; };
+    // a paper (an arXiv link, or a document just opened) into the job card, then into the reader
+    async function start(ref, label) {
       const lang = sel.value;
       card.hidden = false;
       try {
         await submit(ref, lang, false, (j) => {
-          const T = t();
-          if (j.status === 'error') { card.innerHTML = `<div class="jc-t">${esc(T.failed)} · ${j.pid}</div><div class="jc-e">${esc(errText(j.error))}</div>`; return; }
-          card.innerHTML = `<div class="jc-t">${j.pid} · ${esc(I18N.NATIVE[j.lang])}</div>
+          const T = t(), name = esc(label || j.pid);
+          if (j.status === 'error') { card.innerHTML = `<div class="jc-t">${esc(T.failed)} · ${name}</div><div class="jc-e">${esc(errText(j.error))}</div>`; return; }
+          card.innerHTML = `<div class="jc-t">${name} · ${esc(I18N.NATIVE[j.lang])}</div>
             <div class="jc-s">${esc(T.stages[j.stage] || j.stage)}${j.total ? ` · ${j.done}/${j.total}` : ''}</div>
             <span class="sb-prog"><i style="width:${pct(j)}%"></i></span>`;
           if (j.status === 'done') location.href = `/p/${j.pid}?lang=${encodeURIComponent(j.lang)}`;
         });
-      } catch (x) { card.hidden = true; err.textContent = errText(x.message); err.hidden = false; }
+      } catch (x) { card.hidden = true; fail(errText(x.message)); }
+    }
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      const ref = document.getElementById('ref').value.trim();
+      if (!/\d{4}\.\d{4,5}/.test(ref)) { fail(t().bad_ref); return; }
+      if (!modelName) { fail(t().no_model); return; }   // connect a model first (the card below)
+      start(ref);
     };
+    // a Markdown file, from the bar's mark or dropped anywhere on the page: stored by the server, then generated
+    async function openFile(file) {
+      err.hidden = true;
+      if (!file) return;
+      if (!/\.(md|markdown|mdown|txt)$/i.test(file.name)) { fail(t().md_only); return; }
+      if (!modelName) { fail(t().no_model); return; }
+      try {
+        const r = await api('/api/import', { name: file.name, text: await file.text() });
+        start(r.paper, r.title);
+      } catch (x) { fail(errText(x.message)); }
+    }
+    const fileIn = document.getElementById('file'), barEl = form.querySelector('.bar');
+    const openBtn = document.getElementById('open-file');
+    openBtn.onclick = () => fileIn.click();
+    fileIn.onchange = () => { openFile(fileIn.files[0]); fileIn.value = ''; };
+    let depth = 0;   // dragenter and dragleave fire for every child the file passes over
+    document.addEventListener('dragenter', (e) => { if ([...e.dataTransfer.types].includes('Files')) { depth++; barEl.classList.add('dropping'); } });
+    document.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; barEl.classList.remove('dropping'); } });
+    document.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+    document.addEventListener('drop', (e) => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault(); depth = 0; barEl.classList.remove('dropping');
+      openFile(e.dataTransfer.files[0]);
+    });
     renderLanding();
     if (jobs.some((j) => j.status === 'queued' || j.status === 'running')) startPolling();
   }
