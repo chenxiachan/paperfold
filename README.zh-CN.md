@@ -4,7 +4,7 @@
 
 # PaperFold
 
-**缩放任何一篇论文，读得更明白**
+**缩放任何文字，读得更明白**
 
 <img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9%2B-6B5CE7?style=flat-square">
 <img alt="12 种语言" src="https://img.shields.io/badge/languages-12-6B5CE7?style=flat-square">
@@ -20,6 +20,10 @@
 <img src="docs/assets/zoom-zh.gif" width="880" alt="一篇论文从全文折叠成章节地图，再展开回来">
 
 </div>
+
+## 最新
+
+- **2026 年 10 月：不只读 arXiv。** 粘贴 PubMed Central、bioRxiv、medRxiv 上论文的链接或 DOI，或任何语言的维基百科条目，也可以拖入你自己的 Markdown 文件。打开后同样是五个层级。
 
 ## 读论文，脑子里少装一点
 
@@ -62,7 +66,7 @@ python3 -m pip install -r requirements.txt
 python3 -m adr serve
 ```
 
-在浏览器里打开 `http://localhost:3017`（最后一条命令会打印这个地址）。第一次使用先[连接一个模型](#连接模型)，然后粘贴链接（arXiv、PubMed Central、bioRxiv、medRxiv 的论文，DOI，或维基百科条目）或拖入一个 Markdown 文件，选择语言。
+在浏览器里打开 `http://localhost:3017`（最后一条命令会打印这个地址）。第一次使用先[连接一个模型](#连接模型)，然后粘贴 arXiv、PubMed Central、bioRxiv、medRxiv 上论文的链接或 DOI，或维基百科条目，也可以拖入一个 Markdown 文件，再选择语言。
 
 需要 Python 3.9 或更新的版本（macOS 自带的就可以）。arXiv 论文要有 arXiv 生成的 HTML 版本，2023 年底以来的论文大多都有；bioRxiv 和 medRxiv 的预印本、任何语言的维基百科条目，都直接从网站读取；其他论文要在 [Europe PMC](https://europepmc.org) 有开放全文（PubMed Central 的开放获取文章，以及 Research Square 等平台的预印本）；Markdown 文件没有这个要求。
 
