@@ -23,7 +23,8 @@ python3 -m adr serve                    # http://localhost:3017  (ThoughtDAG kee
 ```
 
 The landing takes a link or ID (arXiv, PubMed Central, Europe PMC, bioRxiv, medRxiv, a DOI, Wikipedia), or a Markdown
-file (the bar's upload button, or dropped anywhere on the page), and a language; the sidebar lists every paper generated so far. In a paper,
+file (the dashed box under the bar, or dropped anywhere on the page), and a language; a line under the bar names
+the sources it reads; the sidebar lists every paper generated so far. In a paper,
 the language menu switches between generated languages, generates a new one, or regenerates the current one.
 Two languages. The paper is read in one (the menu at the top right, 12 languages: English, 简体中文, 繁體中文,
 日本語, 한국어, Español, Français, Deutsch, Português, Italiano, Русский, हिन्दी): its text, and the names of its own

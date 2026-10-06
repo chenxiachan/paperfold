@@ -197,9 +197,8 @@
     document.getElementById('ui-lang-box').title = T.ui_lang;
     ui.setAttribute('aria-label', T.ui_lang);
     document.getElementById('go-t').textContent = T.generate;
-    const of = document.getElementById('open-file');
-    of.title = T.open_md; of.setAttribute('aria-label', T.open_md);
-    document.getElementById('open-file-text').textContent = T.open_md;
+    document.getElementById('sources').textContent = T.sources;
+    document.getElementById('dropzone-t').textContent = T.drop_zone;
     document.getElementById('open-settings').textContent = T.settings;
     document.getElementById('model-label').textContent = modelLabel();
     renderConnect();
@@ -283,13 +282,11 @@
         start(r.paper, r.title);
       } catch (x) { fail(errText(x.message)); }
     }
-    const fileIn = document.getElementById('file'), barEl = form.querySelector('.bar');
-    document.getElementById('open-file').onclick = () => fileIn.click();
-    document.getElementById('open-file-text').onclick = () => fileIn.click();
+    const fileIn = document.getElementById('file'), zone = document.getElementById('dropzone');
+    zone.onclick = () => fileIn.click();
     fileIn.onchange = () => { openFile(fileIn.files[0]); fileIn.value = ''; };
     let depth = 0;   // dragenter and dragleave fire for every child the file passes over
-    const refEl = document.getElementById('ref');
-    const dropping = (on) => { barEl.classList.toggle('dropping', on); refEl.placeholder = on ? t().drop_md : t().placeholder; };
+    const dropping = (on) => { zone.classList.toggle('dragging', on); document.getElementById('dropzone-t').textContent = on ? t().drop_md : t().drop_zone; };
     document.addEventListener('dragenter', (e) => { if ([...e.dataTransfer.types].includes('Files')) { depth++; dropping(true); } });
     document.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; dropping(false); } });
     document.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
