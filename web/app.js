@@ -140,6 +140,23 @@
   // ── on a reader page: generate a language, or regenerate the current one ──
   if (PAPER) {
     const toast = h('div', 'gen-toast'); toast.hidden = true; document.body.append(toast);
+    // a Markdown file dropped on a paper's page: stored, then generated from the landing (?start=)
+    let over = 0;
+    const hasFile = (e) => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes('Files');
+    const say = (msg, ms) => { toast.hidden = false; toast.textContent = msg; if (ms) setTimeout(() => { toast.hidden = true; }, ms); };
+    document.addEventListener('dragenter', (e) => { if (hasFile(e)) { over++; say(t().drop_md); } });
+    document.addEventListener('dragleave', () => { if (--over <= 0) { over = 0; if (toast.textContent === t().drop_md) toast.hidden = true; } });
+    document.addEventListener('dragover', (e) => { if (hasFile(e)) e.preventDefault(); });
+    document.addEventListener('drop', async (e) => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault(); over = 0;
+      const file = e.dataTransfer.files[0];
+      if (!/\.(md|markdown|mdown|txt)$/i.test(file.name)) { say(t().md_only, 3000); return; }
+      try {
+        const r = await api('/api/import', { name: file.name, text: await file.text() });
+        location.href = `/?start=${encodeURIComponent(r.paper)}&t=${encodeURIComponent(r.title)}`;
+      } catch (x) { say(errText(x.message), 4000); }
+    });
     window.DRApp = {
       onLang() { renderSidebar(); },
       generate(lang, force) {
@@ -182,6 +199,7 @@
     document.getElementById('go-t').textContent = T.generate;
     const of = document.getElementById('open-file');
     of.title = T.open_md; of.setAttribute('aria-label', T.open_md);
+    document.getElementById('open-file-text').textContent = T.open_md;
     document.getElementById('open-settings').textContent = T.settings;
     document.getElementById('model-label').textContent = modelLabel();
     renderConnect();
@@ -266,8 +284,8 @@
       } catch (x) { fail(errText(x.message)); }
     }
     const fileIn = document.getElementById('file'), barEl = form.querySelector('.bar');
-    const openBtn = document.getElementById('open-file');
-    openBtn.onclick = () => fileIn.click();
+    document.getElementById('open-file').onclick = () => fileIn.click();
+    document.getElementById('open-file-text').onclick = () => fileIn.click();
     fileIn.onchange = () => { openFile(fileIn.files[0]); fileIn.value = ''; };
     let depth = 0;   // dragenter and dragleave fire for every child the file passes over
     const refEl = document.getElementById('ref');
@@ -281,6 +299,12 @@
       openFile(e.dataTransfer.files[0]);
     });
     renderLanding();
+    // a file dropped on a paper's page comes here, stored already: generate it (?start=<id>&t=<title>)
+    const started = new URLSearchParams(location.search);
+    if (started.get('start')) {
+      history.replaceState(null, '', '/');
+      if (modelName) start(started.get('start'), started.get('t')); else fail(t().no_model);
+    }
     if (jobs.some((j) => j.status === 'queued' || j.status === 'running')) startPolling();
   }
 

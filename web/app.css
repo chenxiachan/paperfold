@@ -80,6 +80,7 @@ html.app footer.zoom { left: var(--rail); }
 .bar-file { all: unset; display: flex; flex: none; cursor: pointer; border-radius: 6px; }
 .bar-file:hover .bar-ico, .bar-file:focus-visible .bar-ico { color: var(--accent); }
 .bar-file:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.file-line { margin-top: 10px; }
 #newform .bar.dropping { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 #newform input { flex: 1 1 200px; min-width: 0; font: 450 17px var(--sans); color: var(--ink); background: none; border: 0; padding: 12px 4px; outline: none; }
 #newform input::placeholder { color: #8F877D; }
