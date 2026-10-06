@@ -188,7 +188,6 @@
     const T = t();
     document.documentElement.lang = I18N.htmlLang(uiLang);
     document.getElementById('h-tagline').textContent = T.hero;
-    document.getElementById('h-sub').textContent = T.hero_sub;
     document.getElementById('ref').placeholder = T.placeholder;
     document.getElementById('ref').setAttribute('aria-label', T.placeholder);
     document.getElementById('l-lang').textContent = T.read_in;
