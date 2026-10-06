@@ -12,9 +12,7 @@ tools/modelbench/
 tools/zoombench_ext.py
 research/
 launch/
-# the app: its build tools, the runtime it ships, and the packages it makes
-desktop/node_modules/
-desktop/payload/
-desktop/out/
+# the desktop app is built from its own repository
+desktop/
 # the maintainer's working log, kept on this computer
 STATUS.md

@@ -33,12 +33,7 @@ or the one chosen in Settings (kept in the browser, `pf-ui-lang`). A question is
 asked in, the interface's when that is unclear.
 
 Where things are kept: the code in the project (`adr/`, `web/`); papers and exports in `papers/` and `out/` of the
-project, or wherever `PAPERFOLD_DATA` points (the app points it at its data folder); settings and keys in
-`~/.paperfold/`.
-
-The app (`desktop/`, see its README): an Electron window around the same server, with its own CPython
-(python-build-standalone) and packages, so a reader installs nothing. Signed and notarized in CI with the
-certificate ThoughtDAG uses (`.github/workflows/desktop.yml`).
+project, or wherever `PAPERFOLD_DATA` points; settings and keys in `~/.paperfold/`.
 
 A gallery for a free static host: `tools/gallery.json` lists one paper per field, each with its field and a line on
 why it is worth reading in every gallery language (en, zh, de). `python3 tools/gallery.py --make <model>` generates
