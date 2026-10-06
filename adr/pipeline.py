@@ -4,7 +4,7 @@ Every step reports through `progress(stage, done, total)`; the server turns that
 """
 import urllib.error
 
-from . import biorxiv, epmc, ladder, links, llm, models, store, translate
+from . import biorxiv, epmc, ladder, links, llm, models, store, translate, wiki
 from .fetch import fetch
 
 
@@ -21,6 +21,8 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
             epmc.fetch(pid)
         elif pid.startswith(("biorxiv-", "medrxiv-")):
             biorxiv.fetch(pid, progress)
+        elif pid.startswith("wiki-"):
+            wiki.fetch(pid)
         d = store.pdir(pid)
     else:
         try:

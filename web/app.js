@@ -250,7 +250,7 @@
       e.preventDefault();
       err.hidden = true;
       const ref = document.getElementById('ref').value.trim();
-      if (!/\d{4}\.\d{4,5}|PMC\d{4,}|PPR\d{4,}|10\.\d{4,9}\/\S/i.test(ref)) { fail(t().bad_ref); return; }   // arXiv, Europe PMC, a DOI
+      if (!/\d{4}\.\d{4,5}|PMC\d{4,}|PPR\d{4,}|10\.\d{4,9}\/\S|wikipedia\.org\//i.test(ref)) { fail(t().bad_ref); return; }   // arXiv, Europe PMC, a DOI, Wikipedia
       if (!modelName) { fail(t().no_model); return; }   // connect a model first (the card below)
       start(ref);
     };
@@ -270,12 +270,14 @@
     openBtn.onclick = () => fileIn.click();
     fileIn.onchange = () => { openFile(fileIn.files[0]); fileIn.value = ''; };
     let depth = 0;   // dragenter and dragleave fire for every child the file passes over
-    document.addEventListener('dragenter', (e) => { if ([...e.dataTransfer.types].includes('Files')) { depth++; barEl.classList.add('dropping'); } });
-    document.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; barEl.classList.remove('dropping'); } });
+    const refEl = document.getElementById('ref');
+    const dropping = (on) => { barEl.classList.toggle('dropping', on); refEl.placeholder = on ? t().drop_md : t().placeholder; };
+    document.addEventListener('dragenter', (e) => { if ([...e.dataTransfer.types].includes('Files')) { depth++; dropping(true); } });
+    document.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; dropping(false); } });
     document.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
     document.addEventListener('drop', (e) => {
       if (!e.dataTransfer.files.length) return;
-      e.preventDefault(); depth = 0; barEl.classList.remove('dropping');
+      e.preventDefault(); depth = 0; dropping(false);
       openFile(e.dataTransfer.files[0]);
     });
     renderLanding();

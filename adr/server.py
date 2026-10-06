@@ -223,7 +223,7 @@ def make_handler(jobs):
                     try:
                         job = jobs.submit(body.get("paper", ""), lang, body.get("force"))
                     except ValueError as e:   # not a paper's reference, or (a DOI) none Europe PMC can read in full
-                        return self.json({"error": "no-fulltext" if str(e) == "no-fulltext" else "bad-ref"}, 400)
+                        return self.json({"error": str(e) if str(e) in ("no-fulltext", "no-article") else "bad-ref"}, 400)
                     return self.json(job)
                 if u.path == "/api/import":
                     text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]

@@ -62,9 +62,9 @@ python3 -m pip install -r requirements.txt
 python3 -m adr serve
 ```
 
-Open `http://localhost:3017`, which the last command prints. The first time, [connect a model](#connect-a-model); then paste a paper's link (arXiv, PubMed Central, or a DOI), or open a Markdown file, and pick a language.
+Open `http://localhost:3017`, which the last command prints. The first time, [connect a model](#connect-a-model); then paste a link (a paper on arXiv, PubMed Central, bioRxiv or medRxiv, a DOI, or a Wikipedia article), or drag in a Markdown file, and pick a language.
 
-You need Python 3.9 or newer (the one macOS ships with works). An arXiv paper needs its HTML version, as most papers since late 2023 have; a bioRxiv or medRxiv preprint is read from the server itself; any other paper needs its open full text in [Europe PMC](https://europepmc.org) (open-access articles in PubMed Central, and preprints such as Research Square's); a Markdown file needs nothing.
+You need Python 3.9 or newer (the one macOS ships with works). An arXiv paper needs its HTML version, as most papers since late 2023 have; a bioRxiv or medRxiv preprint, or a Wikipedia article in any language, is read from the site itself; any other paper needs its open full text in [Europe PMC](https://europepmc.org) (open-access articles in PubMed Central, and preprints such as Research Square's); a Markdown file needs nothing.
 
 ## Connect a model
 

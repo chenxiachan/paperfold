@@ -22,8 +22,8 @@ python3 -m pip install -r requirements.txt   # beautifulsoup4, lxml, Pillow
 python3 -m adr serve                    # http://localhost:3017  (ThoughtDAG keeps 3001)
 ```
 
-The landing takes an arXiv link or ID, or a Markdown file (the bar's mark opens one, or drop it on the page), and a
-language; the sidebar lists every paper generated so far. In a paper,
+The landing takes a link or ID (arXiv, PubMed Central, Europe PMC, bioRxiv, medRxiv, a DOI, Wikipedia), or a Markdown
+file (the bar's upload button, or dropped anywhere on the page), and a language; the sidebar lists every paper generated so far. In a paper,
 the language menu switches between generated languages, generates a new one, or regenerates the current one.
 Two languages. The paper is read in one (the menu at the top right, 12 languages: English, 简体中文, 繁體中文,
 日本語, 한국어, Español, Français, Deutsch, Português, Italiano, Русский, हिन्दी): its text, and the names of its own
@@ -211,6 +211,16 @@ minute or two; the job's progress counts them. Stored as `papers/biorxiv-<DOI su
 still turns this computer away (HTTP 403 for the XML), the preprint is read from Europe PMC if it holds the full text,
 under the same id; else the job says so.
 
+Wikipedia (`wiki.py`), any language edition: the title is resolved by the Action API (redirects followed to the article
+itself) and the article's Parsoid HTML read from the MediaWiki REST API; a Chinese article is asked for in zh-cn, since
+its source mixes scripts and leaves the words it must not convert empty until it is converted. Left out: infoboxes,
+navigation boxes and sidebars, hatnotes, maintenance notices, inline icons, layout tables, and the sections that only
+list links ("See also", "External links", "Further reading", in the larger editions' words). Links to other articles
+are read as their words, so the model can rephrase and translate them; a formula keeps its MathML (its TeX without
+Wikipedia's `{\displaystyle …}` as alttext), and one alone in its line is a display formula; the reference lists
+become one bibliography the marks [1] point into. Stored as `papers/wiki-<language>-<page id>/` with the revision read,
+under CC BY-SA 4.0.
+
 The model is still told it reads a paper, and the levels are made in English first: a document in another language
 is read with English levels over its own text. Making the levels in the document's language is the next step.
 
@@ -245,6 +255,7 @@ adr/local.py    documents from this computer: stored as papers (md-…), with th
 adr/jats.py     JATS XML → semantic HTML (PubMed Central, Europe PMC, bioRxiv, PLOS, eLife)
 adr/epmc.py     papers from Europe PMC by PMC or PPR id, link or DOI (pmc…, ppr…)
 adr/biorxiv.py  preprints from bioRxiv and medRxiv, from their own JATS (biorxiv-…, medrxiv-…)
+adr/wiki.py     Wikipedia articles, any language edition (wiki-<lang>-<page id>)
 adr/tokens.py   tokenizer, sentence splitter, LCS alignment
 adr/ladder.py   one model call per section; validation; written words aligned to source words for the morph
 adr/links.py    argument links, one call over the whole paper
