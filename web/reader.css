@@ -596,7 +596,7 @@ html.morphing .chatbtn { pointer-events: none; }
   @page { margin: 16mm 14mm; }
 }
 .paper-head .license { font-size: 12.5px; margin-top: 6px; }
-.license a { color: var(--faint); }   /* (no .paper-head before it: the zoom's copies of this line have none) */
+.license, .license a { color: var(--faint); }   /* (no .paper-head before it: the zoom's copies of this line have none) */
 .license a:hover { color: var(--muted); }
 /* "keep my highlights": the reader's passages, kept as the paper zooms out, in the author's type */
 .tk.kept, .tr.kept { font-family: var(--serif); font-weight: 400; color: var(--ink-2); }

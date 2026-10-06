@@ -218,8 +218,9 @@ navigation boxes and sidebars, hatnotes, maintenance notices, inline icons, layo
 list links ("See also", "External links", "Further reading", in the larger editions' words). Links to other articles
 are read as their words, so the model can rephrase and translate them; a formula keeps its MathML (its TeX without
 Wikipedia's `{\displaystyle …}` as alttext), and one alone in its line is a display formula; the reference lists
-become one bibliography the marks [1] point into. Stored as `papers/wiki-<language>-<page id>/` with the revision read,
-under CC BY-SA 4.0.
+become one bibliography the marks [1] point into. Stored as `papers/wiki-<language>-<page id>/` with the revision read and
+the day it was read (`snapshot`, shown under the title and carried into the notes' exports: the article may have changed
+since), under CC BY-SA 4.0.
 
 The model is still told it reads a paper, and the levels are made in English first: a document in another language
 is read with English levels over its own text. Making the levels in the document's language is the next step.

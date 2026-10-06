@@ -10,10 +10,12 @@ uses ..."), maintenance notices, small inline icons, and the sections that only 
 links", "Further reading"). Links to other articles are read as their words, so the model can rephrase and translate
 them. Formulas keep their MathML, with their TeX as alttext; reference marks [1] point into one bibliography.
 
-Stored as papers/wiki-<language>-<page id>/, with the revision read; under CC BY-SA 4.0, as Wikipedia's text is.
+Stored as papers/wiki-<language>-<page id>/, with the revision read and the day it was read (the snapshot: the article
+may have changed since); under CC BY-SA 4.0, as Wikipedia's text is.
 """
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -189,7 +191,7 @@ def fetch(pid, progress=None):
                    variant="zh-cn" if lang == "zh" else None).decode("utf-8", "replace")
     stamp = re.search(r'<meta property="dc:modified" content="([^"]+)"', parsoid)
     meta = {"id": pid, "version": f"rev {rev}" if rev else "", "title": title, "authors": ["Wikipedia contributors"],
-            "date": stamp.group(1)[:10] if stamp else "", "lang": lang,
+            "date": stamp.group(1)[:10] if stamp else "", "lang": lang, "snapshot": time.strftime("%Y-%m-%d"),
             "abs_url": f"https://{lang}.wikipedia.org/w/index.php?title={key}&oldid={rev}" if rev else f"https://{lang}.wikipedia.org/wiki/{key}",
             "html_url": "", "license": "https://creativecommons.org/licenses/by-sa/4.0/",
             "source": {"kind": "wikipedia", "name": title, "revision": rev}, "label": f"{lang}.wikipedia.org"}

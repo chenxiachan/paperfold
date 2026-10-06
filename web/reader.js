@@ -365,7 +365,8 @@
     mirrorLang();
     const trTitle = lang !== 'en' && m.titles && m.titles[lang];
     paperHead.innerHTML = `<h1>${esc(trTitle || m.title)}</h1>${trTitle ? `<div class="orig">${esc(m.title)}</div>` : ''}<div class="authors">${esc((m.authors || []).map(flipName).join(', '))}</div>` +
-      (m.license ? `<div class="license"><a href="${esc(m.license)}" target="_blank" rel="noopener">${esc(licenseName(m.license, t))}</a></div>` : '');
+      (m.license || m.snapshot ? `<div class="license">${[m.license ? `<a href="${esc(m.license)}" target="_blank" rel="noopener">${esc(licenseName(m.license, t))}</a>` : '',
+        m.snapshot ? esc(t.snapshot.replace('{date}', longDate(m.snapshot))) : ''].filter(Boolean).join(' · ')}</div>` : '');
     [...paperHead.children].forEach((c) => { c.dataset.id = `ph:${c.className || c.tagName}`; });
     capEpoch++;
     // theorem labels come from LaTeXML in English
@@ -400,6 +401,8 @@
     if (window.DRApp) window.DRApp.onLang(lang);
   }
 
+  // a page read from the web is a snapshot: the day it was read, in the interface's language ("6 October 2026")
+  const longDate = (iso) => { try { return new Date(`${iso}T12:00:00`).toLocaleDateString(I18N.htmlLang(ui), { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return iso; } };
   // what a paper's license allows, in a few words: CC licenses by name; arXiv's own grants only arXiv the right to share
   function licenseName(url, t) {
     const cc = /creativecommons\.org\/(licenses|publicdomain)\/([a-z-]+)\/([\d.]+)/.exec(url);
@@ -2343,7 +2346,7 @@
     .sort((x, y) => (placeOf(x.anchor) - placeOf(y.anchor)) || (((x.anchor.tokens || [0])[0]) - ((y.anchor.tokens || [0])[0])));
   function notesJson() {
     const m = D.meta;
-    return { format: 'paperfold/notes', version: 1, made_by: `${BRAND} · ${REPO}`, paper: { id: m.id, version: m.version, title: m.title, url: m.abs_url }, notes: inOrder() };
+    return { format: 'paperfold/notes', version: 1, made_by: `${BRAND} · ${REPO}`, paper: { id: m.id, version: m.version, title: m.title, url: m.abs_url, ...(m.snapshot ? { snapshot: m.snapshot } : {}) }, notes: inOrder() };
   }
   // Markdown for Obsidian: a note per paper; each highlight a quote with a block id (^n-…) other notes can link to,
   // each question a callout; every one links back to its place in the reader
@@ -2351,7 +2354,7 @@
     const m = D.meta, t = T[ui], q = (s) => JSON.stringify(String(s || ''));
     const out = ['---', `title: ${q(m.title)}`, `authors: ${JSON.stringify(m.authors || [])}`,
       m.abs_url ? `arxiv: ${q(m.id + (m.version || ''))}` : `source: ${q(sourceName(m))}`,
-      ...(m.abs_url ? [`url: ${m.abs_url}`] : []), `license: ${m.license || ''}`, ...(D.app ? [`reader: ${location.origin}/p/${m.id}`] : []),
+      ...(m.abs_url ? [`url: ${m.abs_url}`] : []), ...(m.snapshot ? [`snapshot: ${m.snapshot}`] : []), `license: ${m.license || ''}`, ...(D.app ? [`reader: ${location.origin}/p/${m.id}`] : []),
       `exported: ${new Date().toISOString().slice(0, 10)}`, 'tags: [paper]', 'format: paperfold/notes@1', '---', '',
       `# ${m.title}`, '', [(m.authors || []).map(flipName).join(', '), m.abs_url ? `[${sourceName(m)}](${m.abs_url})` : sourceName(m)].filter(Boolean).join(' · '), ''];
     let sec = null;
