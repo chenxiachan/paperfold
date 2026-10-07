@@ -13,7 +13,7 @@
 
 [English](README.md) · **简体中文**
 
-**[试一试效果 →](https://chenxiachan.github.io/paperfold-gallery/)** 来自不同领域的论文，无需安装。
+**[试一试效果 →](https://chenxiachan.github.io/paperfold-gallery/)** 来自不同领域的arXiv论文，无需安装。
 
 <br>
 
