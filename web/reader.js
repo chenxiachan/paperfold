@@ -3019,6 +3019,16 @@
   warmSoon(600);
   loadNotes();
   try { if (PDF_OK && innerWidth >= 1100 && localStorage.getItem(CMP_KEY) === '1') openCompare(); } catch { /* private window */ }
+  // the page again after a generation (app.js): the level and the paragraph that were being read, where they were
+  try {
+    const k = JSON.parse(sessionStorage.getItem('pf-keep') || 'null');
+    sessionStorage.removeItem('pf-keep');
+    const el = k && k.pid === D.meta.id && unitEl.get(k.uid);
+    if (el) {
+      const back = () => requestAnimationFrame(() => scrollBy(0, el.getBoundingClientRect().top - k.top));
+      if (typeof k.level === 'number' && k.level !== level) { setLevel(k.level); setTimeout(back, DUR + 120); } else back();
+    }
+  } catch { /* private window */ }
   function setUi(code) {
     if (!T[code] || code === ui) return;
     ui = code;

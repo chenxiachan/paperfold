@@ -131,6 +131,7 @@ button.primary:hover { background: var(--accent-deep); }
 .gen-toast .sb-prog { grid-column: 1 / -1; }
 .gen-toast .g-x { grid-row: 1; grid-column: 2; border: 0; background: none; font-size: 18px; color: var(--muted); cursor: pointer; }
 .gen-toast .g-stop { grid-row: 1; grid-column: 2; align-self: start; }
+.gen-toast .g-note { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 
 /* ── settings ────────────────────────────────────────────── */
 dialog.settings { border: 1px solid var(--line); border-radius: 16px; padding: 0; width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 48px); background: var(--card); color: var(--ink);

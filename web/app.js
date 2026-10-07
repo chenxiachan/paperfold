@@ -184,35 +184,67 @@
         location.href = `/?start=${encodeURIComponent(r.paper)}&t=${encodeURIComponent(r.title)}`;
       } catch (x) { say(errText(x.message), 4000); }
     });
+    // a generation of this paper in the toast: its stage and a stop button; done, the page again, at the paragraph being
+    // read (the reader picks it up from sessionStorage). `note` says why the page is here before its levels are.
+    function toastFor(lang, note) {
+      const T = t(), name = I18N.NATIVE[lang];
+      toast.hidden = false;
+      toast.innerHTML = `<b>${esc(T.generating)} · ${esc(name)}</b><span class="g-stage">${esc(T.stages.queued)}</span>` +
+        `<span class="sb-prog"><i style="width:4%"></i></span>${note ? `<span class="g-note">${esc(note)}</span>` : ''}`;
+      const closable = (head, line) => {
+        toast.innerHTML = `<b>${esc(head)} · ${esc(name)}</b><span class="g-stage">${esc(line)}</span><button type="button" class="g-x" aria-label="${esc(t().close)}">×</button>`;
+        toast.querySelector('.g-x').onclick = () => { toast.hidden = true; };
+      };
+      const update = (j) => {
+        const T2 = t();
+        if (j.status === 'error') { closable(T2.failed, errText(j.error)); return; }
+        if (j.status === 'stopped') { closable(T2.stopped, ''); return; }
+        if (!toast.querySelector('.g-stop')) {
+          toast.insertAdjacentHTML('beforeend', `<button type="button" class="g-stop">${esc(T2.stop)}</button>`);
+          toast.querySelector('.g-stop').onclick = () => stopJob(j.id);
+        }
+        toast.querySelector('.g-stage').textContent = stageOf(j, T2);
+        toast.querySelector('.g-stop').disabled = !!j.stopping;
+        toast.querySelector('.sb-prog i').style.width = `${pct(j)}%`;
+        if (j.status === 'done') reopen(j.lang);
+      };
+      update.fail = (e) => closable(t().failed, errText(e.message));
+      return update;
+    }
+    function reopen(lang) {
+      const r = document.getElementById('doc').getBoundingClientRect(), R = window.__reader;
+      let u = null;
+      for (const f of [0.3, 0.36, 0.42, 0.24]) {   // the reading line, or near it when it falls between paragraphs
+        const at = document.elementFromPoint(r.left + Math.min(r.width / 2, 320), innerHeight * f);
+        u = at && at.closest('.u[data-u]');
+        if (u) break;
+      }
+      try { if (u) sessionStorage.setItem('pf-keep', JSON.stringify({ pid: PAPER.id, uid: u.dataset.u, top: u.getBoundingClientRect().top, level: R && R.level })); } catch { /* private window */ }
+      location.href = `/p/${PAPER.id}?lang=${encodeURIComponent(lang)}`;
+    }
     window.DRApp = {
       onLang() { renderSidebar(); },
       generate(lang, force) {
         const T = t(), name = I18N.NATIVE[lang];
         if (force && !confirm(`${T.regen} · ${name}?`)) return;
-        toast.hidden = false;
-        toast.innerHTML = `<b>${esc(T.generating)} · ${esc(name)}</b><span class="g-stage">${esc(T.stages.queued)}</span><span class="sb-prog"><i style="width:4%"></i></span>`;
-        const closable = (head, line) => {
-          toast.innerHTML = `<b>${esc(head)} · ${esc(name)}</b><span class="g-stage">${esc(line)}</span><button type="button" class="g-x" aria-label="${esc(t().close)}">×</button>`;
-          toast.querySelector('.g-x').onclick = () => { toast.hidden = true; };
-        };
-        submit(PAPER.id, lang, force, (j) => {
-          const T2 = t();
-          if (j.status === 'error') { closable(T2.failed, errText(j.error)); return; }
-          if (j.status === 'stopped') { closable(T2.stopped, ''); return; }
-          if (!toast.querySelector('.g-stop')) {
-            toast.insertAdjacentHTML('beforeend', `<button type="button" class="g-stop">${esc(T2.stop)}</button>`);
-            toast.querySelector('.g-stop').onclick = () => stopJob(j.id);
-          }
-          toast.querySelector('.g-stage').textContent = stageOf(j, T2);
-          toast.querySelector('.g-stop').disabled = !!j.stopping;
-          toast.querySelector('.sb-prog i').style.width = `${pct(j)}%`;
-          if (j.status === 'done') location.href = `/p/${PAPER.id}?lang=${encodeURIComponent(lang)}`;
-        }).catch((e) => { closable(t().failed, errText(e.message)); });
+        const update = toastFor(lang);
+        submit(PAPER.id, lang, force, update).catch(update.fail);
       },
     };
     api('/api/models').then((d) => { modelName = d.selectedName || ''; renderSidebar(); }).catch(() => {});
     api('/api/papers').then((p) => { papers = p; renderSidebar(); }).catch(() => {});
-    api('/api/jobs').then((j) => { jobs = j; renderSidebar(); if (j.some((x) => x.status === 'running' || x.status === 'queued')) startPolling(); }).catch(() => {});
+    api('/api/jobs').then((j) => {
+      jobs = j;
+      renderSidebar();
+      // a generation of this paper under way (the landing opens a paper as soon as it can be read): followed here
+      const mine = jobFor(PAPER.id);
+      if (mine) {
+        const update = toastFor(mine.lang, t().read_first);
+        watchers.set(mine.id, (x) => { update(x); if (!live(x)) watchers.delete(x.id); });
+        update(mine);
+      }
+      if (j.some(live)) startPolling();
+    }).catch(() => {});
   }
 
   // ── the landing ──────────────────────────────────────────────────────
@@ -302,7 +334,8 @@
             <div class="jc-s">${esc(stageOf(j, T))}</div>
             <span class="sb-prog"><i style="width:${pct(j)}%"></i></span>`;
           card.querySelector('.jc-stop').onclick = () => stopJob(j.id);
-          if (j.status === 'done') location.href = `/p/${j.pid}?lang=${encodeURIComponent(j.lang)}`;
+          // readable (parsed): the paper opens in its own words now, and its levels come in while it is read
+          if (j.status === 'done' || (j.readable && j.status === 'running')) location.href = `/p/${j.pid}?lang=${encodeURIComponent(j.lang)}`;
         });
       } catch (x) { card.hidden = true; fail(errText(x.message)); }
     }
