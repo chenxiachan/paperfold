@@ -656,3 +656,39 @@ html.morphing .chatbtn { pointer-events: none; }
   .lside .ncard { width: auto; max-width: 100%; }
   .chunk > .side, .chunk > .lside { position: static; }
 }
+
+/* ── beside the original pages: the PDF at the left, the reader's column at the right ── */
+.cmpbtn { order: 3; flex: none; font: 600 12.5px var(--sans); color: var(--ink-2); background: none; border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 11px; cursor: pointer; }
+.cmpbtn:hover { border-color: var(--accent); color: var(--accent); }
+.cmpbtn.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+html.compare { --pdfw: min(46vw, 860px); }
+/* (html.app.compare: over app.css's html.app rules, which come later) */
+html.compare body, html.app.compare body { padding-left: calc(var(--rail, 0px) + var(--pdfw)); }
+html.compare footer.zoom, html.app.compare footer.zoom { left: calc(var(--rail, 0px) + var(--pdfw)); }
+.pdfpane { position: fixed; z-index: 15; top: 0; bottom: 0; left: var(--rail, 0px); width: var(--pdfw); display: flex; flex-direction: column;
+  background: var(--line-2); border-right: 1px solid var(--line); font-family: var(--sans); }
+.pp-bar { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 16px; font-size: 12.5px; font-weight: 550; color: var(--muted); }
+.pp-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-n { font-variant-numeric: tabular-nums; }
+.pp-x { width: 28px; height: 28px; border: 0; border-radius: 7px; background: none; font: 400 20px/1 var(--sans); color: var(--muted); cursor: pointer; }
+.pp-x:hover { background: var(--line); color: var(--ink); }
+.pp-scroll { flex: 1; min-height: 0; overflow: auto; padding: 2px 12px 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.pp-page { position: relative; flex: none; background: #fff; border-radius: 2px; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 10px 26px -14px rgba(0, 0, 0, .3); }
+.pp-page canvas { display: block; width: 100%; height: 100%; }
+.pp-marks { position: absolute; inset: 0; pointer-events: none; }
+.pp-mark { position: absolute; border-radius: 2px; background: rgba(107, 92, 231, .2); mix-blend-mode: multiply; }
+.pp-mark.pick { animation: pp-pick 1.3s ease-out; }
+@keyframes pp-pick { 0% { background: rgba(107, 92, 231, .45); } 100% { background: rgba(107, 92, 231, .2); } }
+.pp-msg { margin: 48px 18px; font-size: 14px; line-height: 1.5; color: var(--muted); text-align: center; }
+html.compare .side, html.compare .lside { position: static; width: auto; flex-direction: row; flex-wrap: wrap; gap: 2px 14px; margin-top: 4px; }
+html.compare .lk, html.compare .lside .ncard { width: auto; max-width: 100%; }
+html.compare .chunk > .side, html.compare .chunk > .lside { position: static; }
+@media (max-width: 1099px) {
+  .cmpbtn, .pdfpane { display: none !important; }
+  html.compare body, html.app.compare body { padding-left: var(--rail, 0px); }
+  html.compare footer.zoom, html.app.compare footer.zoom { left: var(--rail, 0px); }
+}
+@media (prefers-reduced-motion: reduce) { .pp-mark.pick { animation: none; } }
+@media print { .pdfpane, .cmpbtn { display: none !important; } html.compare body, html.app.compare body { padding-left: 0; } }

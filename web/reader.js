@@ -1528,7 +1528,7 @@
   function layoutSides() {
     const all = docEl.querySelectorAll('.side, .lside');
     for (const sd of all) sd.style.marginTop = '';
-    if (!matchMedia(D.app ? '(min-width: 1300px)' : '(min-width: 1240px)').matches) return;
+    if (document.documentElement.classList.contains('compare') || !matchMedia(D.app ? '(min-width: 1300px)' : '(min-width: 1240px)').matches) return;   // beside the PDF: in the column
     const moves = [];
     for (const col of ['.side', '.lside']) {   // the right margin, then the left: each stacks on its own
       const shown = [...docEl.querySelectorAll(col)].map((sd) => [sd, sd.getBoundingClientRect()]).filter(([, r]) => r.height)
@@ -2435,7 +2435,303 @@
     for (const key of notesOf.keys()) renderNoteCards(key);
     updateNotesBtn();
     chatLabel();
+    cmpLabel();
     if (!chat.hidden) openChat(chatNote);
+  }
+
+  // ── beside the original pages: the paper's PDF at the left (fetched once by the app, from arXiv or PubMed Central),
+  //    each paragraph found on it by its own words (the paper's language, whatever language it is read in). A click
+  //    on a paragraph shows where it is on its page; reading on carries the pages along; a click on a page goes to its
+  //    paragraph ──
+  const PDF_OK = !!D.app && /^(\d{4}\.\d{4,5}|pmc\d+)$/.test(D.meta.id);
+  const CMP_KEY = 'pf-compare';
+  const cmpBtn = h('button', 'cmpbtn');
+  cmpBtn.type = 'button';
+  cmpBtn.hidden = !PDF_OK;
+  npick.before(cmpBtn);
+  let cmp = null;   // while open: the pane, the pages, every word on them with its boxes, and each paragraph's place
+  const pdfNorm = (s) => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  function cmpLabel() {
+    cmpBtn.textContent = T[ui].compare;
+    cmpBtn.title = T[ui].compare_tip;
+    cmpBtn.classList.toggle('on', !!cmp);
+    cmpBtn.setAttribute('aria-pressed', cmp ? 'true' : 'false');
+  }
+  cmpLabel();
+  cmpBtn.addEventListener('click', () => { if (cmp) closeCompare(); else openCompare(); });
+
+  // the paragraph being read: where it is on screen now, to keep it there while the column changes width
+  function unitAtReading() {
+    const r = docEl.getBoundingClientRect();
+    for (const f of [0.3, 0.36, 0.42, 0.24]) {
+      const el = document.elementFromPoint(r.left + Math.min(r.width / 2, 320), innerHeight * f);
+      const fig = el && el.closest('figure.fig');
+      const u = el && (el.closest('.u[data-u]') || (fig && fig.querySelector('figcaption.u')));
+      if (u) return u;
+    }
+    return null;
+  }
+  function reflowKeeping(u) {
+    const top = u && u.getBoundingClientRect().top;
+    dispatchEvent(new Event('resize'));   // the reader's own: snaps the zoom, lays the margins out again
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (u && u.isConnected) scrollBy(0, u.getBoundingClientRect().top - top); }));
+  }
+
+  async function openCompare() {
+    if (cmp || !PDF_OK) return;
+    const keep = unitAtReading();
+    const pane = h('aside', 'pdfpane'), bar = h('div', 'pp-bar'), title = h('span', 'pp-t'), count = h('span', 'pp-n');
+    const x = h('button', 'pp-x', '×'), scroller = h('div', 'pp-scroll'), msg = h('div', 'pp-msg');
+    x.type = 'button';
+    x.setAttribute('aria-label', T[ui].close);
+    pane.setAttribute('aria-label', T[ui].compare_tip);
+    title.textContent = D.meta.id.startsWith('pmc') ? 'PubMed Central · PDF' : `arXiv · PDF ${D.meta.version || ''}`.trim();
+    msg.textContent = T[ui].pdf_loading;
+    bar.append(title, count, x);
+    scroller.append(msg);
+    pane.append(bar, scroller);
+    document.body.append(pane);
+    cmp = { pane, scroller, count, pages: [], words: [], grams: null, spans: new Map(), current: null, follow: null, epoch: 0 };
+    x.addEventListener('click', closeCompare);
+    document.documentElement.classList.add('compare');
+    try { localStorage.setItem(CMP_KEY, '1'); } catch { /* private window */ }
+    cmpLabel();
+    reflowKeeping(keep);
+    try {
+      const lib = await import('/static/vendor/pdfjs/pdf.min.mjs');
+      lib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
+      const r = await fetch(`/api/pdf/${encodeURIComponent(D.meta.id)}`);
+      if (!r.ok) throw Object.assign(new Error('no pdf'), { none: r.status === 404 });
+      const loading = lib.getDocument({ data: new Uint8Array(await r.arrayBuffer()), isEvalSupported: false });
+      const doc = await loading.promise;
+      if (!cmp || cmp.pane !== pane) { loading.destroy(); return; }
+      Object.assign(cmp, { lib, doc, loading });
+      await layPages();
+      msg.remove();
+      await indexWords();
+      cmp.follow = null;
+      followNow();
+    } catch (e) {
+      if (cmp && cmp.pane === pane) msg.textContent = e.none ? T[ui].pdf_none : T[ui].pdf_error;
+    }
+  }
+  function closeCompare() {
+    if (!cmp) return;
+    const keep = unitAtReading();
+    if (cmp.io) cmp.io.disconnect();
+    if (cmp.loading) cmp.loading.destroy();   // the document and its worker
+    cmp.pane.remove();
+    cmp = null;
+    document.documentElement.classList.remove('compare');
+    try { localStorage.setItem(CMP_KEY, '0'); } catch { /* private window */ }
+    cmpLabel();
+    reflowKeeping(keep);
+  }
+
+  // the pages: sized at once (the pane scrolls through all of them), drawn when they come near
+  async function layPages() {
+    const { doc, scroller } = cmp;
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n), vp = page.getViewport({ scale: 1 });
+      const el = h('div', 'pp-page'), canvas = document.createElement('canvas'), marks = h('div', 'pp-marks');
+      el.dataset.n = n;
+      el.append(canvas, marks);
+      scroller.append(el);
+      cmp.pages.push({ n, page, vp, el, canvas, marks, drawn: 0, task: null });
+    }
+    sizePages();
+    cmp.io = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) drawPage(cmp.pages[+e.target.dataset.n - 1]); },
+      { root: scroller, rootMargin: '800px 0px' });
+    for (const p of cmp.pages) cmp.io.observe(p.el);
+    scroller.addEventListener('scroll', () => requestAnimationFrame(pageCount), { passive: true });
+    scroller.addEventListener('click', onPageClick);
+    pageCount();
+  }
+  function sizePages() {
+    const width = cmp.scroller.clientWidth - 24, widest = Math.max(...cmp.pages.map((p) => p.vp.width));
+    cmp.scale = Math.max(0.3, width / widest);
+    cmp.epoch++;
+    for (const p of cmp.pages) {
+      p.el.style.width = `${Math.round(p.vp.width * cmp.scale)}px`;
+      p.el.style.height = `${Math.round(p.vp.height * cmp.scale)}px`;
+    }
+  }
+  async function drawPage(p) {
+    if (!cmp || !p || p.drawn === cmp.epoch) return;
+    const epoch = cmp.epoch, dpr = Math.min(devicePixelRatio || 1, 2), vp = p.page.getViewport({ scale: cmp.scale * dpr });
+    p.drawn = epoch;
+    if (p.task) p.task.cancel();
+    const c = p.canvas;
+    c.width = Math.floor(vp.width);
+    c.height = Math.floor(vp.height);
+    p.task = p.page.render({ canvasContext: c.getContext('2d'), viewport: vp });
+    try { await p.task.promise; } catch { if (p.drawn === epoch) p.drawn = 0; }
+    p.task = null;
+    paintMarks(p);
+  }
+  function pageCount() {
+    if (!cmp || !cmp.pages.length) return;
+    const top = cmp.scroller.scrollTop + cmp.scroller.clientHeight * 0.3;
+    const p = cmp.pages.find((q) => q.el.offsetTop + q.el.offsetHeight > top) || cmp.pages[cmp.pages.length - 1];
+    cmp.count.textContent = `${p.n} / ${cmp.pages.length}`;
+  }
+
+  // every word on the pages, in reading order, with its boxes (scale 1): a word broken by a hyphen at a line's end is
+  // one word, and so is a word the PDF wrote in two pieces
+  async function indexWords() {
+    const words = [];
+    for (const p of cmp.pages) {
+      const tc = await p.page.getTextContent();
+      let lastY = null, lastEnd = null;
+      for (const it of tc.items) {
+        if (!it.str || !it.str.trim()) { lastEnd = null; continue; }
+        const tx = cmp.lib.Util.transform(p.vp.transform, it.transform);
+        const fh = Math.hypot(tx[2], tx[3]) || it.height || 8, x = tx[4], base = tx[5], s = it.str, L = s.length;
+        const newLine = lastY === null || Math.abs(base - lastY) > fh * 0.5;
+        lastY = base;
+        const re = /\S+/g;
+        let m, first = true;
+        while ((m = re.exec(s))) {
+          const x0 = x + it.width * (m.index / L), x1 = x + it.width * ((m.index + m[0].length) / L);
+          const box = { x: x0, y: base - fh * 0.82, w: x1 - x0, h: fh * 1.08 };
+          const w = pdfNorm(m[0]), prev = words[words.length - 1];
+          const glued = first && m.index === 0 && !newLine && lastEnd !== null && x0 - lastEnd < fh * 0.12;   // two pieces of one word
+          const broken = first && newLine && prev && prev.hyph && prev.page === p.n;                          // net- / work
+          first = false;
+          if (!w) continue;
+          if ((glued || broken) && prev) { prev.w += w; prev.boxes.push(box); prev.hyph = /[-‐]$/.test(m[0]); continue; }
+          words.push({ w, page: p.n, boxes: [box], hyph: /[-‐]$/.test(m[0]) });
+        }
+        lastEnd = /\s$/.test(s) ? null : x + it.width;
+      }
+    }
+    const grams = new Map();
+    for (let i = 0; i + 2 < words.length; i++) {
+      const k = `${words[i].w} ${words[i + 1].w} ${words[i + 2].w}`;
+      const a = grams.get(k);
+      if (a) a.push(i); else grams.set(k, [i]);
+    }
+    Object.assign(cmp, { words, grams });
+  }
+
+  // where a paragraph is: its runs of three words found on the pages, the run of agreeing places they vote for, and
+  // the words from its first match to its last (formula symbols on the page sit between them, so a place may drift)
+  function locate(uid) {
+    if (cmp.spans.has(uid)) return cmp.spans.get(uid);
+    const u = U[uid], uw = u ? u.toks.filter((t) => t.t).map((t) => pdfNorm(t.t)).filter(Boolean) : [];
+    const hitsOf = (i) => { const a = cmp.grams.get(`${uw[i]} ${uw[i + 1]} ${uw[i + 2]}`); return a && a.length <= 30 ? a : null; };
+    let span = null;
+    if (uw.length >= 3) {
+      const votes = new Map();
+      for (let i = 0; i + 2 < uw.length; i++) for (const j of hitsOf(i) || []) { const k = Math.round((j - i) / 8); votes.set(k, (votes.get(k) || 0) + 1); }
+      let k0 = null, n0 = 0;
+      for (const [k, n] of votes) { const all = n + (votes.get(k - 1) || 0) + (votes.get(k + 1) || 0); if (all > n0) { n0 = all; k0 = k; } }
+      if (k0 !== null && n0 >= Math.max(2, Math.min(5, Math.floor((uw.length - 2) * 0.25)))) {
+        let lo = -1, hi = -1, lastI = 0;
+        for (let i = 0; i + 2 < uw.length; i++) {
+          for (const j of hitsOf(i) || []) {
+            const ok = lo < 0 ? Math.abs(Math.round((j - i) / 8) - k0) <= 1 : j > hi - 2 && j - hi <= (i - lastI) + 40;
+            if (ok) { if (lo < 0) lo = j; hi = j + 2; lastI = i; break; }
+          }
+        }
+        if (lo >= 0) span = { lo, hi, page: cmp.words[lo].page, boxes: boxesOf(lo, hi) };
+      }
+    }
+    cmp.spans.set(uid, span);
+    return span;
+  }
+  function boxesOf(lo, hi) {   // the words' boxes, one per line
+    const lines = [];
+    for (let i = lo; i <= hi; i++) {
+      const w = cmp.words[i];
+      for (const b of w.boxes) {
+        const line = lines.find((l) => l.page === w.page && Math.abs(l.y + l.h / 2 - (b.y + b.h / 2)) < b.h * 0.45 && b.x < l.x + l.w + b.h * 3 && b.x + b.w > l.x - b.h * 3);
+        if (line) {
+          const x1 = Math.max(line.x + line.w, b.x + b.w), y1 = Math.max(line.y + line.h, b.y + b.h);
+          line.x = Math.min(line.x, b.x); line.y = Math.min(line.y, b.y); line.w = x1 - line.x; line.h = y1 - line.y;
+        } else lines.push({ page: w.page, x: b.x, y: b.y, w: b.w, h: b.h });
+      }
+    }
+    return lines;
+  }
+
+  // a paragraph shown on its page: the pane scrolls to it when it is out of sight (or always, when picked)
+  function showSpan(span, how) {
+    const before = cmp.current;
+    cmp.current = span;
+    cmp.picked = how === 'pick';
+    for (const p of cmp.pages) if ((before && before.boxes.some((b) => b.page === p.n)) || span.boxes.some((b) => b.page === p.n)) paintMarks(p);
+    if (how === 'stay') return;
+    const b = span.boxes[0], p = cmp.pages[b.page - 1], sc = cmp.scroller;
+    const y = p.el.offsetTop + b.y * cmp.scale, last = span.boxes[span.boxes.length - 1];
+    const yEnd = cmp.pages[last.page - 1].el.offsetTop + (last.y + last.h) * cmp.scale;
+    const seen = y >= sc.scrollTop + 40 && yEnd <= sc.scrollTop + sc.clientHeight - 20;
+    if (how === 'pick' || !seen) sc.scrollTo({ top: y - sc.clientHeight * 0.28, behavior: how === 'pick' && !reduced ? 'smooth' : 'auto' });
+  }
+  function paintMarks(p) {
+    if (!cmp) return;
+    const s = cmp.scale, span = cmp.current;
+    p.marks.replaceChildren(...(span ? span.boxes.filter((b) => b.page === p.n) : []).map((b) => {
+      const m = h('div', `pp-mark${cmp.picked ? ' pick' : ''}`);
+      m.style.cssText = `left:${(b.x - 2) * s}px;top:${(b.y - 1) * s}px;width:${(b.w + 4) * s}px;height:${(b.h + 2) * s}px`;
+      return m;
+    }));
+  }
+
+  // reading on: the paragraph at the reading line, shown on its page
+  function followNow() {
+    if (!cmp || !cmp.grams) return;
+    const u = unitAtReading();
+    if (!u || u.dataset.u === cmp.follow) return;
+    cmp.follow = u.dataset.u;
+    const span = locate(u.dataset.u);
+    if (span) showSpan(span, 'follow');
+  }
+  let followTimer = null;
+  addEventListener('scroll', () => { if (cmp) { clearTimeout(followTimer); followTimer = setTimeout(followNow, 140); } }, { passive: true });
+  addEventListener('resize', () => {
+    if (!cmp || !cmp.pages.length) return;
+    clearTimeout(cmp.resizeTimer);
+    cmp.resizeTimer = setTimeout(() => {
+      if (!cmp) return;
+      sizePages();
+      const sc = cmp.scroller;
+      for (const p of cmp.pages) if (p.el.offsetTop < sc.scrollTop + sc.clientHeight + 800 && p.el.offsetTop + p.el.offsetHeight > sc.scrollTop - 800) drawPage(p);
+    }, 150);
+  });
+  // a paragraph clicked: its place on the page
+  docEl.addEventListener('click', (e) => {
+    if (!cmp || !cmp.grams) return;
+    const fig = e.target.closest('figure.fig'), u = e.target.closest('.u[data-u]') || (fig && fig.querySelector('figcaption.u'));
+    if (!u) return;
+    const span = locate(u.dataset.u);
+    cmp.follow = u.dataset.u;
+    if (span) showSpan(span, 'pick');
+  });
+  // a page clicked: the paragraph there (the narrowest that holds the word under the pointer)
+  function onPageClick(e) {
+    const el = e.target.closest('.pp-page');
+    if (!el || !cmp.grams) return;
+    const n = +el.dataset.n, r = el.getBoundingClientRect(), px = (e.clientX - r.left) / cmp.scale, py = (e.clientY - r.top) / cmp.scale;
+    let at = -1, best = Infinity;
+    cmp.words.forEach((w, i) => {
+      if (w.page !== n) return;
+      for (const b of w.boxes) {
+        const dx = Math.max(b.x - px, 0, px - b.x - b.w), dy = Math.max(b.y - py, 0, py - b.y - b.h), d = dx * dx + 4 * dy * dy;
+        if (d < best) { best = d; at = i; }
+      }
+    });
+    if (at < 0 || best > 900) return;
+    let hit = null;
+    for (const uid of order.keys()) {
+      const s = locate(uid);
+      if (s && s.lo <= at && at <= s.hi && (!hit || s.hi - s.lo < hit.s.hi - hit.s.lo)) hit = { uid, s };
+    }
+    if (!hit) return;
+    cmp.follow = hit.uid;
+    showSpan(hit.s, 'stay');
+    const target = unitEl.get(hit.uid);
+    if (target) go(target.closest('figure.fig') || target, null);
   }
 
   // ── the legend, both ways: hovering a kind lights its paragraphs' dots (and on the map, its chips) while the rest
@@ -2722,13 +3018,15 @@
   hydrateSoon();
   warmSoon(600);
   loadNotes();
+  try { if (PDF_OK && innerWidth >= 1100 && localStorage.getItem(CMP_KEY) === '1') openCompare(); } catch { /* private window */ }
   function setUi(code) {
     if (!T[code] || code === ui) return;
     ui = code;
     try { localStorage.setItem(UI_KEY, code); } catch { /* private window */ }
     applyLang();
   }
-  window.__reader = { setLevel, setLang, setUi, get ui() { return ui; }, zoomBy, get level() { return level; }, get lang() { return lang; }, get pos() { return pos; },
+  window.__reader = { setLevel, setLang, setUi, get ui() { return ui; }, zoomBy,
+    get compared() { if (!cmp || !cmp.grams) return null; const ids = [...order.keys()]; return { units: ids.length, found: ids.filter((id) => locate(id)).length, words: cmp.words.length }; }, get level() { return level; }, get lang() { return lang; }, get pos() { return pos; },
     get staged() { return !!stage; }, get _caps() { return caps; }, get keyframes() { return caps.map((c) => (c ? c.P.size : 0)); },
     // holding the zoom at a position, as a hand would (for looking at the motion frame by frame)
     scrubTo(p) { clearTimeout(snapTimer); holding = true; aimLevel = null; goal = Math.max(0, Math.min(4, p)); kick(); }, letGo() { release(); } };

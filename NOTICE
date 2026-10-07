@@ -5,8 +5,9 @@ This product includes software developed by Xia Chen
 (https://github.com/chenxiachan/paperfold), licensed under the Apache License,
 Version 2.0 (see LICENSE).
 
-It includes the fonts Inter and Source Serif 4 (SIL Open Font License 1.1, in web/vendor/fonts) and KaTeX
-(MIT License, in web/vendor/katex), kept with PaperFold so that its pages ask no other server for anything.
+It includes the fonts Inter and Source Serif 4 (SIL Open Font License 1.1, in web/vendor/fonts), KaTeX
+(MIT License, in web/vendor/katex) and PDF.js (Apache License 2.0, in web/vendor/pdfjs), kept with PaperFold
+so that its pages ask no other server for anything.
 
 
 Papers and their licenses

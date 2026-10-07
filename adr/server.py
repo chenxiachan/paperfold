@@ -16,6 +16,7 @@
   POST /api/providers/save    {key?, preset, name, base, api_key?, models}  ·  POST /api/providers/remove {key}
   POST /api/settings          {use_thoughtdag_env}  ·  POST /api/settings/test {model?}: one tiny call
   GET  /api/notes/<id>        the reader's notes on a paper (docs/notes-format.md)
+  GET  /api/pdf/<id>          the paper's original PDF (arXiv, PubMed Central), fetched once and kept (pdf.py)
   POST /api/notes/<id>        {op: "put", note} or {op: "delete", id}
   POST /api/ask               {paper, id, question}: the model answers a note's question; the answer is stored in it
   POST /api/papers/delete     {paper}: move a paper to papers/.trash (not while it is being generated)
@@ -38,12 +39,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import agents, bridges, build, langs, llm, local, models, notes, pipeline, providers, store
+from . import agents, bridges, build, langs, llm, local, models, notes, pdf, pipeline, providers, store
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript"}
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
-VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
+VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
                 ".txt": "text/plain; charset=utf-8"}
 
 
@@ -229,6 +230,12 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
+                m = re.fullmatch(r"/api/pdf/([\w.-]+)", u.path)
+                if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
+                    f = pdf.path(m.group(1)) if pdf.has_source(m.group(1)) else None
+                    if not f:
+                        return self.json({"error": "no-pdf"}, 404)
+                    return self.send(200, f.read_bytes(), "application/pdf", cache="max-age=86400")
                 if u.path == "/favicon.ico":
                     return self.send(204, b"", "image/x-icon")
                 self.json({"error": "not found"}, 404)
