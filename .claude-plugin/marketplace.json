@@ -1,0 +1,12 @@
+{
+  "name": "paperfold",
+  "description": "Plugins from PaperFold",
+  "owner": { "name": "Xia Chen" },
+  "plugins": [
+    {
+      "name": "textfold",
+      "source": "./plugins/textfold",
+      "description": "Read Claude Code's replies at the level you need, from every word to the answer in one sentence, with one key"
+    }
+  ]
+}

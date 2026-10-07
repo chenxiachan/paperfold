@@ -19,10 +19,19 @@
 
 <img src="docs/assets/zoom.gif" width="880" alt="A paper folding from its full text into a map of its sections, and back">
 
+<br><br>
+
+### Also for agent output
+
+Your agent writes more than you have time to read. A [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) folds every reply the same way, one key per level. [More ↓](#in-claude-code)
+
+<img src="docs/assets/textfold.gif" width="880" alt="A reply in Claude Code folding from the full text to two sentences a paragraph, then one, and back, one key at a time">
+
 </div>
 
 ## What's new
 
+- **October 2026: your agent's replies fold too.** [TextFold](#in-claude-code) puts the five levels on every Claude Code reply. Press 5 for the answer in one sentence, 1 for every word.
 - **October 2026: more than arXiv.** Paste the link or DOI of a paper on PubMed Central, bioRxiv or medRxiv, or a Wikipedia article in any language, or drag in a Markdown file of your own. Each opens at the same five levels.
 
 ## Read with less in your head
@@ -99,6 +108,38 @@ python3 -m adr export 2201.11903
 ```
 
 This writes one self-contained HTML file to `out/2201.11903/` that opens anywhere without a server. PaperFold's license covers its code: a paper, and the levels and translations made from it, stay under the license its authors chose, shown under every title. Most arXiv papers allow reading but not redistribution, so share a page only when that license allows it, as Creative Commons licenses do.
+
+## In Claude Code
+
+TextFold puts the five levels on every reply in Claude Code. Press 5 for the answer in one sentence, 3 for the point of every paragraph, 1 for every word. Nothing is paraphrased, so at every level you read exactly what Claude said.
+
+<details>
+<summary><b>Install it, and see what each level gives you</b></summary>
+
+<br>
+
+It needs Claude Code 2.1.287 or later, in the terminal or in the Code tab of the Desktop app.
+
+```bash
+claude plugin marketplace add chenxiachan/paperfold
+claude plugin install textfold@paperfold
+```
+
+| Key | Level | What you get |
+|:-:|---|---|
+| **1** | **Full** | every word Claude wrote |
+| **2** | **Brief** | each point, with the reason behind it |
+| **3** | **Points** | just the points, at a glance |
+| **4** | **Outline** | the map of a long reply: its sections, and what each one says |
+| **5** | **Gist** | the answer, in one sentence |
+
+Type the digit while the prompt is empty, or pick a level in the row above the prompt. Short replies stay whole: one under about 80 words, or one a fold would barely shorten, always shows as written.
+
+**Why you can trust a fold.** TextFold asks Claude to lead with the point: the answer first in every reply, the key sentence first in every paragraph. A fold keeps what Claude put first. There is no second model and no summary, so a fold costs nothing, takes no time, and never puts words in Claude's mouth.
+
+More in [plugins/textfold](plugins/textfold/README.md).
+
+</details>
 
 <br>
 

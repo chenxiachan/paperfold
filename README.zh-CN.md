@@ -19,10 +19,19 @@
 
 <img src="docs/assets/zoom-zh.gif" width="880" alt="一篇论文从全文折叠成章节地图，再展开回来">
 
+<br><br>
+
+### 也可以用在 Agent 输出上
+
+Agent 写的，总比你有空读的多。一个 [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) 用同样的方式折叠每条回答，一个键一个层级。[了解更多 ↓](#在-claude-code-里)
+
+<img src="docs/assets/textfold.gif" width="880" alt="Claude Code 里的一条回答从全文折到每段两句，再折到一句，然后展开回来，每次按一个键">
+
 </div>
 
 ## 最新
 
+- **2026 年 10 月：Agent 的回答也能折叠了。** [TextFold](#在-claude-code-里) 把五个层级放到 Claude Code 的每条回答上。按 5 看一句话的答案，按 1 看每一个字。
 - **2026 年 10 月：不只读 arXiv。** 粘贴 PubMed Central、bioRxiv、medRxiv 上论文的链接或 DOI，或任何语言的维基百科条目，也可以拖入你自己的 Markdown 文件。打开后同样是五个层级。
 
 ## 读论文，脑子里少装一点
@@ -99,6 +108,38 @@ python3 -m adr export 2201.11903
 ```
 
 这会在 `out/2201.11903/` 里生成一个自包含的 HTML 文件，不需要服务器，在哪里都能打开。PaperFold 的许可证只管代码：论文本身，以及由它生成的各层级和译文，仍然适用作者选择的许可证，标在每篇论文的标题下方。arXiv 上多数论文只允许阅读，不允许转载，只有论文的许可证允许时（比如 Creative Commons），才把页面分享出去。
+
+## 在 Claude Code 里
+
+TextFold 把五个层级放到 Claude Code 的每条回答上。按 5 看一句话的答案，按 3 看每段的要点，按 1 看每一个字。不做任何改写，所以无论在哪一级，你读到的都是 Claude 的原话。
+
+<details>
+<summary><b>安装，以及每一级能看到什么</b></summary>
+
+<br>
+
+需要 Claude Code 2.1.287 或更新的版本，在终端里或桌面应用的 Code 标签页里都能用。
+
+```bash
+claude plugin marketplace add chenxiachan/paperfold
+claude plugin install textfold@paperfold
+```
+
+| 键 | 层级 | 你看到的 |
+|:-:|---|---|
+| **1** | **Full** | Claude 写的每一个字 |
+| **2** | **Brief** | 每个要点，连同背后的理由 |
+| **3** | **Points** | 只看要点，一眼扫完 |
+| **4** | **Outline** | 长回答的地图：有哪几节，每节讲了什么 |
+| **5** | **Gist** | 一句话的答案 |
+
+在提示框为空时输入数字，或者在提示框上方那一行里选一个层级。短回答保持原样：不到大约 80 个词（中文约 130 字），或者折叠后几乎不会变短的回答，总是原样显示。
+
+**为什么折叠可信。** TextFold 请 Claude 把要点放在前面：每条回答先给答案，每段先写关键句。折叠保留的就是 Claude 放在最前面的内容。没有第二个模型，也不做摘要，所以折叠不花钱、不用等，也不会替 Claude 说它没说过的话。
+
+详见 [plugins/textfold](plugins/textfold/README.md)。
+
+</details>
 
 <br>
 
