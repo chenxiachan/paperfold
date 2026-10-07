@@ -16,7 +16,8 @@
   POST /api/providers/save    {key?, preset, name, base, api_key?, models}  ·  POST /api/providers/remove {key}
   POST /api/settings          {use_thoughtdag_env}  ·  POST /api/settings/test {model?}: one tiny call
   GET  /api/notes/<id>        the reader's notes on a paper (docs/notes-format.md)
-  GET  /api/pdf/<id>          the paper's original PDF (arXiv, PubMed Central), fetched once and kept (pdf.py)
+  GET  /api/pdf/<id>          the paper's original PDF (arXiv, PubMed Central, bioRxiv), fetched once and kept (pdf.py)
+  POST /api/pdf/<id>          the PDF itself (the reader's copy, when the server would not give it): kept the same way
   POST /api/notes/<id>        {op: "put", note} or {op: "delete", id}
   POST /api/ask               {paper, id, question}: the model answers a note's question; the answer is stored in it
   POST /api/papers/delete     {paper}: move a paper to papers/.trash (not while it is being generated)
@@ -235,8 +236,8 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/pdf/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     f = pdf.path(m.group(1)) if pdf.has_source(m.group(1)) else None
-                    if not f:
-                        return self.json({"error": "no-pdf"}, 404)
+                    if not f:   # with where the reader may open it, to drop it on the pane
+                        return self.json({"error": "no-pdf", "open": pdf.where(m.group(1)) if pdf.has_source(m.group(1)) else None}, 404)
                     return self.send(200, f.read_bytes(), "application/pdf", cache="max-age=86400")
                 if u.path == "/favicon.ico":
                     return self.send(204, b"", "image/x-icon")
@@ -251,6 +252,13 @@ def make_handler(jobs):
                 return self.json({"error": "forbidden"}, 403)  # another site may not drive this server
             try:
                 size = int(self.headers.get("Content-Length") or 0)
+                m = re.fullmatch(r"/api/pdf/([\w.-]+)", u.path)
+                if m:   # a paper's PDF, dropped on the reader's pane: the file's bytes, not JSON
+                    if not (store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists()):
+                        return self.json({"error": "no such paper"}, 404)
+                    if size > pdf.LIMIT:
+                        return self.json({"error": "too-large"}, 413)
+                    return self.json({"ok": True}) if pdf.keep(m.group(1), self.rfile.read(size)) else self.json({"error": "not-pdf"}, 400)
                 if size > 12_000_000:   # a Markdown file is far smaller; this is a request gone wrong
                     return self.json({"error": "too-large"}, 413)
                 body = json.loads(self.rfile.read(size) or b"{}")

@@ -1,6 +1,8 @@
-"""A paper's original typeset pages, for the reader's side-by-side view: arXiv's PDF of the version read, or the
-publisher's PDF that PubMed Central keeps in its open data. Fetched once, when the reader first asks, and kept beside
-the paper as source.pdf. Wikipedia articles and Markdown files have none."""
+"""A paper's original typeset pages, for the reader's side-by-side view: arXiv's PDF of the version read, the
+publisher's PDF that PubMed Central keeps in its open data, a bioRxiv or medRxiv preprint's own, or (for a preprint read
+through Europe PMC) the preprint server's. Fetched once, when the reader first asks, and kept beside the paper as
+source.pdf. Wikipedia articles and Markdown files have none. None of these servers lets a page read the file itself
+(no CORS), and their article pages may not be framed, so the app fetches it."""
 import json
 import re
 import threading
@@ -22,11 +24,22 @@ def candidates(pid, meta):
         n = pid[3:]
         for v in (1, 2, 3):   # the open data's versions of an article
             yield f"https://pmc-oa-opendata.s3.amazonaws.com/PMC{n}.{v}/PMC{n}.{v}.pdf"
+    elif re.fullmatch(r"(biorxiv|medrxiv)-[0-9.]+", pid):
+        if meta.get("abs_url"):
+            yield f"{meta['abs_url']}.full.pdf"
+    elif re.fullmatch(r"ppr\d+", pid):   # Europe PMC's own PDF link is only good on its page: the preprint server's
+        doi = meta.get("doi") or ""
+        if re.match(r"10\.(1101|64898)/", doi):
+            yield f"https://www.biorxiv.org/content/{doi}.full.pdf"
+            yield f"https://www.medrxiv.org/content/{doi}.full.pdf"
+        m = re.match(r"10\.21203/rs\.3\.(rs-\d+)/(v\d+)", doi)
+        if m:
+            yield f"https://www.researchsquare.com/article/{m.group(1)}/{m.group(2)}.pdf"
 
 
 def has_source(pid):
     """Whether the paper is of a kind that can have one (the reader shows its button only then)."""
-    return bool(re.fullmatch(r"\d{4}\.\d{4,5}|pmc\d+", pid))
+    return bool(re.fullmatch(r"\d{4}\.\d{4,5}|pmc\d+|ppr\d+|(biorxiv|medrxiv)-[0-9.]+", pid))
 
 
 def path(pid):
@@ -51,3 +64,21 @@ def path(pid):
                 tmp.replace(f)
                 return f
     return None
+
+
+def where(pid):
+    """Where a reader can open the PDF themselves when the app cannot fetch it (medRxiv refuses programs): its first
+    address, else the paper's page."""
+    meta = json.loads((store.pdir(pid) / "meta.json").read_text())
+    return next(candidates(pid, meta), None) or meta.get("abs_url") or None
+
+
+def keep(pid, data):
+    """The reader's own copy of the paper's PDF, dropped on the pane: kept as its source.pdf. False if it is not one."""
+    if data[:5] != b"%PDF-" or len(data) > LIMIT:
+        return False
+    f = store.pdir(pid) / "source.pdf"
+    tmp = f.with_suffix(".part")
+    tmp.write_bytes(data)
+    tmp.replace(f)
+    return True

@@ -2443,7 +2443,7 @@
   //    each paragraph found on it by its own words (the paper's language, whatever language it is read in). A click
   //    on a paragraph shows where it is on its page; reading on carries the pages along; a click on a page goes to its
   //    paragraph ──
-  const PDF_OK = !!D.app && /^(\d{4}\.\d{4,5}|pmc\d+)$/.test(D.meta.id);
+  const PDF_OK = !!D.app && /^(\d{4}\.\d{4,5}|pmc\d+|ppr\d+|(biorxiv|medrxiv)-[0-9.]+)$/.test(D.meta.id);
   const CMP_KEY = 'pf-compare';
   const cmpBtn = h('button', 'cmpbtn');
   cmpBtn.type = 'button';
@@ -2481,39 +2481,85 @@
     if (cmp || !PDF_OK) return;
     const keep = unitAtReading();
     const pane = h('aside', 'pdfpane'), bar = h('div', 'pp-bar'), title = h('span', 'pp-t'), count = h('span', 'pp-n');
-    const x = h('button', 'pp-x', '×'), scroller = h('div', 'pp-scroll'), msg = h('div', 'pp-msg');
+    const x = h('button', 'pp-x', '×'), scroller = h('div', 'pp-scroll');
     x.type = 'button';
     x.setAttribute('aria-label', T[ui].close);
     pane.setAttribute('aria-label', T[ui].compare_tip);
-    title.textContent = D.meta.id.startsWith('pmc') ? 'PubMed Central · PDF' : `arXiv · PDF ${D.meta.version || ''}`.trim();
-    msg.textContent = T[ui].pdf_loading;
+    const src = { pmc: 'PubMed Central', ppr: 'Preprint', biorxiv: 'bioRxiv', medrxiv: 'medRxiv' }[D.meta.id.match(/^[a-z]+/)?.[0]];
+    title.textContent = src ? `${src} · PDF` : `arXiv · PDF ${D.meta.version || ''}`.trim();
     bar.append(title, count, x);
-    scroller.append(msg);
     pane.append(bar, scroller);
     document.body.append(pane);
     cmp = { pane, scroller, count, pages: [], words: [], grams: null, spans: new Map(), current: null, follow: null, epoch: 0 };
     x.addEventListener('click', closeCompare);
+    scroller.addEventListener('scroll', () => requestAnimationFrame(pageCount), { passive: true });
+    scroller.addEventListener('click', onPageClick);
     document.documentElement.classList.add('compare');
     try { localStorage.setItem(CMP_KEY, '1'); } catch { /* private window */ }
     cmpLabel();
     reflowKeeping(keep);
+    // a PDF dropped on the pane (one the server could not fetch): kept by the server as the paper's, then read here.
+    // The page's own drop (a Markdown file to open) does not see it.
+    for (const t of ['dragenter', 'dragover', 'dragleave']) pane.addEventListener(t, (e) => { e.stopPropagation(); if (t !== 'dragleave') e.preventDefault(); });
+    pane.addEventListener('drop', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const f = e.dataTransfer.files[0];
+      if (f) givePdf(pane, f);
+    });
+    loadPdf(pane);
+  }
+  async function loadPdf(pane) {
+    const msg = h('div', 'pp-msg');
+    msg.textContent = T[ui].pdf_loading;
+    cmp.scroller.replaceChildren(msg);
     try {
       const lib = await import('/static/vendor/pdfjs/pdf.min.mjs');
       lib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
       const r = await fetch(`/api/pdf/${encodeURIComponent(D.meta.id)}`);
-      if (!r.ok) throw Object.assign(new Error('no pdf'), { none: r.status === 404 });
+      if (!r.ok) throw Object.assign(new Error('no pdf'), { open: (await r.json().catch(() => ({}))).open });
       const loading = lib.getDocument({ data: new Uint8Array(await r.arrayBuffer()), isEvalSupported: false });
       const doc = await loading.promise;
       if (!cmp || cmp.pane !== pane) { loading.destroy(); return; }
-      Object.assign(cmp, { lib, doc, loading });
+      Object.assign(cmp, { lib, doc, loading, pages: [], spans: new Map() });
       await layPages();
       msg.remove();
       await indexWords();
+      // a PDF whose words are not this paper's (another paper dropped by mistake): said, and another can be dropped
+      const ids = [...order.keys()];
+      if (ids.length && ids.filter((id) => locate(id)).length < ids.length * 0.3) cmp.scroller.prepend(h('div', 'pp-warn', esc(T[ui].pdf_mismatch)));
       cmp.follow = null;
       followNow();
     } catch (e) {
-      if (cmp && cmp.pane === pane) msg.textContent = e.none ? T[ui].pdf_none : T[ui].pdf_error;
+      if (cmp && cmp.pane === pane) offerPdf(msg, e.open);
     }
+  }
+  // none to show: where to open it, and a place to drop it once downloaded
+  function offerPdf(msg, open) {
+    const t = T[ui];
+    msg.replaceChildren(h('p', null, esc(open ? t.pdf_none : t.pdf_error)));
+    if (open) {
+      const a = h('a', null, `${esc(t.pdf_open)} ↗`);
+      a.href = open; a.target = '_blank'; a.rel = 'noopener';
+      const p = h('p');
+      p.append(a);
+      msg.append(p);
+    }
+    const drop = h('div', 'pp-drop', esc(t.pdf_drop)), pick = h('button', 'pp-pick', esc(t.pdf_pick)), input = document.createElement('input');
+    pick.type = 'button';
+    input.type = 'file'; input.accept = 'application/pdf,.pdf'; input.hidden = true;
+    pick.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => { if (input.files[0]) givePdf(cmp.pane, input.files[0]); });
+    drop.append(pick, input);
+    msg.append(drop);
+  }
+  async function givePdf(pane, file) {
+    if (!cmp || cmp.pane !== pane) return;
+    const msg = h('div', 'pp-msg');
+    msg.textContent = T[ui].pdf_saving;
+    cmp.scroller.replaceChildren(msg);
+    const r = await fetch(`/api/pdf/${encodeURIComponent(D.meta.id)}`, { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file }).catch(() => null);
+    if (r && r.ok) loadPdf(pane);
+    else { msg.replaceChildren(h('p', null, esc(T[ui].pdf_bad))); offerPdf(msg, null); }
   }
   function closeCompare() {
     if (!cmp) return;
@@ -2531,6 +2577,7 @@
   // the pages: sized at once (the pane scrolls through all of them), drawn when they come near
   async function layPages() {
     const { doc, scroller } = cmp;
+    if (cmp.io) cmp.io.disconnect();
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n), vp = page.getViewport({ scale: 1 });
       const el = h('div', 'pp-page'), canvas = document.createElement('canvas'), marks = h('div', 'pp-marks');
@@ -2543,8 +2590,6 @@
     cmp.io = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) drawPage(cmp.pages[+e.target.dataset.n - 1]); },
       { root: scroller, rootMargin: '800px 0px' });
     for (const p of cmp.pages) cmp.io.observe(p.el);
-    scroller.addEventListener('scroll', () => requestAnimationFrame(pageCount), { passive: true });
-    scroller.addEventListener('click', onPageClick);
     pageCount();
   }
   function sizePages() {

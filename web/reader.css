@@ -682,6 +682,14 @@ html.compare footer.zoom, html.app.compare footer.zoom { left: calc(var(--rail, 
 .pp-mark.pick { animation: pp-pick 1.3s ease-out; }
 @keyframes pp-pick { 0% { background: rgba(107, 92, 231, .45); } 100% { background: rgba(107, 92, 231, .2); } }
 .pp-msg { margin: 48px 18px; font-size: 14px; line-height: 1.5; color: var(--muted); text-align: center; }
+.pp-msg p { margin: 0 0 10px; }
+.pp-warn { align-self: stretch; margin: 2px 0 0; padding: 9px 12px; border-radius: 9px; background: var(--card); border: 1px solid var(--line);
+  font-size: 13px; line-height: 1.45; color: var(--r-limitation); }
+.pp-drop { margin: 22px auto 0; max-width: 340px; padding: 18px 16px; border: 1.5px dashed var(--faint); border-radius: 12px; display: grid; gap: 12px;
+  justify-items: center; font-size: 13.5px; }
+.pp-pick { font: 600 13px var(--sans); color: var(--accent); background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 13px; cursor: pointer; }
+.pp-pick:hover { border-color: var(--accent); }
 html.compare .side, html.compare .lside { position: static; width: auto; flex-direction: row; flex-wrap: wrap; gap: 2px 14px; margin-top: 4px; }
 html.compare .lk, html.compare .lside .ncard { width: auto; max-width: 100%; }
 html.compare .chunk > .side, html.compare .chunk > .lside { position: static; }

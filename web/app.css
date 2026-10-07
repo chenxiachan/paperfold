@@ -123,7 +123,8 @@ button.primary:hover { background: var(--accent-deep); }
 .jc-stop:disabled, .gen-toast .g-stop:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--muted); }
 
 /* ── generation progress over a paper ───────────────────── */
-.gen-toast { position: fixed; z-index: 35; top: 62px; left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px));
+/* bottom right, over the ask button: out of the way of the paper's title and of what is being read */
+.gen-toast { position: fixed; z-index: 35; right: 20px; bottom: 62px; width: min(380px, calc(100vw - 32px));
   display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 12px 14px; border-radius: 12px; background: var(--card);
   border: 1px solid var(--line); box-shadow: 0 16px 44px -20px rgba(40, 30, 10, .45); font: 13.5px var(--sans); }
 .gen-toast b { font-weight: 650; }
@@ -190,6 +191,7 @@ dialog.settings::backdrop { background: rgba(30, 25, 15, .28); }
   #sidebar.collapsed .sb-rail { position: fixed; top: 8px; left: 8px; padding: 0; }
   #sidebar.collapsed .sb-rail .rail-btn:not(.rail-open) { display: none; }
   .sb-del { opacity: 1; }
+  .gen-toast { right: 12px; bottom: 112px; }
   .hero h1 { font-size: 32px; }
   #newform .bar { padding: 6px 6px 6px 14px; }
   #newform input { flex-basis: calc(100% - 40px); }   /* the link on its own line; the language and Generate below it */
