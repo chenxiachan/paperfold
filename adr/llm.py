@@ -33,6 +33,10 @@ def spec_of(model):
     return resolve(model)
 
 
+class Stopped(Exception):
+    """The reader stopped a generation: the calls not yet made are skipped; those under way finish and stay cached."""
+
+
 def label(model):
     return spec_of(model)["id"]
 

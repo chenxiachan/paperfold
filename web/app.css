@@ -34,6 +34,19 @@
 .sb-prog { display: block; height: 3px; border-radius: 3px; background: var(--line-2); overflow: hidden; margin-top: 3px; }
 .sb-prog i { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s var(--ease); }
 .sb-stage { font-size: 11.5px; color: var(--accent); }
+/* a job's stop button: a small square, always there while it runs (the delete × only shows on hover) */
+.sb-stop { position: absolute; top: 6px; right: 4px; width: 24px; height: 24px; border: 0; border-radius: 7px; background: none; cursor: pointer;
+  display: grid; place-items: center; color: var(--muted); }
+.sb-stop i { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+.sb-stop:hover { background: var(--line-2); color: var(--r-limitation); }
+.sb-stop:disabled { cursor: default; opacity: .4; background: none; color: var(--muted); }
+.sb-item.unfinished .sb-stage { color: var(--muted); }
+.sb-item.unfinished:hover .sb-stage { color: var(--accent); }
+.rail-open { position: relative; }
+.rail-open.busy::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  animation: busy 1.4s ease-in-out infinite; }
+@keyframes busy { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .rail-open.busy::after { animation: none; } }
 .sb-empty { padding: 10px 9px; font-size: 13px; color: var(--faint); }
 .sb-foot { border-top: 1px solid var(--line-2); padding: 10px 12px 14px; }
 .sb-settings { width: 100%; text-align: left; border: 0; background: none; font: 550 13px var(--sans); color: var(--ink-2); padding: 6px 4px; border-radius: 7px; cursor: pointer; }
@@ -102,6 +115,12 @@ button.primary:hover { background: var(--accent-deep); }
 .jc-t { font-weight: 650; font-size: 14.5px; }
 .jc-s { font-size: 13px; color: var(--muted); margin: 4px 0 6px; }
 .jc-e { font-size: 13.5px; color: var(--r-limitation); margin-top: 4px; }
+.jc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.jc-stop, .jc-go, .gen-toast .g-stop { flex: none; border: 1px solid var(--line); border-radius: 8px; background: none; padding: 3px 10px;
+  font: 550 12.5px var(--sans); color: var(--ink-2); cursor: pointer; }
+.jc-stop:hover, .gen-toast .g-stop:hover { border-color: var(--r-limitation); color: var(--r-limitation); }
+.jc-go { border-color: var(--accent); color: var(--accent); }
+.jc-stop:disabled, .gen-toast .g-stop:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--muted); }
 
 /* ── generation progress over a paper ───────────────────── */
 .gen-toast { position: fixed; z-index: 35; top: 62px; left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px));
@@ -111,6 +130,7 @@ button.primary:hover { background: var(--accent-deep); }
 .gen-toast .g-stage { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
 .gen-toast .sb-prog { grid-column: 1 / -1; }
 .gen-toast .g-x { grid-row: 1; grid-column: 2; border: 0; background: none; font-size: 18px; color: var(--muted); cursor: pointer; }
+.gen-toast .g-stop { grid-row: 1; grid-column: 2; align-self: start; }
 
 /* ── settings ────────────────────────────────────────────── */
 dialog.settings { border: 1px solid var(--line); border-radius: 16px; padding: 0; width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 48px); background: var(--card); color: var(--ink);

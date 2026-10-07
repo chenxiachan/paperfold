@@ -1,6 +1,8 @@
 """Generate a paper in a language: fetch (an arXiv paper), parse, the English ladder and links (once), the translation.
 
-Every step reports through `progress(stage, done, total)`; the server turns that into a progress bar.
+Every step reports through `progress(stage, done, total)`; the server turns that into a progress bar. A set `stop`
+(a threading.Event) ends it with llm.Stopped at the next step: what the model has already written stays in the cache,
+so the same generation started again goes on from there.
 """
 import urllib.error
 
@@ -13,7 +15,11 @@ def task(cfg, name):
     return models.for_task(llm.spec_of(cfg), name)
 
 
-def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=lambda *a: None):
+def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=lambda *a: None, stop=None):
+    def check():
+        if stop is not None and stop.is_set():
+            raise llm.Stopped()
+
     pid = store.resolve(ref)
     progress("fetch", 0, 1)
     if store.is_imported(pid):   # stored when it was opened (local.py), or fetched once from Europe PMC (epmc.py)
@@ -31,13 +37,16 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
             if e.code == 404:
                 raise RuntimeError("no-html")  # the app shows its own sentence for this
             raise
+    check()
     progress("parse", 0, 1)
     doc = store.parsed(pid)
     cache = d / "llm-cache"
     model = llm.label(cfg)
     en = store.read(pid, "en")
     if en is None or (force and lang == "en"):
-        ladder.build(doc, task(cfg, "ladder"), cache, jobs=jobs, log=log, progress=lambda a, b: progress("ladder", a, b), force=force)
+        check()
+        ladder.build(doc, task(cfg, "ladder"), cache, jobs=jobs, log=log, progress=lambda a, b: progress("ladder", a, b), force=force, stop=stop)
+        check()
         progress("links", 0, 1)
         links.build(doc, task(cfg, "links"), cache, log=log, force=force)
         store.save_en(doc, model)
@@ -47,7 +56,8 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
     if lang != "en":
         tr = store.read(pid, f"tr-{lang}")
         if force or tr is None or tr.get("base") != en["version"]:
-            translate.build(doc, lang, task(cfg, "translate"), cache, jobs=jobs, log=log, progress=lambda a, b: progress("translate", a, b), force=force)
+            check()
+            translate.build(doc, lang, task(cfg, "translate"), cache, jobs=jobs, log=log, progress=lambda a, b: progress("translate", a, b), force=force, stop=stop)
             store.save_tr(doc, lang, en["version"], model)
     progress("done", 1, 1)
     return pid

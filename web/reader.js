@@ -2562,6 +2562,55 @@
   addEventListener('click', (e) => { if (!langMenu.hidden && !e.target.closest('.langpick')) closeLangMenu(); });
   if (!D.app && AVAIL.length < 2) document.querySelector('.langpick').remove();
 
+  // ── a figure, enlarged: a click on its picture opens it over the page with its caption (as the reader sees it now:
+  //    this language, this level); Esc, a click beside it or × closes it. A picture larger than the screen opens to
+  //    fit, and a click on it shows it at full size, to scroll ──
+  const lightbox = h('div', 'lightbox');
+  lightbox.hidden = true;
+  lightbox.setAttribute('role', 'dialog');
+  lightbox.setAttribute('aria-modal', 'true');
+  document.body.append(lightbox);
+  let lightboxFrom = null;
+  function openLightbox(pic) {
+    const fig = pic.closest('figure.fig'), cap = fig && fig.querySelector('figcaption');
+    const shown = pic.cloneNode(true);
+    shown.removeAttribute('style');
+    shown.classList.add('lb-pic');
+    if (shown.tagName.toLowerCase() === 'svg') { shown.removeAttribute('width'); shown.removeAttribute('height'); }
+    const stage = h('div', 'lb-stage');
+    stage.append(shown);
+    const x = h('button', 'lb-x', '×');
+    x.type = 'button';
+    x.setAttribute('aria-label', T[ui].close);
+    lightbox.replaceChildren(stage, x);
+    if (cap) {
+      const label = cap.querySelector('.flabel'), text = cap._tx ? cap._tx.innerText.trim() : '';
+      const c = h('div', 'lb-cap');
+      c.textContent = [label && label.textContent.trim(), text].filter(Boolean).join(' ');
+      if (c.textContent) lightbox.append(c);
+      lightbox.setAttribute('aria-label', c.textContent || 'Figure');
+    }
+    lightbox.classList.remove('lb-full');
+    lightbox.hidden = false;
+    document.documentElement.classList.add('lb-open');
+    lightboxFrom = document.activeElement;
+    x.focus({ preventScroll: true });
+  }
+  function closeLightbox() {
+    lightbox.hidden = true;
+    lightbox.replaceChildren();
+    document.documentElement.classList.remove('lb-open');
+    if (lightboxFrom && lightboxFrom.focus) lightboxFrom.focus({ preventScroll: true });
+  }
+  lightbox.addEventListener('click', (e) => {
+    const pic = e.target.closest('.lb-pic');
+    if (pic && pic.tagName.toLowerCase() === 'img') {   // larger than the screen: full size, to scroll; and back
+      const fits = pic.naturalWidth <= pic.clientWidth + 2 && pic.naturalHeight <= pic.clientHeight + 2;
+      if (!fits || lightbox.classList.contains('lb-full')) { lightbox.classList.toggle('lb-full'); return; }
+    }
+    if (!pic) closeLightbox();
+  });
+
   // ── input ────────────────────────────────────────────────────────────
   // ⌘/Ctrl + wheel and a trackpad pinch zoom around the pointer; over the slider, the plain wheel zooms
   addEventListener('wheel', (e) => {
@@ -2582,6 +2631,10 @@
   });
   addEventListener('gestureend', (e) => { e.preventDefault(); release(); });
   addEventListener('keydown', (e) => {
+    if (!lightbox.hidden) {   // an enlarged figure takes the keys: Esc closes it, the rest do nothing behind it
+      if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); }
+      return;
+    }
     if (e.target.closest && e.target.closest('input, textarea, [contenteditable]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Escape' && (popNote || !selbar.hidden)) { closeNote(); hideSelbar(); e.preventDefault(); return; }
@@ -2596,6 +2649,8 @@
     e.preventDefault();
   });
   docEl.addEventListener('click', (e) => {
+    const pic = e.target.closest('figure.fig .fbody img, figure.fig .fbody svg');
+    if (pic && !String(getSelection()).length) { e.preventDefault(); openLightbox(pic.closest('svg') || pic); return; }
     const card = e.target.closest('.ncard');
     if (card) { e.preventDefault(); const n = notes.find((x) => x.id === card.dataset.note); if (n) openNote(n); return; }
     const mark = e.target.closest('.hl, .hlsp');

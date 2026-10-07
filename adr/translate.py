@@ -151,7 +151,7 @@ def assemble(u, o, atoms, lang, warn):
     return {"toks": toks, "sents": sents, "lad": {"brief": brief, "tn": tn, "topic": topic}}
 
 
-def build(doc, lang, cfg, cache_dir, jobs=4, log=print, progress=None, force=False):
+def build(doc, lang, cfg, cache_dir, jobs=4, log=print, progress=None, force=False, stop=None):
     chunks = [c for c in doc["chunks"] if c["units"]]
     cost, warnings, errors = 0.0, [], []
     L = langs.name(lang)
@@ -162,6 +162,8 @@ def build(doc, lang, cfg, cache_dir, jobs=4, log=print, progress=None, force=Fal
 
     def run(task):
         c, k, us = task
+        if stop is not None and stop.is_set():   # stopped: the parts not yet sent are skipped
+            return task, None, llm.Stopped()
         try:
             return task, llm.call(prompt_for(doc, {**c, "units": us}, lang), SCHEMA, cfg, cache_dir, force), None
         except Exception as e:
@@ -173,6 +175,8 @@ def build(doc, lang, cfg, cache_dir, jobs=4, log=print, progress=None, force=Fal
         for n_done, ((c, k, us), res, err) in enumerate(ex.map(run, tasks), 1):
             if progress:
                 progress(n_done, len(tasks))
+            if stop is not None and stop.is_set():
+                raise llm.Stopped()
             if err:
                 errors.append(err)
                 log(f"  ! {lang} {c['id']}{f' part {k + 1}' if k else ''}: {err}")

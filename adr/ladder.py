@@ -227,12 +227,14 @@ def section_ladder(o, topic_budget=3, doc=None, chunk=None):
     return {"take": take, "topic": locate(clean(o.get("topic")), take) or head_words(take, topic_budget)}
 
 
-def build(doc, cfg, cache_dir, jobs=4, log=print, progress=None, force=False):
+def build(doc, cfg, cache_dir, jobs=4, log=print, progress=None, force=False, stop=None):
     chunks = [c for c in doc["chunks"] if c["units"]]
     cost, warnings, errors = 0.0, [], []
     model = llm.label(cfg)
 
     def run(c):
+        if stop is not None and stop.is_set():   # stopped: the chunks not yet sent are skipped
+            return c, None, llm.Stopped()
         try:
             return c, llm.call(prompt_for(doc, c), SCHEMA, cfg, cache_dir, force), None
         except Exception as e:  # one failed chunk falls back to local ladders, the rest still build
@@ -244,6 +246,8 @@ def build(doc, cfg, cache_dir, jobs=4, log=print, progress=None, force=False):
         for n_done, (c, res, err) in enumerate(ex.map(run, chunks), 1):
             if progress:
                 progress(n_done, len(chunks))
+            if stop is not None and stop.is_set():
+                raise llm.Stopped()
             if err:
                 errors.append(err)
                 log(f"  ! {c['id']}: {err}")

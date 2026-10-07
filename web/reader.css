@@ -241,6 +241,24 @@ li.u[data-l="2"] .mk, li.u[data-l="1"] .mk, li.u[data-l="0"] .mk { display: none
 figure.fig { margin: 26px 0; }
 figure.fig .fbody { text-align: center; overflow-x: auto; transition: opacity .3s; }
 figure.fig .fbody img { max-width: 100%; height: auto; display: inline-block; }
+figure.fig .fbody img, figure.fig .fbody svg { cursor: zoom-in; }
+/* a figure, enlarged over the page: dark around it in either theme, the picture on white as on paper */
+.lightbox { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 28px 24px 22px; background: rgba(20, 18, 15, .88); animation: lb-in .16s ease-out; }
+@keyframes lb-in { from { opacity: 0; } }
+.lightbox .lb-stage { min-height: 0; max-width: 100%; display: flex; align-items: center; justify-content: center; }
+.lightbox .lb-pic { display: block; max-width: min(94vw, 1600px); max-height: 80vh; width: auto; height: auto; background: #fff; border-radius: 6px;
+  padding: 8px; box-shadow: 0 24px 70px -20px rgba(0, 0, 0, .7); cursor: zoom-in; }
+.lightbox:has(.lb-cap) .lb-pic { max-height: 74vh; }
+.lightbox svg.lb-pic { width: min(94vw, 1200px); height: 76vh; }
+.lightbox.lb-full .lb-stage { overflow: auto; align-self: stretch; justify-content: flex-start; align-items: flex-start; flex: 1; }
+.lightbox.lb-full .lb-pic { max-width: none; max-height: none; margin: auto; cursor: zoom-out; }
+.lightbox .lb-cap { max-width: min(760px, 92vw); max-height: 16vh; overflow-y: auto; color: #EDE9E3; font: 14px/1.5 var(--sans); text-align: center; }
+.lightbox .lb-x { position: absolute; top: 12px; right: 14px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .12);
+  color: #fff; font: 400 24px/1 var(--sans); cursor: pointer; }
+.lightbox .lb-x:hover, .lightbox .lb-x:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }
+html.lb-open { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .lightbox { animation: none; } }
 figure.fig figcaption.u { font-family: var(--sans); }
 figure.fig figcaption.u[data-l="4"], figure.fig figcaption.u[data-l="3"] { font-family: var(--sans); font-size: 14.5px; line-height: 1.5; margin: 10px 0 0; }
 .flabel { display: none; font-family: var(--sans); font-weight: 650; color: var(--ink); margin-right: .4em; white-space: nowrap; }

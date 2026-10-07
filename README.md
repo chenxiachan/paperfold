@@ -97,6 +97,7 @@ PaperFold uses a model you already have, and there is no account to create. It l
 | Pinch, or ⌘ / Ctrl + scroll | zoom around the pointer |
 | `1` to `5` | jump to a level |
 | Click a paragraph | open just that paragraph |
+| Click a figure | see it enlarged |
 | Select text | highlight, write a note, or ask |
 | **Ask the paper**, bottom right | ask about the whole paper |
 | `L` | next language |

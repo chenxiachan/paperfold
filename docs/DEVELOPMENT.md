@@ -259,7 +259,7 @@ adr/links.py    argument links, one call over the whole paper
 adr/translate.py  any language: sentence-aligned translation + short levels, one call per section (langs.py: the 12 languages)
 adr/store.py    versioned layers per paper; assembling a reader from them
 adr/pipeline.py fetch → parse → English ladder + links (once) → translation, with progress
-adr/server.py   local server: pages, /api/papers, /api/jobs, /api/generate, /api/settings
+adr/server.py   local server: pages, /api/papers, /api/jobs (and /api/jobs/stop), /api/generate, /api/settings
 adr/agents.py   local agents: the scan, model catalogs, one-shot runs (claude -p, codex exec, pi -p)
 adr/providers.py API providers: ThoughtDAG's env registry and presets, /models probing
 adr/models.py   one catalog of agent and API models; settings; resolving a model id

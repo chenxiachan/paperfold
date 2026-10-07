@@ -4,6 +4,8 @@
   GET  /p/<id>?lang=xx        a paper in the reader
   GET  /api/papers            the papers on disk
   GET  /api/jobs              generation jobs (queued, running, recently finished)
+  POST /api/jobs/stop         {id}: stop a job: a queued one is dropped; a running one ends once the model calls under way
+                              return (what they wrote is kept in the cache, so starting it again goes on from there)
   POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time. paper: an arXiv id or
                               link, a PMC or PPR id, a DOI (Europe PMC, epmc.py), or a stored document's id
   POST /api/import            {name, text}: store a Markdown file as a paper (local.py); its id, to generate
@@ -73,6 +75,7 @@ def models_payload():
 class Jobs:
     def __init__(self):
         self.items, self.q = {}, queue.Queue()
+        self.stops = {}   # job id -> threading.Event, set when the reader stops it (kept out of the job: it is sent as JSON)
         threading.Thread(target=self.work, daemon=True).start()
 
     def submit(self, ref, lang, force):
@@ -83,16 +86,38 @@ class Jobs:
         job = {"id": uuid.uuid4().hex[:10], "pid": pid, "lang": lang, "force": bool(force), "status": "queued",
                "stage": "queued", "done": 0, "total": 0, "error": "", "log": [], "created": time.time(), "finished": None}
         self.items[job["id"]] = job
+        self.stops[job["id"]] = threading.Event()
         self.q.put(job["id"])
+        return job
+
+    def stop(self, job_id):
+        job = self.items.get(job_id)
+        if not job or job["status"] not in ("queued", "running"):
+            return job
+        if job["status"] == "queued":   # never started: off the queue (work() skips it)
+            job.update(status="stopped", finished=time.time())
+        else:
+            job["stopping"] = True
+            self.stops[job_id].set()
         return job
 
     def work(self):
         while True:
             job = self.items[self.q.get()]
+            if job["status"] == "stopped":
+                continue
             job["status"] = "running"
+            stop = self.stops[job["id"]]
 
-            def progress(stage, done, total, job=job):
+            def progress(stage, done, total, job=job, stop=stop):
+                if stop.is_set() and stage != "done":   # a fetch that reports (bioRxiv's paced figures) ends here too
+                    raise llm.Stopped()
                 job.update(stage=stage, done=done, total=total)
+                if not job.get("title") and stage not in ("queued", "fetch"):   # a new paper's title, once it is parsed
+                    try:
+                        job["title"] = json.loads((store.pdir(job["pid"]) / "meta.json").read_text())["title"]
+                    except (OSError, ValueError, KeyError):
+                        pass
 
             def log(line, job=job):
                 job["log"] = (job["log"] + [line])[-40:]
@@ -100,9 +125,14 @@ class Jobs:
             try:
                 spec = models.resolve(None)  # the model chosen in the settings, resolved once per job
                 job["model"] = spec["id"]
-                pipeline.generate(job["pid"], job["lang"], spec, force=job["force"], progress=progress, log=log)
+                pipeline.generate(job["pid"], job["lang"], spec, force=job["force"], progress=progress, log=log, stop=stop)
                 job["status"] = "done"
             except Exception as e:  # shown in the app; the traceback stays in the job log
+                if isinstance(e, llm.Stopped) or stop.is_set():
+                    job.update(status="stopped", stopping=False)
+                    job["finished"] = time.time()
+                    PAGES.pop(job["pid"], None)
+                    continue
                 job.update(status="error", error="no-model" if str(e).startswith("No model is available") else str(e))
                 log(traceback.format_exc()[-800:])
             job["finished"] = time.time()
@@ -225,6 +255,9 @@ def make_handler(jobs):
                     except ValueError as e:   # not a paper's reference, or (a DOI) none Europe PMC can read in full
                         return self.json({"error": str(e) if str(e) in ("no-fulltext", "no-article") else "bad-ref"}, 400)
                     return self.json(job)
+                if u.path == "/api/jobs/stop":
+                    job = jobs.stop(body.get("id", ""))
+                    return self.json(job) if job else self.json({"error": "no such job"}, 404)
                 if u.path == "/api/import":
                     text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]
                     if not text.strip():

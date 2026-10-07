@@ -37,23 +37,30 @@
   // a paper opens in the language last read in, else the interface's, else its first
   const pick = (p) => [store.get('dr-lang'), uiLang].find((l) => l && p.langs.includes(l)) || p.langs[0] || 'en';
   const modelLabel = () => modelName;
-  function jobFor(pid) { return jobs.find((j) => j.pid === pid && (j.status === 'queued' || j.status === 'running')); }
+  const live = (j) => j.status === 'queued' || j.status === 'running';
+  function jobFor(pid) { return jobs.find((j) => j.pid === pid && live(j)); }
   function pct(j) { return j.total ? Math.round((100 * j.done) / j.total) : (j.stage === 'done' ? 100 : 6); }
+  // where a job is: its stage and count, or that it is stopping
+  const stageOf = (j, T) => (j.stopping ? T.stopping : `${T.stages[j.stage] || j.stage}${j.total ? ` ${j.done}/${j.total}` : ''}`);
+  const stopBtn = (j, T) => `<button type="button" class="sb-stop" data-stop="${j.id}" title="${esc(T.stop)}" aria-label="${esc(T.stop)}"${j.stopping ? ' disabled' : ''}><i></i></button>`;
+  const progress = (j, T) => `<span class="sb-prog"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(stageOf(j, T))} · ${esc(I18N.NATIVE[j.lang])}</span>`;
   function renderSidebar() {
     const T = t();
     const listed = new Set(papers.map((p) => p.id));
-    const pending = jobs.filter((j) => !listed.has(j.pid) && (j.status === 'queued' || j.status === 'running'));
+    const pending = jobs.filter((j) => !listed.has(j.pid) && live(j));
     const item = (p) => {
       const j = jobFor(p.id);
       const title = (p.titles && p.titles[uiLang]) || p.title;
       const langs = p.langs.map((l) => `<span${l === uiLang ? ' class="on"' : ''}>${SHORT[l] || l}</span>`).join('');
       const active = PAPER && PAPER.id === p.id;
-      return `<div class="sb-row"><a class="sb-item${active ? ' active' : ''}" href="/p/${p.id}?lang=${pick(p)}" title="${esc(p.title)}">
+      const unfinished = !j && !p.langs.length;   // stopped (or failed) before its first language: a click goes on with it
+      return `<div class="sb-row"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
         <span class="sb-t">${esc(title)}</span><span class="sb-m"><span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span></span>
-        ${j ? `<span class="sb-prog"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(T.stages[j.stage] || j.stage)} · ${esc(I18N.NATIVE[j.lang])}</span>` : ''}</a>` +
-        (j ? '' : `<button type="button" class="sb-del" data-del="${p.id}" title="${esc(T.del_paper)}" aria-label="${esc(T.del_paper)}">×</button>`) + '</div>';
+        ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
+        (j ? stopBtn(j, T) : `<button type="button" class="sb-del" data-del="${p.id}" title="${esc(T.del_paper)}" aria-label="${esc(T.del_paper)}">×</button>`) + '</div>';
     };
-    const pend = (j) => `<div class="sb-item pending"><span class="sb-t">${j.pid}</span><span class="sb-prog"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(T.stages[j.stage] || j.stage)}</span></div>`;
+    const pend = (j) => `<div class="sb-row"><div class="sb-item pending"><span class="sb-t">${esc(j.title || j.pid)}</span>` +
+      `<span class="sb-m"><span class="sb-id">${j.pid}</span></span>${progress(j, T)}</div>${stopBtn(j, T)}</div>`;
     side.innerHTML = `
       <div class="sb-head"><a class="sb-brand" href="/">${MARK}<span>PaperFold</span></a>
         <button type="button" class="sb-toggle" aria-label="${esc(T.collapse)}" title="${esc(T.collapse)}">‹</button></div>
@@ -71,6 +78,26 @@
     side.querySelector('.rail-open').onclick = () => setCollapsed(false);
     side.querySelectorAll('.sb-settings, .rail-settings').forEach((b) => { b.onclick = openSettings; });
     side.querySelectorAll('.sb-del').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); deletePaper(b.dataset.del); }; });
+    side.querySelectorAll('.sb-stop').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); stopJob(b.dataset.stop); }; });
+    side.querySelectorAll('[data-resume]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); resume(a.dataset.resume); }; });
+    // folded to a rail (over a paper): a dot on the list button while something generates
+    side.querySelector('.rail-open').classList.toggle('busy', jobs.some(live));
+  }
+  // a job stopped from anywhere (the sidebar, the landing's card, the toast over a paper): what is written stays cached
+  async function stopJob(id) {
+    try {
+      const j = await api('/api/jobs/stop', { id });
+      jobs = [...jobs.filter((x) => x.id !== id), j];
+      const cb = watchers.get(id);
+      if (cb) cb(j);
+    } catch { /* finished meanwhile */ }
+    renderSidebar(); startPolling();
+  }
+  // an unfinished paper goes on in the language it was last asked for (else the reader's), in the background
+  function resume(pid) {
+    const last = [...jobs].reverse().find((j) => j.pid === pid);
+    const lang = (last && last.lang) || [store.get('dr-lang'), uiLang].find((l) => l && I18N.NATIVE[l]) || 'en';
+    submit(pid, lang, false, () => {}).catch(() => {});
   }
   // a paper off the list, after a prompt that says what goes with it; the server moves its folder to papers/.trash
   async function deletePaper(pid) {
@@ -107,17 +134,17 @@
       for (const j of jobs) {
         const cb = watchers.get(j.id);
         if (cb) cb(j);
-        if (before.get(j.id) !== j.status && (j.status === 'done' || j.status === 'error')) finished = true;
+        if (before.get(j.id) !== j.status && (j.status === 'done' || j.status === 'error' || j.status === 'stopped')) finished = true;
       }
       if (finished) papers = await api('/api/papers');
       renderSidebar();
     } catch { /* the server restarted; try again */ }
-    if (jobs.some((j) => j.status === 'queued' || j.status === 'running') || watchers.size) polling = setTimeout(poll, 1200);
+    if (jobs.some(live) || watchers.size) polling = setTimeout(poll, 1200);
   }
   function startPolling() { if (!polling) polling = setTimeout(poll, 400); }
   async function submit(paper, lang, force, onUpdate) {
     const job = await api('/api/generate', { paper, lang, force: !!force });
-    watchers.set(job.id, (j) => { onUpdate(j); if (j.status === 'done' || j.status === 'error') watchers.delete(j.id); });
+    watchers.set(job.id, (j) => { onUpdate(j); if (j.status === 'done' || j.status === 'error' || j.status === 'stopped') watchers.delete(j.id); });
     jobs = [...jobs.filter((j) => j.id !== job.id), job];
     renderSidebar(); onUpdate(job); startPolling();
     return job;
@@ -164,17 +191,23 @@
         if (force && !confirm(`${T.regen} · ${name}?`)) return;
         toast.hidden = false;
         toast.innerHTML = `<b>${esc(T.generating)} · ${esc(name)}</b><span class="g-stage">${esc(T.stages.queued)}</span><span class="sb-prog"><i style="width:4%"></i></span>`;
+        const closable = (head, line) => {
+          toast.innerHTML = `<b>${esc(head)} · ${esc(name)}</b><span class="g-stage">${esc(line)}</span><button type="button" class="g-x" aria-label="${esc(t().close)}">×</button>`;
+          toast.querySelector('.g-x').onclick = () => { toast.hidden = true; };
+        };
         submit(PAPER.id, lang, force, (j) => {
           const T2 = t();
-          if (j.status === 'error') {
-            toast.innerHTML = `<b>${esc(T2.failed)} · ${esc(name)}</b><span class="g-stage">${esc(errText(j.error))}</span><button type="button" class="g-x">×</button>`;
-            toast.querySelector('.g-x').onclick = () => { toast.hidden = true; };
-            return;
+          if (j.status === 'error') { closable(T2.failed, errText(j.error)); return; }
+          if (j.status === 'stopped') { closable(T2.stopped, ''); return; }
+          if (!toast.querySelector('.g-stop')) {
+            toast.insertAdjacentHTML('beforeend', `<button type="button" class="g-stop">${esc(T2.stop)}</button>`);
+            toast.querySelector('.g-stop').onclick = () => stopJob(j.id);
           }
-          toast.querySelector('.g-stage').textContent = `${T2.stages[j.stage] || j.stage}${j.total ? ` ${j.done}/${j.total}` : ''}`;
+          toast.querySelector('.g-stage').textContent = stageOf(j, T2);
+          toast.querySelector('.g-stop').disabled = !!j.stopping;
           toast.querySelector('.sb-prog i').style.width = `${pct(j)}%`;
           if (j.status === 'done') location.href = `/p/${PAPER.id}?lang=${encodeURIComponent(lang)}`;
-        }).catch((e) => { toast.innerHTML = `<b>${esc(t().failed)}</b><span class="g-stage">${esc(errText(e.message))}</span>`; });
+        }).catch((e) => { closable(t().failed, errText(e.message)); });
       },
     };
     api('/api/models').then((d) => { modelName = d.selectedName || ''; renderSidebar(); }).catch(() => {});
@@ -248,16 +281,27 @@
     const form = document.getElementById('newform'), err = document.getElementById('err'), card = document.getElementById('jobcard');
     const fail = (msg) => { err.textContent = msg; err.hidden = false; };
     // a paper (an arXiv link, or a document just opened) into the job card, then into the reader
-    async function start(ref, label) {
-      const lang = sel.value;
+    let latest = null;   // the paper the card shows: started last. One started before keeps going in the sidebar.
+    async function start(ref, label, langOf) {
+      const lang = langOf || sel.value, mine = {};
+      latest = mine;
       card.hidden = false;
       try {
         await submit(ref, lang, false, (j) => {
-          const T = t(), name = esc(label || j.pid);
+          if (latest !== mine) return;
+          const T = t(), name = esc(label || j.title || j.pid);
           if (j.status === 'error') { card.innerHTML = `<div class="jc-t">${esc(T.failed)} · ${name}</div><div class="jc-e">${esc(errText(j.error))}</div>`; return; }
-          card.innerHTML = `<div class="jc-t">${name} · ${esc(I18N.NATIVE[j.lang])}</div>
-            <div class="jc-s">${esc(T.stages[j.stage] || j.stage)}${j.total ? ` · ${j.done}/${j.total}` : ''}</div>
+          if (j.status === 'stopped') {
+            card.innerHTML = `<div class="jc-head"><div class="jc-t">${name} · ${esc(I18N.NATIVE[j.lang])}</div><button type="button" class="jc-go">${esc(T.resume)}</button></div>
+              <div class="jc-s">${esc(T.stopped)}</div>`;
+            card.querySelector('.jc-go').onclick = () => start(j.pid, label || j.title, j.lang);
+            return;
+          }
+          card.innerHTML = `<div class="jc-head"><div class="jc-t">${name} · ${esc(I18N.NATIVE[j.lang])}</div>
+              <button type="button" class="jc-stop"${j.stopping ? ' disabled' : ''}>${esc(T.stop)}</button></div>
+            <div class="jc-s">${esc(stageOf(j, T))}</div>
             <span class="sb-prog"><i style="width:${pct(j)}%"></i></span>`;
+          card.querySelector('.jc-stop').onclick = () => stopJob(j.id);
           if (j.status === 'done') location.href = `/p/${j.pid}?lang=${encodeURIComponent(j.lang)}`;
         });
       } catch (x) { card.hidden = true; fail(errText(x.message)); }
@@ -301,7 +345,7 @@
       history.replaceState(null, '', '/');
       if (modelName) start(started.get('start'), started.get('t')); else fail(t().no_model);
     }
-    if (jobs.some((j) => j.status === 'queued' || j.status === 'running')) startPolling();
+    if (jobs.some(live)) startPolling();
   }
 
   // ── settings: the model, the agents on this computer, the API providers (ThoughtDAG's model access) ──
