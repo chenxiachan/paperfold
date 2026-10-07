@@ -13,7 +13,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-**[Try it →](https://chenxiachan.github.io/paperfold-gallery/)** papers from different fields, nothing to install.
+**[Try it →](https://chenxiachan.github.io/paperfold-gallery/)** arXiv papers from different fields, nothing to install.
 
 <br>
 
