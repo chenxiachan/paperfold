@@ -100,6 +100,11 @@ def _sanitize(root):
             el.attrs.pop("src", None)
 
 
+def sanitize(root):
+    """Strip root to the elements/attributes _sanitize() allows, in place; for callers outside this module."""
+    _sanitize(root)
+
+
 def _keep_classes(el):
     cls = [c for c in el.get("class", []) if c.startswith(("ltx_", "pf-"))]
     if cls:
