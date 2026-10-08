@@ -59,6 +59,13 @@
         ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
         (j ? stopBtn(j, T) : `<button type="button" class="sb-del" data-del="${p.id}" title="${esc(T.del_paper)}" aria-label="${esc(T.del_paper)}">×</button>`) + '</div>';
     };
+    // papers, Wikipedia articles and documents of one's own, each under its name when there is more than one kind
+    const kindOf = (id) => (/^wiki-/.test(id) ? 'wiki' : /^md-/.test(id) ? 'doc' : 'paper');
+    const groups = [['paper', T.papers], ['wiki', T.g_wiki], ['doc', T.g_docs]]
+      .map(([k, name]) => [name, papers.filter((p) => kindOf(p.id) === k)]).filter(([, ps]) => ps.length);
+    const listed_ = groups.length > 1
+      ? groups.map(([name, ps]) => `<div class="sb-group">${esc(name)}</div>${ps.map(item).join('')}`).join('')
+      : papers.map(item).join('');
     const pend = (j) => `<div class="sb-row"><div class="sb-item pending"><span class="sb-t">${esc(j.title || j.pid)}</span>` +
       `<span class="sb-m"><span class="sb-id">${j.pid}</span></span>${progress(j, T)}</div>${stopBtn(j, T)}</div>`;
     side.innerHTML = `
@@ -71,8 +78,8 @@
         <button type="button" class="rail-btn rail-settings" title="${esc(T.settings)}">⚙</button>
       </div>
       <a class="sb-new" href="/">＋ ${esc(T.new_paper)}</a>
-      <div class="sb-label">${esc(T.papers)}</div>
-      <nav class="sb-list">${pending.map(pend).join('')}${papers.map(item).join('') || (pending.length ? '' : `<div class="sb-empty">${esc(T.empty)}</div>`)}</nav>
+      ${groups.length > 1 ? '' : `<div class="sb-label">${esc(T.papers)}</div>`}
+      <nav class="sb-list">${pending.map(pend).join('')}${listed_ || (pending.length ? '' : `<div class="sb-empty">${esc(T.empty)}</div>`)}</nav>
       <div class="sb-foot"><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button><div class="sb-model">${esc(modelLabel())}</div></div>`;
     side.querySelector('.sb-toggle').onclick = () => setCollapsed(true);
     side.querySelector('.rail-open').onclick = () => setCollapsed(false);

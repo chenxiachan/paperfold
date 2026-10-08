@@ -2,7 +2,8 @@
 
 CommonMark, with GitHub's tables and strikethrough, footnotes, definition lists, YAML front matter, and math:
 $...$ and $$...$$ by Pandoc's rules (so "$5 and $10" stays money), and \\(...\\) and \\[...\\] as chat models write
-them. HTML written in the file is shown as text, never run.
+them. HTML written in the file (a GitHub README's centred logo, its badges, a <details>) is kept as far as
+semantic.normalize's allowlist goes: no script, no handler, no javascript: link survives it.
 """
 import re
 
@@ -16,7 +17,7 @@ FENCE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 
 
 def _md():
-    return (MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
+    return (MarkdownIt("commonmark", {"html": True, "linkify": False, "typographer": False})
             .enable(["table", "strikethrough"])
             .use(front_matter_plugin).use(footnote_plugin).use(deflist_plugin)
             .use(dollarmath_plugin, allow_space=False, allow_digits=False, double_inline=True))
@@ -97,10 +98,13 @@ def take_title(html, fm, name):
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "lxml")
     body = soup.body or soup
-    first = next((c for c in body.children if getattr(c, "name", None)), None)
     h1s = body.find_all("h1")
+    first = h1s[0] if h1s else None
+    # the first heading counts when nothing but pictures and links comes before it (a README's logo and badges)
+    if first is not None and "".join(s for s in first.find_all_previous(string=True) if not s.find_parent("a")).strip():
+        first = None
     title = fm.get("title") or ""
-    if first is not None and first.name == "h1" and (len(h1s) == 1 or (title and first.get_text(" ", strip=True) == title)):
+    if first is not None and (len(h1s) == 1 or (title and first.get_text(" ", strip=True) == title)):
         title = title or first.get_text(" ", strip=True)
         first.decompose()
     if not title:

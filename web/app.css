@@ -15,6 +15,8 @@
 .sb-new:hover { border-color: var(--accent); color: var(--accent); }
 .sb-label { padding: 6px 16px 4px; font-size: 11.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
 .sb-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+.sb-group { padding: 12px 9px 4px; font-size: 11.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.sb-group:first-child { padding-top: 6px; }
 .sb-item { display: flex; flex-direction: column; gap: 3px; padding: 8px 9px; border-radius: 9px; color: var(--ink); text-decoration: none !important; }
 .sb-item:hover { background: var(--surface); }
 .sb-item.active { background: var(--accent-soft); }

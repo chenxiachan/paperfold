@@ -40,16 +40,18 @@ REFERENCES = re.compile(r"^(references|bibliography|works cited|literature( cite
                         r"список литературы|литература)$", re.I)
 
 
-def normalize(html, resolve_img=None):
+def normalize(html, resolve_img=None, sizes=False):
     """Semantic HTML -> the HTML parse.parse reads. resolve_img(src) gives where the page finds an image (img/...) or
-    None when it cannot be had; without it, images are left out."""
+    None when it cannot be had; without it, images are left out. sizes: keep an image's width and height in pixels, as
+    a Markdown file's author wrote them (a README's small logo); other sources' images are fetched at another size."""
     soup = BeautifulSoup(html, "lxml")
     root = soup.body or soup
     for c in root.find_all(string=lambda s: isinstance(s, Comment)):
         c.extract()
-    _sanitize(root)
+    _sanitize(root, sizes)
     _math(soup, root)
     _footnotes(soup, root)
+    _loose_images(soup, root)
     _images(soup, root, resolve_img)
     _tables(soup, root)
     for el in root.find_all(["blockquote", "div", "section", "article", "main", "header", "footer", "aside"]):
@@ -72,7 +74,7 @@ def _ours(el):
     return any(c.startswith("ltx_") for c in el.get("class", []))
 
 
-def _sanitize(root):
+def _sanitize(root, sizes=False):
     for el in list(root.find_all(True)):
         if getattr(el, "decomposed", False):
             continue
@@ -89,9 +91,11 @@ def _sanitize(root):
             el.unwrap()
             continue
         align = re.search(r"text-align:\s*(left|right|center)", el.get("style", "")) if name in ("td", "th") else None
+        size = {k: el.get(k) for k in ("width", "height") if sizes and name == "img" and re.fullmatch(r"\d{1,4}", str(el.get(k, "")))}
         for k in list(el.attrs):
             if k.lower() not in ATTRS:
                 del el.attrs[k]
+        el.attrs.update(size)   # a picture's size in pixels, as its page gave it (a logo stays small)
         if align:   # a Markdown table's column alignment, as LaTeXML's class
             el["class"] = [f"ltx_align_{align.group(1)}"]
         if name == "a" and not re.match(r"^(#|https?://|mailto:)", el.get("href", ""), re.I):
@@ -241,11 +245,37 @@ def _lone_img(p):
     return kids[0] if len(kids) == 1 and getattr(kids[0], "name", None) == "img" else None
 
 
+LOOSE = {"img", "a", "br", "span", "b", "strong", "em", "i", "code", "sub", "sup"}
+
+
+def _loose_images(soup, root):
+    """Pictures written straight into a container (a README's centred <div>: its logo, its badges, its GIF) into a
+    paragraph of their own, with what runs beside them, so a lone one can become a figure like any other."""
+    for img in list(root.find_all("img")):
+        parent = img.parent
+        while parent is not None and parent.name == "a":
+            img, parent = parent, parent.parent
+        if parent is None or parent.name not in ("div", "section", "article", "main", "body", "blockquote", "center"):
+            continue
+        run = [img]
+        for step in (-1, 1):
+            sib = img.previous_sibling if step < 0 else img.next_sibling
+            while sib is not None and (isinstance(sib, NavigableString) or sib.name in LOOSE):
+                (run.insert(0, sib) if step < 0 else run.append(sib))
+                sib = sib.previous_sibling if step < 0 else sib.next_sibling
+        p = soup.new_tag("p")
+        run[0].insert_before(p)
+        for n in run:
+            p.append(n.extract())
+
+
 def _images(soup, root, resolve_img):
     for p in root.find_all("p"):
         img = _lone_img(p)
         if img is None:
             continue
+        if str(img.get("width", "")).isdigit() and int(img["width"]) < 160:
+            continue   # a logo or an icon: drawn where it is, not a figure with a caption
         fig = soup.new_tag("figure", attrs={"class": "ltx_figure"})
         fig.append(img.extract())
         nxt = _sibling(p, 1)
@@ -357,9 +387,10 @@ def _flow(soup, root):
     """The document as a flat run of blocks: loose inline text becomes paragraphs, a paragraph holding a block (a
     display formula Pandoc wrote inside it) is split around it."""
     out, run = [], []
+    blank = lambda x: (isinstance(x, NavigableString) and not x.strip()) or getattr(x, "name", None) == "br"
 
     def flush():
-        if any(not (isinstance(x, NavigableString) and not x.strip()) for x in run):
+        if not all(blank(x) for x in run):   # line breaks alone (a README's <br> spacers) make no paragraph
             p = soup.new_tag("p")
             for x in run:
                 p.append(x.extract() if isinstance(x, Tag) else NavigableString(str(x)))
@@ -369,6 +400,9 @@ def _flow(soup, root):
     for ch in list(root.contents):
         if isinstance(ch, Tag) and (ch.name in BLOCK or _ours(ch)):
             flush()
+            if ch.name == "p" and all(blank(x) for x in ch.contents):
+                ch.decompose()
+                continue
             out.extend(_split_p(soup, ch) if ch.name == "p" else [ch.extract()])
         elif isinstance(ch, (Tag, NavigableString)):
             run.append(ch)

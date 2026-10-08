@@ -68,9 +68,13 @@ class Images:
                 data, _ = self.get(src)
                 return (data if data[:4] != b"<!DO" and data[:5] != b"<html" else None), path.rsplit("/", 1)[-1] or "image"
             with urllib.request.urlopen(urllib.request.Request(src, headers=UA), timeout=20) as r:
-                if not (r.headers.get("Content-Type") or "").startswith("image/"):
+                ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip()
+                if not ctype.startswith("image/"):
                     return None, ""
-                return r.read(MAX_IMG + 1), path.rsplit("/", 1)[-1] or "image"
+                name = path.rsplit("/", 1)[-1] or "image"
+                if Path(name).suffix.lower() not in IMG_EXT:   # a badge's address has none: the page needs it to draw it
+                    name += {"image/svg+xml": ".svg", "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp"}.get(ctype, "")
+                return r.read(MAX_IMG + 1), name
         if self.base is None or re.match(r"^[a-z][a-z0-9+.-]*:", src, re.I):
             return None, ""
         f = (self.base / urllib.parse.unquote(src.split("#")[0].split("?")[0])).resolve()
@@ -90,10 +94,10 @@ def import_text(text, name="document.md", base=None):
     meta = {"id": pid, "version": "", "title": title, "authors": fm["authors"], "date": fm["date"],
             "abs_url": "", "html_url": "", "license": fm["license"] if re.match(r"https?://", fm["license"]) else "",
             "source": {"kind": kind, "name": Path(name).name}, "label": Path(name).name}
-    return store_doc(pid, html, meta, "source.md", text, lambda folder: Images(folder, base).resolve)
+    return store_doc(pid, html, meta, "source.md", text, lambda folder: Images(folder, base).resolve, sizes=True)
 
 
-def store_doc(pid, html, meta, raw_name, raw, resolver):
+def store_doc(pid, html, meta, raw_name, raw, resolver, sizes=False):
     """A document's semantic HTML stored as a paper: normalized (with its images, through resolver(img folder)) into
     papers/<pid>/, written whole or not at all. A paper already stored stays as it is."""
     d = store.pdir(pid)
@@ -103,7 +107,7 @@ def store_doc(pid, html, meta, raw_name, raw, resolver):
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     try:
-        (tmp / "source.html").write_text(semantic.normalize(html, resolve_img=resolver(tmp / "img")))
+        (tmp / "source.html").write_text(semantic.normalize(html, resolve_img=resolver(tmp / "img"), sizes=sizes))
         (tmp / raw_name).write_text(raw)
         (tmp / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
         shutil.rmtree(d, ignore_errors=True)

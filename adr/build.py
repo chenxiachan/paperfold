@@ -54,6 +54,8 @@ def data_uri(f, max_side=1600):
         # "&" escaped too: in the page's src="…" an entity of the SVG's own (&quot;) would be decoded first and break it
         return "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(svg, safe=" /:=;,'()-._~!*+@?$")
     im = Image.open(f)
+    if getattr(im, "is_animated", False):   # a demo that moves stays as it is: a WebP of its first frame would stand still
+        return f"data:image/{(im.format or 'gif').lower()};base64," + base64.b64encode(f.read_bytes()).decode()
     im.thumbnail((max_side, max_side))
     if im.mode not in ("RGB", "RGBA"):
         im = im.convert("RGBA")

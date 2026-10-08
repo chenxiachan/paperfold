@@ -154,6 +154,9 @@ html.morphing .dot, html.morphing .legend i { animation: none !important; }
 
 /* ── document column ────────────────────────────────────── */
 .doc { position: relative; max-width: var(--col); margin: 0 auto; padding: 8px 24px 160px; }
+/* a wide screen: a wider column, with the margins still wide enough for the notes beside it (34px + 236px) */
+@media (min-width: 1480px) { :root { --col: 780px; } }
+@media (min-width: 1760px) { :root { --col: 860px; } }
 .doc[data-level="0"] { max-width: 1280px; }
 .tk { display: inline-block; transform-origin: 0 0; white-space: pre-wrap; }
 .tk.at { white-space: nowrap; }
