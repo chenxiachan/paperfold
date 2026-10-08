@@ -44,6 +44,7 @@
   const stageOf = (j, T) => (j.stopping ? T.stopping : `${T.stages[j.stage] || j.stage}${j.total ? ` ${j.done}/${j.total}` : ''}`);
   const stopBtn = (j, T) => `<button type="button" class="sb-stop" data-stop="${j.id}" title="${esc(T.stop)}" aria-label="${esc(T.stop)}"${j.stopping ? ' disabled' : ''}><i></i></button>`;
   const progress = (j, T) => `<span class="sb-prog"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(stageOf(j, T))} · ${esc(I18N.NATIVE[j.lang])}</span>`;
+  let lastSidebar = '';
   function renderSidebar() {
     const T = t();
     const listed = new Set(papers.map((p) => p.id));
@@ -68,7 +69,7 @@
       : papers.map(item).join('');
     const pend = (j) => `<div class="sb-row"><div class="sb-item pending"><span class="sb-t">${esc(j.title || j.pid)}</span>` +
       `<span class="sb-m"><span class="sb-id">${j.pid}</span></span>${progress(j, T)}</div>${stopBtn(j, T)}</div>`;
-    side.innerHTML = `
+    const html = `
       <div class="sb-head"><a class="sb-brand" href="/">${MARK}<span>PaperFold</span></a>
         <button type="button" class="sb-toggle" aria-label="${esc(T.collapse)}" title="${esc(T.collapse)}">‹</button></div>
       <div class="sb-rail">
@@ -81,6 +82,13 @@
       ${groups.length > 1 ? '' : `<div class="sb-label">${esc(groups.length ? groups[0][0] : T.papers)}</div>`}
       <nav class="sb-list">${pending.map(pend).join('')}${listed_ || (pending.length ? '' : `<div class="sb-empty">${esc(T.empty)}</div>`)}</nav>
       <div class="sb-foot"><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button><div class="sb-model">${esc(modelLabel())}</div></div>`;
+    // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
+    const busy = jobs.some(live);
+    if (html === lastSidebar) { side.querySelector('.rail-open').classList.toggle('busy', busy); return; }
+    const scrolled = side.querySelector('.sb-list') ? side.querySelector('.sb-list').scrollTop : 0;
+    side.innerHTML = html;
+    lastSidebar = html;
+    side.querySelector('.sb-list').scrollTop = scrolled;
     side.querySelector('.sb-toggle').onclick = () => setCollapsed(true);
     side.querySelector('.rail-open').onclick = () => setCollapsed(false);
     side.querySelectorAll('.sb-settings, .rail-settings').forEach((b) => { b.onclick = openSettings; });
@@ -88,7 +96,7 @@
     side.querySelectorAll('.sb-stop').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); stopJob(b.dataset.stop); }; });
     side.querySelectorAll('[data-resume]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); resume(a.dataset.resume); }; });
     // folded to a rail (over a paper): a dot on the list button while something generates
-    side.querySelector('.rail-open').classList.toggle('busy', jobs.some(live));
+    side.querySelector('.rail-open').classList.toggle('busy', busy);
   }
   // a job stopped from anywhere (the sidebar, the landing's card, the toast over a paper): what is written stays cached
   async function stopJob(id) {
