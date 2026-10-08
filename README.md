@@ -31,6 +31,7 @@ Your agent writes more than you have time to read. A [Claude Code mod](https://c
 
 ## What's new
 
+- **October 2026: read beside the original.** **Original**, at the top of a paper, opens its PDF at the left (from arXiv, PubMed Central or bioRxiv) and shows each paragraph on its page as you read. A new paper opens as soon as it can be read, while its levels are written.
 - **October 2026: your agent's replies fold too.** [TextFold](#in-claude-code) puts the five levels on every Claude Code reply. Press 5 for the answer in one sentence, 1 for every word.
 - **October 2026: more than arXiv.** Paste the link or DOI of a paper on PubMed Central, bioRxiv or medRxiv, or a Wikipedia article in any language, or drag in a Markdown file of your own. Each opens at the same five levels.
 
@@ -98,6 +99,7 @@ PaperFold uses a model you already have, and there is no account to create. It l
 | `1` to `5` | jump to a level |
 | Click a paragraph | open just that paragraph |
 | Click a figure | see it enlarged |
+| **Original**, at the top | read beside the paper's PDF |
 | Select text | highlight, write a note, or ask |
 | **Ask the paper**, bottom right | ask about the whole paper |
 | `L` | next language |
