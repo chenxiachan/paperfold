@@ -48,13 +48,16 @@ def _has_tex(doc):
     return '"x":' in json.dumps([doc["units"], doc["chunks"]])
 
 
+ANIMATED_INSIDE = 2_000_000   # a moving picture larger than this goes into a single-file page as its first frame
+
+
 def data_uri(f, max_side=1600):
     if f.suffix.lower() == ".svg":  # vector stays vector: crisp at every zoom, and small for line plots
         svg = f.read_text(errors="replace")
         # "&" escaped too: in the page's src="…" an entity of the SVG's own (&quot;) would be decoded first and break it
         return "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(svg, safe=" /:=;,'()-._~!*+@?$")
     im = Image.open(f)
-    if getattr(im, "is_animated", False):   # a demo that moves stays as it is: a WebP of its first frame would stand still
+    if getattr(im, "is_animated", False) and f.stat().st_size <= ANIMATED_INSIDE:   # a small demo that moves, as it is
         return f"data:image/{(im.format or 'gif').lower()};base64," + base64.b64encode(f.read_bytes()).decode()
     im.thumbnail((max_side, max_side))
     if im.mode not in ("RGB", "RGBA"):
@@ -64,12 +67,16 @@ def data_uri(f, max_side=1600):
     return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def inline_images(doc):
-    """Figures go inside the page: one file that still works when forwarded, previewed, or opened on a phone."""
+def inline_images(doc, app=False):
+    """Figures go inside the page: one file that still works when forwarded, previewed, or opened on a phone. In the app
+    a picture other than a drawing is the server's to give (/p/<id>/img/<name>): a page carrying a README's GIFs inside
+    weighed ten megabytes, and the zoom copies its figures; that way they move as they should, and the page stays light."""
     meta = doc["meta"]
     cache = store.pdir(meta["id"]) / "img"
     local = fetch_images(doc["images"], meta["html_url"], cache)
-    uris = {src: data_uri(cache / path.split("/", 1)[1]) for src, path in local.items()}
+    pid = urllib.parse.quote(meta["id"])
+    uris = {src: (f"/p/{pid}/{path}" if app and not path.lower().endswith(".svg") else data_uri(cache / path.split("/", 1)[1]))
+            for src, path in local.items()}
     for b in doc["blocks"]:
         if "html" in b:
             for src, uri in uris.items():
@@ -85,7 +92,7 @@ def payload(doc, app, katex=None):
 
 def page(doc, app=False, assets=None):
     """assets: for a static page published beside a folder holding web/vendor's fonts/ and katex/ (a gallery)."""
-    inline_images(doc)
+    inline_images(doc, app)
     t = (WEB / "template.html").read_text()
     if app:
         head = fonts_head(APP_ASSETS) + '<link rel="stylesheet" href="/static/reader.css"><link rel="stylesheet" href="/static/app.css">'

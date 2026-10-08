@@ -45,6 +45,7 @@ from . import agents, bridges, build, langs, llm, local, models, notes, pdf, pip
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript"}
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
+IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
                 ".txt": "text/plain; charset=utf-8"}
 
@@ -210,6 +211,13 @@ def make_handler(jobs):
                             f'<div style="text-align:center"><h2>{"✓ OpenRouter" if key else "OpenRouter ✕"}</h2></div>'
                             f'<script>location.replace({json.dumps(to)})</script>')
                     return self.send(200, page, "text/html; charset=utf-8")
+                m = re.fullmatch(r"/p/([\w.-]+)/img/([\w.-]+)", u.path)   # a paper's picture (a drawing stays inside its page)
+                if m and store.valid_id(m.group(1)):
+                    f = store.pdir(m.group(1)) / "img" / m.group(2)
+                    kind = IMAGE_TYPES.get(f.suffix.lower())
+                    if kind and f.is_file():
+                        return self.send(200, f.read_bytes(), kind, cache="max-age=86400")
+                    return self.json({"error": "no such picture"}, 404)
                 m = re.fullmatch(r"/p/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)):
                     if not (store.pdir(m.group(1)) / "source.html").exists():
