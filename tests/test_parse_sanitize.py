@@ -1,20 +1,12 @@
-"""Regression test: adr.parse.parse() must sanitize arXiv/LaTeXML HTML the same way
-adr.semantic.normalize()/_sanitize() sanitizes every other ingestion path (Markdown via
-local.py, JATS via jats.py, bioRxiv, Wikipedia).
+"""Regression test: parse.parse() must take out what can run script from an arXiv/LaTeXML page.
 
-Root cause under test: fetch.py writes the raw arxiv.org/html/<id> bytes straight to
-papers/<id>/source.html, and store.parsed() feeds that file straight into parse.parse()
-with no sanitization step anywhere on the way. parse() then copies element/attribute
-content verbatim into the document payload (str(el), decode_contents(), etc.), so a
-<script>, <style>, an on*= handler, or a javascript: href anywhere in the arXiv page
-survives into atoms/blocks/chunks and is later written to the DOM via .innerHTML in
-web/reader.js (e.g. line 124, 224-230, 1613-1645).
+fetch.py writes the raw arxiv.org/html/<id> bytes to papers/<id>/source.html and store.parsed() feeds that to
+parse(). parse() copies element HTML verbatim into the document (str(el), decode_contents()), and web/reader.js draws
+it with innerHTML on the local server's own origin. adr/latexml_safe.py is what stands in between; this test holds the
+line in that direction (the other direction, that figures and sizes survive, is test_parse_keeps_figures.py).
 
-This test is expected to FAIL (RED) against current code: parse() has no sanitize call.
-Run from /tmp/paperfold-review so the `adr` package resolves:
+Run from the repo root:
     python3 -m unittest discover tests
-or directly:
-    python3 tests/test_parse_sanitize.py
 """
 import json
 import re
@@ -23,12 +15,14 @@ import unittest
 from adr.parse import parse
 
 # A minimal arXiv/LaTeXML-shaped page (article.ltx_document, ltx_section/ltx_title/ltx_p
-# classes the parser depends on) carrying five independent injection vectors:
+# classes the parser depends on) carrying independent injection vectors, the last group inside an SVG:
 #   1. a top-level <script> sibling of the sections (parse.py block()'s raw fallback)
 #   2. a top-level <style> sibling (same path)
 #   3. a <script> inside a section heading (decode_contents() in heading(), parse.py:192-193)
 #   4. an onclick= handler on an inline <a> (atom() stores str(el) verbatim, parse.py:131-134)
 #   5. a javascript: href on that same <a>
+#   6. SVG: an xlink:href javascript: link, <animate> and <set> that rewrite an href, a data:text/html
+#      image src with an onerror handler, a style with an external url()
 MALICIOUS_HTML = """
 <html><body>
 <article class="ltx_document">
@@ -37,6 +31,16 @@ MALICIOUS_HTML = """
 <section class="ltx_section" id="s1">
 <h2 class="ltx_title ltx_title_section">Intro<script>alert('head')</script></h2>
 <div class="ltx_para"><p class="ltx_p">hello <a href="javascript:alert(1)" onclick="y()">link</a></p></div>
+<figure class="ltx_figure" id="f1">
+<svg class="ltx_picture" width="100" height="60">
+<a xlink:href="javascript:alert(2)"><text>x</text></a>
+<animate attributeName="href" to="javascript:alert(3)"/>
+<set attributeName="xlink:href" to="javascript:alert(4)"/>
+<foreignObject><img src="data:text/html;base64,PHNjcmlwdD4=" onerror="z()"></foreignObject>
+<rect style="fill:url(http://evil.example/x);width:5px"/>
+</svg>
+<figcaption class="ltx_caption">A picture.</figcaption>
+</figure>
 </section>
 </article>
 </body></html>
@@ -82,6 +86,14 @@ class ParseSanitizeTest(unittest.TestCase):
         frags = self._all_html_fragments()
         for frag in frags:
             self.assertNotIn("javascript:", frag.lower(), f"javascript: href survived in: {frag!r}")
+
+    def test_svg_vectors_are_removed_and_the_picture_stays(self):
+        blob = json.dumps(self.doc).lower().replace('\\"', '"')
+        for bad in ("<animate", "<set ", "data:text/html", "evil.example"):
+            self.assertNotIn(bad, blob, f"{bad!r} survived")
+        # ...while the picture around them is kept: the svg, its foreignObject and image, the harmless style
+        for good in ("<svg", "<foreignobject", "<img", "width:5px"):
+            self.assertIn(good, blob, f"{good!r} was removed")
 
     def test_whole_payload_is_clean(self):
         """Belt-and-braces: serialize the entire doc payload (what store.assemble()/build.page()

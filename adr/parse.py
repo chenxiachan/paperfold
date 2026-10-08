@@ -10,7 +10,7 @@ import re
 
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 
-from .semantic import sanitize
+from .latexml_safe import make_safe
 from .tokens import split_sentences, tokenize_text
 
 SECTION_LEVEL = {
@@ -335,7 +335,7 @@ def parse(html, meta):
             obj.name = "img"
             obj["src"] = obj.attrs.pop("data")
             obj.attrs.pop("type", None)
-    sanitize(art)   # arXiv's LaTeXML page is the one source parse() reads without going through semantic.normalize()
+    make_safe(art)   # arXiv's page reaches the reader as it is, so what could run script is taken out here (latexml_safe.py)
     doc.images = sorted({img["src"] for img in art.find_all("img") if img.get("src") and not img["src"].startswith("data:")})
     for ch in art.find_all(recursive=False):
         cls = ch.get("class", [])
