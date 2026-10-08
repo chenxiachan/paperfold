@@ -31,7 +31,8 @@ OLD_HOME = Path.home() / ".dynamic-reader"   # where they were kept before the n
 # md-<title words>-<hash>), a paper from Europe PMC (epmc.py: pmc<n>, ppr<n>) or a preprint from bioRxiv or medRxiv
 # (biorxiv.py: biorxiv-<DOI suffix>) or a Wikipedia article (wiki.py: wiki-<language>-<page id>)
 ARXIV_ID = re.compile(r"\d{4}\.\d{4,5}")
-IMPORTED_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*|pmc\d{4,9}|ppr\d{4,9}|(?:biorxiv|medrxiv)-[0-9.]{3,40}|wiki-[a-z][a-z-]{1,15}-\d{1,10}")
+IMPORTED_ID = re.compile(r"md-[a-z0-9]+(?:-[a-z0-9]+)*|pmc\d{4,9}|ppr\d{4,9}|(?:biorxiv|medrxiv)-[0-9.]{3,40}|wiki-[a-z][a-z-]{1,15}-\d{1,10}"
+                         r"|gh-[a-z0-9-]{1,39}--[a-z0-9._-]{1,100}")
 
 
 def valid_id(pid):
@@ -46,13 +47,17 @@ def resolve(ref):
     """The id a reference names (ValueError when it names none): a stored document's id as it is; an arXiv id or
     link; a bioRxiv or medRxiv link or DOI (read from the server itself: its own text, its newest version); a PubMed
     Central or Europe PMC preprint id or link; any other DOI, looked up in Europe PMC (ValueError("no-fulltext") when
-    it holds no open full text); a Wikipedia article's link (ValueError("no-article") when there is no such article)."""
-    from . import biorxiv, epmc, wiki   # (they store through this module)
+    it holds no open full text); a Wikipedia article's link (ValueError("no-article") when there is no such article);
+    a GitHub repository's link (its README; read when the paper is generated)."""
+    from . import biorxiv, epmc, github, wiki   # (they store through this module)
     ref = (ref or "").strip()
     if ref.startswith("md-"):
         if not (IMPORTED_ID.fullmatch(ref) and (pdir(ref) / "meta.json").exists()):
             raise ValueError(f"no such document: {ref}")
         return ref
+    owner, repo = github.ref_of(ref)
+    if owner:
+        return github.pid_of(owner, repo)
     if re.search(r"arxiv\.org|^(arxiv:)?\d{4}\.\d{4,5}(v\d+)?$|10\.48550/", ref, re.I):
         return paper_id(ref)
     if IMPORTED_ID.fullmatch(ref):

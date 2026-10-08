@@ -8,6 +8,7 @@ semantic.normalize's allowlist goes: no script, no handler, no javascript: link 
 import re
 
 from markdown_it import MarkdownIt
+from mdit_py_plugins.anchors import anchors_plugin
 from mdit_py_plugins.deflist import deflist_plugin
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from mdit_py_plugins.footnote import footnote_plugin
@@ -20,6 +21,7 @@ def _md():
     return (MarkdownIt("commonmark", {"html": True, "linkify": False, "typographer": False})
             .enable(["table", "strikethrough"])
             .use(front_matter_plugin).use(footnote_plugin).use(deflist_plugin)
+            .use(anchors_plugin, min_level=1, max_level=6)   # GitHub's heading ids: a README's "#get-started" lands
             .use(dollarmath_plugin, allow_space=False, allow_digits=False, double_inline=True))
 
 

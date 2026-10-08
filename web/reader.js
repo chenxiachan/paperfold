@@ -407,6 +407,8 @@
   function licenseName(url, t) {
     const cc = /creativecommons\.org\/(licenses|publicdomain)\/([a-z-]+)\/([\d.]+)/.exec(url);
     if (cc) return `${t.license}: ${cc[1] === 'publicdomain' ? 'CC0' : 'CC ' + cc[2].toUpperCase()} ${cc[3]}`;
+    const spdx = /spdx\.org\/licenses\/([\w.+-]+?)(?:\.html)?$/.exec(url);   // a GitHub repository's, by its SPDX id
+    if (spdx) return `${t.license}: ${spdx[1]}`;
     return /arxiv\.org\/licenses\/nonexclusive/.test(url) ? t.lic_arxiv : `${t.license}: ${url.replace(/^https?:\/\//, '')}`;
   }
   // a section's one-line summary, word by word (the reader's highlights on it marked)

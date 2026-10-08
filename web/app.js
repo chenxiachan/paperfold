@@ -59,9 +59,9 @@
         ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
         (j ? stopBtn(j, T) : `<button type="button" class="sb-del" data-del="${p.id}" title="${esc(T.del_paper)}" aria-label="${esc(T.del_paper)}">×</button>`) + '</div>';
     };
-    // papers, Wikipedia articles and documents of one's own, each under its name when there is more than one kind
-    const kindOf = (id) => (/^wiki-/.test(id) ? 'wiki' : /^md-/.test(id) ? 'doc' : 'paper');
-    const groups = [['paper', T.papers], ['wiki', T.g_wiki], ['doc', T.g_docs]]
+    // papers, Wikipedia articles, GitHub READMEs and documents of one's own, each under its name when there is more than one kind
+    const kindOf = (id) => (/^wiki-/.test(id) ? 'wiki' : /^gh-/.test(id) ? 'gh' : /^md-/.test(id) ? 'doc' : 'paper');
+    const groups = [['paper', T.papers], ['wiki', T.g_wiki], ['gh', 'GitHub'], ['doc', T.g_docs]]
       .map(([k, name]) => [name, papers.filter((p) => kindOf(p.id) === k)]).filter(([, ps]) => ps.length);
     const listed_ = groups.length > 1
       ? groups.map(([name, ps]) => `<div class="sb-group">${esc(name)}</div>${ps.map(item).join('')}`).join('')
@@ -78,7 +78,7 @@
         <button type="button" class="rail-btn rail-settings" title="${esc(T.settings)}">⚙</button>
       </div>
       <a class="sb-new" href="/">＋ ${esc(T.new_paper)}</a>
-      ${groups.length > 1 ? '' : `<div class="sb-label">${esc(T.papers)}</div>`}
+      ${groups.length > 1 ? '' : `<div class="sb-label">${esc(groups.length ? groups[0][0] : T.papers)}</div>`}
       <nav class="sb-list">${pending.map(pend).join('')}${listed_ || (pending.length ? '' : `<div class="sb-empty">${esc(T.empty)}</div>`)}</nav>
       <div class="sb-foot"><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button><div class="sb-model">${esc(modelLabel())}</div></div>`;
     side.querySelector('.sb-toggle').onclick = () => setCollapsed(true);
@@ -169,7 +169,8 @@
     }
   }
   const errText = (msg) => (msg === 'no-html' ? t().no_html : msg === 'bad-ref' ? t().bad_ref : msg === 'no-model' ? t().no_model
-    : msg === 'not-markdown' || msg === 'empty' ? t().md_only : msg === 'no-fulltext' ? t().no_fulltext : msg);
+    : msg === 'not-markdown' || msg === 'empty' ? t().md_only : msg === 'no-fulltext' ? t().no_fulltext
+    : msg === 'no-readme' ? t().no_readme : msg === 'github-limit' ? t().github_limit : msg);
 
   // ── on a reader page: generate a language, or regenerate the current one ──
   if (PAPER) {
@@ -350,7 +351,7 @@
       e.preventDefault();
       err.hidden = true;
       const ref = document.getElementById('ref').value.trim();
-      if (!/\d{4}\.\d{4,5}|PMC\d{4,}|PPR\d{4,}|10\.\d{4,9}\/\S|wikipedia\.org\//i.test(ref)) { fail(t().bad_ref); return; }   // arXiv, Europe PMC, a DOI, Wikipedia
+      if (!/\d{4}\.\d{4,5}|PMC\d{4,}|PPR\d{4,}|10\.\d{4,9}\/\S|wikipedia\.org\/|github\.com\/[\w.-]+\/[\w.-]+/i.test(ref)) { fail(t().bad_ref); return; }   // arXiv, Europe PMC, a DOI, Wikipedia, a GitHub repository
       if (!modelName) { fail(t().no_model); return; }   // connect a model first (the card below)
       start(ref);
     };

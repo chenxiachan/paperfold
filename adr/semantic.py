@@ -293,7 +293,7 @@ def _images(soup, root, resolve_img):
             img["src"] = where
         else:   # an image the document names but that could not be had: its name stays, as a placeholder
             ph = soup.new_tag("span", attrs={"class": "pf-missing"})
-            ph.string = "🖼 " + (img.get("src", "").split("/")[-1] or img.get("alt") or "image")
+            ph.string = "🖼 " + ((img.get("alt") or "").strip() or img.get("src", "").split("/")[-1].split("?")[0] or "image")
             img.replace_with(ph)
     for fig in root.find_all("figure"):
         if fig.find("table") and not fig.find("img"):
