@@ -69,3 +69,18 @@ test('a short reply stays as written at every level', async ($, on) => {
   await message.unmount()
   await band.unmount()
 })
+
+test('a session starts at the level the setting names', { options: { level: 'Points' } }, async ($, on) => {
+  on('ui.render', async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    if (e.component !== 'AssistantMessage') return Box({ children: [] })
+    return Text({ children: [e.props.text] })
+  })
+  const band = await $.ui.mount({ plugin: 'textfold', surface: 'terminal', ...BAND })
+  const message = await $.ui.mount({ plugin: 'textfold', surface: 'terminal', ...MESSAGE })
+  expect((await message.find(FOLDED))?.text).toBe('  Points · 17 of 89 words · 1 unfolds')
+  await band.press({ key: 'level-1' })
+  expect(await message.find(FOLDED)).toBeUndefined()
+  await message.unmount()
+  await band.unmount()
+})

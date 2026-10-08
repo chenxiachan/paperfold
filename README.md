@@ -136,7 +136,7 @@ claude plugin install textfold@paperfold
 | **4** | **Outline** | the map of a long reply: its sections, and what each one says |
 | **5** | **Gist** | the answer, in one sentence |
 
-Type the digit while the prompt is empty, or pick a level in the row above the prompt. Short replies stay whole: one under about 80 words, or one a fold would barely shorten, always shows as written.
+Type the digit while the prompt is empty, or pick a level in the row above the prompt. Short replies stay whole: one under about 80 words, or one a fold would barely shorten, always shows as written. To have every session start folded, pick a **Starting level** in `/config`.
 
 **Why you can trust a fold.** TextFold asks Claude to lead with the point: the answer first in every reply, the key sentence first in every paragraph. A fold keeps what Claude put first. There is no second model and no summary, so a fold costs nothing, takes no time, and never puts words in Claude's mouth.
 

@@ -4,8 +4,11 @@ import type { Register } from 'claude-code'
 import type { Level } from '../types'
 import { fold, LEVELS, worthFolding } from './fold'
 
-// The level every reply is read at: 1 Full (as written) to 5 Gist. Full until the reader picks another.
-const level = atom({ plugin: 'textfold', key: 'level' } as const, 1 as Level)
+// The level a session starts at: the setting's (/config, "Starting level"), Full when it has none
+const startOf = (options: Readonly<Record<string, unknown>>) => {
+  const i = LEVELS.indexOf(String(options.level) as (typeof LEVELS)[number])
+  return (i >= 0 ? i + 1 : 1) as Level
+}
 
 // What Claude is asked, so that a fold of its reply still reads: the point first, at every scale. It changes
 // the order of what Claude says, not what it says or how much.
@@ -16,7 +19,11 @@ The person reading this session can fold your replies with one key: to each para
 - Give a reply longer than four paragraphs a few short headings.
 This changes the order of what you write, not its content or its length.`
 
-export const register: Register = (on) => {
+export const register: Register = (on, options) => {
+  // The level every reply is read at: 1 Full (as written) to 5 Gist, from the setting until the reader picks another.
+  // A session keeps the one it has when the setting changes (the module reloads; the value is the host's).
+  const level = atom({ plugin: 'textfold', key: 'level' } as const, startOf(options))
+
   // Approach B: Claude writes foldable replies, so folding needs no model call
   on('prompt.compose', async ($, e, next) => {
     const { sections } = await next(e)

@@ -12,7 +12,7 @@ Your agent writes more than you have time to read. TextFold folds every Claude C
 | **4** | **Outline** | the map of a long reply: its sections, and what each one says |
 | **5** | **Gist** | the answer, in one sentence |
 
-Type the digit while the prompt is empty, or pick a level in the row above the prompt. A folded reply tells you how much of it you are seeing, and `1` brings back every word. Short replies stay whole: one under about 80 words, or one a fold would barely shorten, always shows as written.
+Type the digit while the prompt is empty, or pick a level in the row above the prompt. A folded reply tells you how much of it you are seeing, and `1` brings back every word. Short replies stay whole: one under about 80 words, or one a fold would barely shorten, always shows as written. To have every session start folded, pick a **Starting level** in `/config`.
 
 ## Why you can trust a fold
 

@@ -1,10 +1,19 @@
 {
   "name": "textfold",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read Claude Code's replies at the level you need, from every word to the answer in one sentence, with one key",
   "author": { "name": "Xia Chen" },
   "homepage": "https://github.com/chenxiachan/paperfold/tree/main/plugins/textfold",
   "repository": "https://github.com/chenxiachan/paperfold",
   "license": "Apache-2.0",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "level": {
+      "type": "string",
+      "title": "Starting level",
+      "description": "The level replies show at when a session starts. The band above the prompt and the keys 1 to 5 still change it.",
+      "options": ["Full", "Brief", "Points", "Outline", "Gist"],
+      "default": "Full"
+    }
+  }
 }
