@@ -13,7 +13,7 @@
 
 [English](README.md) · **简体中文**
 
-**[试一试效果 →](https://chenxiachan.github.io/paperfold-gallery/)** 来自不同领域的arXiv论文，无需安装。
+**[试一试效果 →](https://chenxiachan.github.io/paperfold-gallery/)** 来自不同领域的论文、一篇维基百科条目和一份 GitHub README，无需安装。
 
 <br>
 
@@ -31,9 +31,10 @@ Agent 写的，总比你有空读的多。一个 [Claude Code mod](https://code.
 
 ## 最新
 
-- **2026 年 10 月：对照原文读。** 论文页顶部的 **原文** 会在左边打开它的 PDF（来自 arXiv、PubMed Central 或 bioRxiv），读到哪一段，就标出它在原页上的位置。新论文解析完就能打开，缩放层级在后台生成。
-- **2026 年 10 月：Agent 的回答也能折叠了。** [TextFold](#在-claude-code-里) 把五个层级放到 Claude Code 的每条回答上。按 5 看一句话的答案，按 1 看每一个字。
-- **2026 年 10 月：不只读 arXiv。** 粘贴 PubMed Central、bioRxiv、medRxiv 上论文的链接或 DOI，或任何语言的维基百科条目，也可以拖入你自己的 Markdown 文件。打开后同样是五个层级。
+- **2026 年 10 月 8 日：读任何 GitHub README。** 粘贴仓库链接，就能在五个层级上读它的 README，logo、徽章和动图都和 GitHub 上一样。Markdown 文件里写的 HTML 也会保留，侧栏按论文、维基百科、GitHub 和文档分组。
+- **2026 年 10 月 8 日：对照原文读。** 论文页顶部的 **原文** 会在左边打开它的 PDF（来自 arXiv、PubMed Central 或 bioRxiv），读到哪一段，就标出它在原页上的位置。新论文解析完就能打开，缩放层级在后台生成。
+- **2026 年 10 月 7 日：Agent 的回答也能折叠了。** [TextFold](#在-claude-code-里) 把五个层级放到 Claude Code 的每条回答上。按 5 看一句话的答案，按 1 看每一个字。
+- **2026 年 10 月 6 日：不只读 arXiv。** 粘贴 PubMed Central、bioRxiv、medRxiv 上论文的链接或 DOI，或任何语言的维基百科条目，也可以拖入你自己的 Markdown 文件。打开后同样是五个层级。
 
 ## 读论文，脑子里少装一点
 

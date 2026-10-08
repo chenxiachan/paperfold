@@ -13,7 +13,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-**[Try it →](https://chenxiachan.github.io/paperfold-gallery/)** arXiv papers from different fields, nothing to install.
+**[Try it →](https://chenxiachan.github.io/paperfold-gallery/)** papers from different fields, a Wikipedia article and a GitHub README, nothing to install.
 
 <br>
 
@@ -31,9 +31,10 @@ Your agent writes more than you have time to read. A [Claude Code mod](https://c
 
 ## What's new
 
-- **October 2026: read beside the original.** **Original**, at the top of a paper, opens its PDF at the left (from arXiv, PubMed Central or bioRxiv) and shows each paragraph on its page as you read. A new paper opens as soon as it can be read, while its levels are written.
-- **October 2026: your agent's replies fold too.** [TextFold](#in-claude-code) puts the five levels on every Claude Code reply. Press 5 for the answer in one sentence, 1 for every word.
-- **October 2026: more than arXiv.** Paste the link or DOI of a paper on PubMed Central, bioRxiv or medRxiv, or a Wikipedia article in any language, or drag in a Markdown file of your own. Each opens at the same five levels.
+- **October 8, 2026: any GitHub README.** Paste a repository's link and read its README at five levels, with its logo, badges and GIFs as on GitHub. A Markdown file keeps the HTML written in it, and the sidebar groups papers, Wikipedia articles, READMEs and documents.
+- **October 8, 2026: read beside the original.** **Original**, at the top of a paper, opens its PDF at the left (from arXiv, PubMed Central or bioRxiv) and shows each paragraph on its page as you read. A new paper opens as soon as it can be read, while its levels are written.
+- **October 7, 2026: your agent's replies fold too.** [TextFold](#in-claude-code) puts the five levels on every Claude Code reply. Press 5 for the answer in one sentence, 1 for every word.
+- **October 6, 2026: more than arXiv.** Paste the link or DOI of a paper on PubMed Central, bioRxiv or medRxiv, or a Wikipedia article in any language, or drag in a Markdown file of your own. Each opens at the same five levels.
 
 ## Read with less in your head
 
