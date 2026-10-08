@@ -87,4 +87,5 @@ def fetch(pid, progress=None):
             "abs_url": info["html_url"], "html_url": "", "description": info.get("description") or "",
             "license": f"https://spdx.org/licenses/{spdx}.html" if spdx and spdx != "NOASSERTION" else "",
             "source": {"kind": "github", "name": full, "branch": branch}, "label": f"GitHub · {full}"}
-    return local.store_doc(pid, html, meta, "source.md", text, lambda folder: local.Images(folder, None).resolve, sizes=True)
+    pre = local.prefetch(re.findall(r'<img[^>]*\ssrc="([^"]+)"', html))   # its pictures, at once
+    return local.store_doc(pid, html, meta, "source.md", text, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)

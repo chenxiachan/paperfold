@@ -77,6 +77,25 @@
         "zh": "把照片重建的场景表示成数百万个三维高斯，以 1080p 实时渲染新视角，画质与当时最好的神经渲染方法相当。",
         "de": "Aus Fotos rekonstruierte Szenen als Millionen von 3D-Gaußfunktionen zeigen neue Ansichten in Echtzeit bei 1080p, in der Qualität der besten neuronalen Verfahren ihrer Zeit."
       }
+    },
+    {
+      "id": "wiki-en-13460",
+      "field": {"en": "Wikipedia", "zh": "维基百科", "de": "Wikipedia"},
+      "why": {
+        "en": "Where links and the web come from, from Vannevar Bush's memex to Ted Nelson, who coined the word. A Wikipedia article, read at five levels like a paper.",
+        "zh": "链接和网页从哪里来：从万尼瓦尔·布什的 memex，到创造了这个词的泰德·尼尔森。一篇维基百科条目，像论文一样分五个层级来读。",
+        "de": "Woher Links und das Web kommen, von Vannevar Bushs Memex bis zu Ted Nelson, der das Wort prägte. Ein Wikipedia-Artikel, gelesen in fünf Ebenen wie eine Arbeit."
+      }
+    },
+    {
+      "id": "gh-chenxiachan--thoughtdag",
+      "consent": true,
+      "field": {"en": "GitHub README", "zh": "GitHub README", "de": "GitHub-README"},
+      "why": {
+        "en": "A README read like a paper: ThoughtDAG, an infinite canvas where conversations with language models grow into an editable thought graph, by the author of PaperFold.",
+        "zh": "像读论文一样读 README：ThoughtDAG 是 PaperFold 作者的另一个项目，一张无限画布，让和大模型的对话长成一张可以编辑的思维图。",
+        "de": "Ein README, gelesen wie eine Arbeit: ThoughtDAG, vom Autor von PaperFold, eine unendliche Leinwand, auf der Gespräche mit Sprachmodellen zu einem bearbeitbaren Gedankengraphen wachsen."
+      }
     }
   ]
 }

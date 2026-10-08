@@ -226,25 +226,33 @@ def main():
 
 
 UI = {
-    "en": {"name": "EN", "lede": "Landmark papers from {n} fields, ready to fold and unfold. Each one opens as a one-screen map of its sections. Pinch, or press 1 to 5, to go from the map down to every word.",
-           "own": "Unfold any arXiv paper yourself with PaperFold", "consent": "shared with the author's consent",
+    "en": {"name": "EN", "lede": "Landmark papers from {n} fields{extra}, ready to fold and unfold. Each one opens as a one-screen map of its sections. Pinch, or press 1 to 5, to go from the map down to every word.",
+           "extra": ", a Wikipedia article and a GitHub README",
+           "own": "Unfold any paper, article or README yourself with PaperFold", "consent": "shared with the author's consent",
            "open": "Open the map", "orig": "Original title: ",
            "foot": "Papers belong to their authors and keep their licenses, named under each title. PaperFold is not affiliated with the authors; the levels, links and translations were made by AI.",
            "takedown": "An author who would like a paper taken down: {issue}.", "issue": "open an issue",
            "made": "Made by {me} with {pf}."},
-    "zh": {"name": "中文", "lede": "{n} 个领域的标志性论文，可以随手折叠、展开。每篇先以一屏的章节地图打开；双指缩放，或按 1 到 5，就能从地图一路展开到每一个词。",
-           "own": "用 PaperFold 展开任何一篇 arXiv 论文", "consent": "经作者同意分享",
+    "zh": {"name": "中文", "lede": "{n} 个领域的标志性论文{extra}，可以随手折叠、展开。每篇先以一屏的章节地图打开；双指缩放，或按 1 到 5，就能从地图一路展开到每一个词。",
+           "extra": "，外加一篇维基百科条目和一份 GitHub README",
+           "own": "用 PaperFold 展开任何一篇论文、文章或 README", "consent": "经作者同意分享",
            "open": "打开地图", "orig": "原标题：",
            "foot": "论文属于原作者，沿用作者的许可协议，标在每篇标题下方。PaperFold 与作者没有隶属关系；各层级、链接和译文由 AI 生成。",
            "takedown": "作者如希望撤下论文，请{issue}。", "issue": "提交 issue",
            "made": "由 {me} 用 {pf} 制作。"},
-    "de": {"name": "DE", "lede": "Wegweisende Arbeiten aus {n} Fachgebieten zum Auf- und Zufalten. Jede öffnet als Karte ihrer Abschnitte auf einem Bildschirm. Mit zwei Fingern zoomen oder 1 bis 5 drücken, und es geht von der Karte bis zu jedem Wort.",
-           "own": "Jede arXiv-Arbeit selbst mit PaperFold auffalten", "consent": "mit Zustimmung des Autors geteilt",
+    "de": {"name": "DE", "lede": "Wegweisende Arbeiten aus {n} Fachgebieten{extra} zum Auf- und Zufalten. Jede öffnet als Karte ihrer Abschnitte auf einem Bildschirm. Mit zwei Fingern zoomen oder 1 bis 5 drücken, und es geht von der Karte bis zu jedem Wort.",
+           "extra": ", dazu ein Wikipedia-Artikel und ein GitHub-README,",
+           "own": "Jede Arbeit, jeden Artikel und jedes README selbst mit PaperFold auffalten", "consent": "mit Zustimmung des Autors geteilt",
            "open": "Karte öffnen", "orig": "Originaltitel: ",
            "foot": "Die Arbeiten gehören ihren Autorinnen und Autoren und behalten deren Lizenz, genannt unter jedem Titel. PaperFold ist mit ihnen nicht verbunden; Ebenen, Verweise und Übersetzungen hat KI erstellt.",
            "takedown": "Autorinnen und Autoren, die eine Arbeit entfernen lassen möchten: {issue}.", "issue": "Issue eröffnen",
            "made": "Erstellt von {me} mit {pf}."},
 }
+
+
+def source(pid, meta):
+    """Where a card's text comes from: arXiv's id, else the source's own label (en.wikipedia.org, GitHub · owner/repo)."""
+    return f"arXiv:{pid}" if store.ARXIV_ID.fullmatch(pid) else meta.get("label") or pid
 
 
 def person(a):
@@ -281,10 +289,12 @@ def index(cards, want):
   <a class="title" data-pid="{e(pid)}" href="{e(pid)}/index.html#level=Topic">{title}</a>
   {f'<div class="orig">{orig}</div>' if orig else ''}
   <p class="why">{each(lambda l: c["why"][l])}</p>
-  <div class="meta"><span>{e(by)}</span><span>{e(meta.get("date", "")[:4])}</span><span>arXiv:{e(pid)}</span><span class="lic">{held}</span></div>
+  <div class="meta"><span>{e(by)}</span><span>{e(meta.get("date", "")[:4])}</span><span>{e(source(pid, meta))}</span><span class="lic">{held}</span></div>
   <div class="go">{each(lambda l: UI[l]["open"])} <span aria-hidden="true">→</span></div>
 </article>''')
-    n = len(cards)
+    papers = [c for c in cards if not c[1]["id"].startswith(("wiki-", "gh-", "md-"))]   # the fields count papers only
+    n = len(papers)
+    extra = lambda l: UI[l]["extra"] if len(papers) < len(cards) else ""
     tabs = "".join(f'<button type="button" data-set="{l}">{e(UI[l]["name"])}</button>' for l in want)
     show = " ".join(f'html[data-lang="{l}"] [data-l]:not([data-l="{l}"]) {{ display: none; }}' for l in want)
     return f'''<!doctype html>
@@ -327,7 +337,7 @@ footer a {{ color: var(--accent); }}
 </style>
 <main>
   <header><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="2.4" rx="1.2" fill="#6B5CE7"/><rect x="2" y="8.8" width="11" height="2.4" rx="1.2" fill="#6B5CE7" fill-opacity=".4"/><rect x="2" y="14.6" width="5" height="2.4" rx="1.2" fill="#E08A3C"/></svg><h1>PaperFold</h1><nav class="langs">{tabs}</nav></header>
-  <p class="lede">{each(lambda l: UI[l]["lede"].format(n=n))}</p>
+  <p class="lede">{each(lambda l: UI[l]["lede"].format(n=n, extra=extra(l)))}</p>
   <a class="own" href="{REPO}">{each(lambda l: UI[l]["own"])} →</a>
   <div class="grid">
 {"".join(rows)}

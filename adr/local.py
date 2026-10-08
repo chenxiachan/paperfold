@@ -38,8 +38,9 @@ class Images:
     """Where each image of the document is kept (img/NN-name): copied from beside the file, downloaded, or decoded
     from a data URI. One that cannot be had is left out (the page shows its name)."""
 
-    def __init__(self, folder, base, get=None):
+    def __init__(self, folder, base, get=None, pre=None):
         self.folder, self.base, self.seen, self.get = folder, base, {}, get   # get(url) -> (bytes, url): a source's own
+        self.pre = pre or {}   # src -> (bytes, name), read beforehand (prefetch)
 
     def resolve(self, src):
         if src in self.seen:
@@ -59,6 +60,8 @@ class Images:
         return where
 
     def _read(self, src):
+        if src in self.pre:
+            return self.pre[src]
         m = re.match(r"data:image/(png|jpe?g|gif|webp);base64,(.+)$", src, re.S)
         if m:
             return base64.b64decode(m.group(2)), f"image.{m.group(1)}"
@@ -81,6 +84,24 @@ class Images:
         if f.suffix.lower() not in IMG_EXT or not f.is_file() or f.stat().st_size > MAX_IMG:
             return None, ""
         return f.read_bytes(), f.name
+
+
+def prefetch(srcs, workers=6):
+    """Pictures on the web, read at the same time rather than one after the other (a README's GIFs take seconds
+    each): src -> (bytes, name), for Images(pre=...). One that cannot be read is left to Images to try again."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    web = sorted({s for s in srcs if re.match(r"https?://", s or "", re.I)})
+    reader = Images(None, None)
+
+    def one(src):
+        try:
+            return src, reader._read(src)
+        except Exception:
+            return src, None
+
+    with ThreadPoolExecutor(workers) as ex:
+        return {src: got for src, got in ex.map(one, web) if got and got[0]}
 
 
 def import_text(text, name="document.md", base=None):
