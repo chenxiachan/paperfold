@@ -309,14 +309,15 @@ TextFold is a tool, and its license covers its code. When you share a file, foll
 
 ## What's new
 
+- **October 30, 2026:** agents of your own, the PDF engine where you choose, and long PDFs keep their levels.
 - **October 28, 2026:** a button in your browser.
 - **October 27, 2026:** a label stays a label.
 - **October 27, 2026:** WorkBuddy 5.8, progress that moves, and saved pages read whole.
-- **October 26, 2026:** questions answered from the whole text, a web page's footnotes kept apart, and downloads tried again.
 
 <details>
 <summary>Each update in full, and earlier ones</summary>
 
+- **October 30, 2026: agents of your own, the PDF engine where you choose, and long PDFs keep their levels.** A program that starts Claude Code, Codex or Pi under another command, such as `mirasim claude`, can be added in **Settings** under **Agents on this computer**: write its command, choose which agent it runs as, and **Detect** lists its models. The PDF engine (MinerU, about 3.4 GB) goes beside your library, so on Windows it is no longer on C: when your library is on D:. You can also choose an empty folder for it in **Settings** before you install it. When a long PDF's levels are written but its argument links cannot be made, the levels are kept and it opens without the links. A relay that sends a whole reply under a stream's header is read too. Thanks to [@Gazerrr03](https://github.com/Gazerrr03), [@nasodaengineer](https://github.com/nasodaengineer) and [@HamiltonZeng](https://github.com/HamiltonZeng).
 - **October 28, 2026: a button in your browser.** In Chrome, Edge or Brave, one click sends the page you are reading to TextFold as you see it, signed in or subscribed, with what its scripts drew, and its reader opens beside the page. The article is found in the browser the way reading views find it, with its headings, figures, formulas and footnotes: a paper on ScienceDirect keeps its 32 headings and 9 figures. The app connects itself to the browser each time it starts, and the button is on its way to the Chrome Web Store. Each section of a paper also knows whether it is part of the appendix, from the paper's own marks. Thanks to [@minatomugino864-lgtm](https://github.com/minatomugino864-lgtm). [Works in your browser ↑](#works-in-your-browser)
 - **October 27, 2026: a label stays a label.** A line that is not part of the text's argument, such as "Keywords:", a heading the PDF engine read as a line of text, an author's address or a date, keeps its own words at every level. The model used to write a sentence about it, longer than the line itself ("Section one is the Introduction."); now it leaves the line as written. A document already folded reads so once you choose **Regenerate** in its language menu.
 - **October 27, 2026: WorkBuddy 5.8, progress that moves, and saved pages read whole.** WorkBuddy 5.8 brings a smaller copy of CodeBuddy, which TextFold now runs as WorkBuddy does. That copy keeps WorkBuddy's sign-in to itself, so when TextFold cannot use it, it says so and what to do: install CodeBuddy on its own and sign in there, and TextFold takes that one. A generation counts each section as it comes back, so one slow section no longer holds the count at 0. A saved web page whose only `<article>` is an advert, or whose comments are longer than its article, is read as its article. Numbered list items keep their numbers when a list folds. Thanks to [@HamiltonZeng](https://github.com/HamiltonZeng), [@Yanksi](https://github.com/Yanksi), [@Nombah501](https://github.com/Nombah501) and [@minatomugino864-lgtm](https://github.com/minatomugino864-lgtm).
@@ -379,6 +380,8 @@ TextFold is a tool, and its license covers its code. When you share a file, foll
 <a href="https://github.com/vcdim" title="@vcdim"><img src="https://github.com/vcdim.png?size=80" width="40" height="40" alt="@vcdim" /></a>
 <a href="https://github.com/Yanksi" title="@Yanksi"><img src="https://github.com/Yanksi.png?size=80" width="40" height="40" alt="@Yanksi" /></a>
 <a href="https://github.com/mingrath1" title="@mingrath1"><img src="https://github.com/mingrath1.png?size=80" width="40" height="40" alt="@mingrath1" /></a>
+<a href="https://github.com/Gazerrr03" title="@Gazerrr03"><img src="https://github.com/Gazerrr03.png?size=80" width="40" height="40" alt="@Gazerrr03" /></a>
+<a href="https://github.com/nasodaengineer" title="@nasodaengineer"><img src="https://github.com/nasodaengineer.png?size=80" width="40" height="40" alt="@nasodaengineer" /></a>
 
 Contributions are welcome: start with [CONTRIBUTING.md](https://github.com/chenxiachan/textfold/blob/main/CONTRIBUTING.md).
 

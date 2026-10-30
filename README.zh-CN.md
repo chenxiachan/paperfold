@@ -309,14 +309,15 @@ TextFold 只是一个工具，它的许可证只管代码。分享文件时，�
 
 ## 最新
 
+- **2026 年 10 月 30 日：** 自己添加的 Agent，PDF 引擎装在你选的地方，长 PDF 保住各层。
 - **2026 年 10 月 28 日：** 浏览器里的按钮。
 - **2026 年 10 月 27 日：** 标签留作标签。
 - **2026 年 10 月 27 日：** WorkBuddy 5.8、会走的进度，存下的网页读出正文。
-- **2026 年 10 月 26 日：** 提问从全文回答，网页的脚注单独保留，下载会再试。
 
 <details>
 <summary>每条的完整内容，以及更早的更新</summary>
 
+- **2026 年 10 月 30 日：自己添加的 Agent，PDF 引擎装在你选的地方，长 PDF 保住各层。** 用别的命令启动 Claude Code、Codex 或 Pi 的程序，比如 `mirasim claude`，可以在 **设置** 的 **本机的 Agent** 里添加：写上启动命令，选它的调用方式，点 **检测** 就会列出模型。PDF 引擎（MinerU，约 3.4 GB）默认装在文献库旁边，文献库在 D 盘时，Windows 上不会再装到 C 盘；也可以在安装前于 **设置** 里给它选一个空文件夹。长 PDF 的各层已经写好、论证连线没能生成时，各层会保留，打开时只是没有连线。把整段回答当作流式发来的中转站也能读了。感谢 [@Gazerrr03](https://github.com/Gazerrr03)、[@nasodaengineer](https://github.com/nasodaengineer) 和 [@HamiltonZeng](https://github.com/HamiltonZeng)。
 - **2026 年 10 月 28 日：浏览器里的按钮。** 在 Chrome、Edge 或 Brave 里点一下，就把正在读的网页按你看到的样子发给 TextFold，登录后、订阅后、由脚本画出来的内容都一样，阅读器在网页旁边打开。正文在浏览器里像阅读模式那样找出来，保留标题、图、公式和脚注：ScienceDirect 上的一篇论文保留了 32 个标题和 9 张图。App 每次启动都会自动连上浏览器，按钮正在上架 Chrome 网上应用店。另外，论文的每一节都知道自己是不是附录，依据是论文本身的标记。感谢 [@minatomugino864-lgtm](https://github.com/minatomugino864-lgtm)。[在浏览器里用 ↑](#在浏览器里用)
 - **2026 年 10 月 27 日：标签留作标签。** 不属于正文论述的一行，比如“Keywords:”、PDF 引擎读成正文的标题、作者的地址或日期，在每一层都保留原文。以前模型会为它写一句话，比这一行本身还长（“Section one is the Introduction.”）；现在它照原样留着。已经生成过的文档，在语言菜单里选 **重新生成** 后就会这样显示。
 - **2026 年 10 月 27 日：WorkBuddy 5.8、会走的进度，存下的网页读出正文。** WorkBuddy 5.8 带了一个精简版的 CodeBuddy，TextFold 现在按 WorkBuddy 自己的方式运行它。这个精简版的登录只供 WorkBuddy 自己使用，所以 TextFold 用不了时会直接说明，并告诉你怎么办：单独安装 CodeBuddy 并在那里登录，TextFold 就会用它。生成时每一节回来就计一节，不会再因为一节慢就停在 0。存下的网页如果唯一的 `<article>` 是广告，或者读者评论比文章还长，现在读到的是文章本身。编号列表折叠后保留编号。感谢 [@HamiltonZeng](https://github.com/HamiltonZeng)、[@Yanksi](https://github.com/Yanksi)、[@Nombah501](https://github.com/Nombah501) 和 [@minatomugino864-lgtm](https://github.com/minatomugino864-lgtm)。
@@ -379,6 +380,8 @@ TextFold 只是一个工具，它的许可证只管代码。分享文件时，�
 <a href="https://github.com/vcdim" title="@vcdim"><img src="https://github.com/vcdim.png?size=80" width="40" height="40" alt="@vcdim" /></a>
 <a href="https://github.com/Yanksi" title="@Yanksi"><img src="https://github.com/Yanksi.png?size=80" width="40" height="40" alt="@Yanksi" /></a>
 <a href="https://github.com/mingrath1" title="@mingrath1"><img src="https://github.com/mingrath1.png?size=80" width="40" height="40" alt="@mingrath1" /></a>
+<a href="https://github.com/Gazerrr03" title="@Gazerrr03"><img src="https://github.com/Gazerrr03.png?size=80" width="40" height="40" alt="@Gazerrr03" /></a>
+<a href="https://github.com/nasodaengineer" title="@nasodaengineer"><img src="https://github.com/nasodaengineer.png?size=80" width="40" height="40" alt="@nasodaengineer" /></a>
 
 欢迎贡献：先看 [CONTRIBUTING.md](https://github.com/chenxiachan/textfold/blob/main/CONTRIBUTING.md)。
 
