@@ -4,9 +4,10 @@
 
 # TextFold
 
-**Fold any text, from a one-screen map to every word**
-
-You read the original, not an AI rewrite. AI only folds it into levels, so you read more efficiently.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/banner-dark.webp">
+  <img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/banner.webp" width="880" alt="Fold it, instead of summarizing it. AI decides what each level leaves out. Every paragraph opens back to the author's words. What TextFold reads: arXiv, PubMed Central, bioRxiv, medRxiv, Wikipedia, GitHub READMEs, any web page, PDF, Word, PowerPoint, Excel, EPUB, HTML, pictures, Markdown, text, CSV and an agent's replies, folded from the full text down to a few words">
+</picture>
 
 🚀 **New: [TextFold in your browser](#works-in-your-browser)!** One click on the browser extension transfers the page you are reading to TextFold.<br>
 For Chrome · Edge · Brave
@@ -17,11 +18,6 @@ For Chrome · Edge · Brave
 
 **English** · [简体中文](https://github.com/chenxiachan/textfold/blob/main/README.zh-CN.md)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/sources-dark.webp">
-  <img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/sources.webp" width="880" alt="What TextFold reads: arXiv, PubMed Central, bioRxiv, medRxiv, Wikipedia, GitHub READMEs, any web page, PDF, Word, PowerPoint, Excel, EPUB, HTML, pictures, Markdown, text, CSV and an agent's replies, folded from the full text down to a few words">
-</picture>
-
 **Paste a link:** any web page · arXiv · PubMed Central · bioRxiv · medRxiv · Wikipedia · GitHub<br>
 **Drop files, one or several:** PDF · Word · PowerPoint · Excel · EPUB · HTML · CSV · pictures · Markdown · text<br>
 **Works with:** [Claude Code](#in-claude-code-and-pi) · [Pi](#in-claude-code-and-pi) · [Zotero](#works-on-your-zotero) · [Obsidian](#works-with-your-obsidian) · [your browser](#works-in-your-browser)
@@ -30,7 +26,7 @@ For Chrome · Edge · Brave
 
 <br>
 
-<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/browser.gif" width="880" alt="A Wikipedia article in Chrome, sent to TextFold with one click on its button, then folded level by level from the full text into a map of its sections">
+<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/zoom.gif" width="880" alt="A paper folding from its full text into a map of its sections, and back">
 
 </div>
 
@@ -46,8 +42,6 @@ Choose the level of detail you need, and lower your cognitive load.
 | **4** | **Takeaway** | one line on the spine of its section | AI |
 | **5** | **Topic** | a few words; the text becomes a map of section cards | AI |
 
-<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/zoom.gif" width="880" alt="A paper folding from its full text into a map of its sections, and back">
-
 ## Also for agent output
 
 Your agent writes more than you have time to read. A [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) folds every reply the same way, one key per level, and an extension does the same in Pi. [More ↓](#in-claude-code-and-pi)
@@ -55,10 +49,12 @@ Your agent writes more than you have time to read. A [Claude Code mod](https://c
 <img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/textfold.gif" width="880" alt="A reply in Claude Code folding from the full text to two sentences a paragraph, then one, and back, one key at a time">
 
 <a name="works-in-your-browser"></a>
-<details>
-<summary><h2>🚀 New feature: Works in your browser</h2></summary>
+
+## 🚀 New feature: Works in your browser
 
 A button for Chrome, Edge and Brave sends the page you are reading to TextFold as you see it: signed in, past a paywall you pay for, drawn by the page's scripts. The browser finds its article the way reading views do, with its headings, figures, formulas and footnotes, and TextFold folds it. With TextFold open, its reader opens beside the page. Firefox is not supported yet.
+
+<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/browser.gif" width="880" alt="A Wikipedia article in Chrome, sent to TextFold with one click on its button, then folded level by level from the full text into a map of its sections">
 
 **Install it from GitHub.** The button is in review for the Chrome Web Store; until it is there:
 
@@ -70,8 +66,6 @@ A button for Chrome, Edge and Brave sends the page you are reading to TextFold a
 Keep the folder where it is: the browser loads the button from it. To update, download it again into the same place and click ↻ on the button's card in `chrome://extensions`. Once the button is in the Chrome Web Store, remove this copy before installing it from there. To see the levels, [connect a model ↓](#connect-a-model).
 
 The button reads a page only when you click it, and hands it to TextFold on this computer and to nothing else ([privacy policy](https://chenxiachan.github.io/textfold/privacy.html)). [docs/web-capture.md](https://github.com/chenxiachan/textfold/blob/main/docs/web-capture.md) tells how it works.
-
-</details>
 
 ## One fold, three places
 

@@ -4,9 +4,10 @@
 
 # TextFold
 
-**折叠任何文字，从一屏地图到每一个字**
-
-你读的是原文，不是 AI 改写的版本。AI 只负责把它折叠成层级，帮你更高效地阅读。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/banner-zh-dark.webp">
+  <img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/banner-zh.webp" width="880" alt="折叠，而不是摘要。AI 决定每一层省略什么；每一段都能展开回作者的原话。 TextFold 能读的：arXiv、PubMed Central、bioRxiv、medRxiv、维基百科、GitHub README、任意网页、PDF、Word、PowerPoint、Excel、EPUB、HTML、图片、Markdown、纯文本、CSV，以及 agent 的回答，从全文一路折到几个词">
+</picture>
 
 🚀 **新功能：[在浏览器里用 TextFold](#在浏览器里用)！** 点一下浏览器扩展，就把正在读的网页传给 TextFold。<br>
 支持 Chrome · Edge · Brave
@@ -17,11 +18,6 @@
 
 [English](https://github.com/chenxiachan/textfold/blob/main/README.md) · **简体中文**
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/sources-dark.webp">
-  <img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/sources.webp" width="880" alt="TextFold 能读的：arXiv、PubMed Central、bioRxiv、medRxiv、维基百科、GitHub README、任意网页、PDF、Word、PowerPoint、Excel、EPUB、HTML、图片、Markdown、纯文本、CSV，以及 agent 的回答，从全文一路折到几个词">
-</picture>
-
 **粘贴链接：** 任意网页 · arXiv · PubMed Central · bioRxiv · medRxiv · 维基百科 · GitHub<br>
 **拖入文件（一个或多个）：** PDF · Word · PowerPoint · Excel · EPUB · HTML · CSV · 图片 · Markdown · 纯文本<br>
 **接上你的工具：** [Claude Code](#在-claude-code-和-pi-里) · [Pi](#在-claude-code-和-pi-里) · [Zotero](#直接读你的-zotero) · [Obsidian](#接上你的-obsidian) · [浏览器](#在浏览器里用)
@@ -30,7 +26,7 @@
 
 <br>
 
-<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/browser.gif" width="880" alt="Chrome 里的一篇维基百科文章，点一下 TextFold 按钮传进 TextFold，再一层层从全文折叠成章节地图">
+<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/zoom-zh.gif" width="880" alt="一篇论文从全文折叠成章节地图，再展开回来">
 
 </div>
 
@@ -46,8 +42,6 @@
 | **4** | **要点** | 一行，挂在本节的主线上 | AI |
 | **5** | **主题** | 几个词；整篇变成一张章节卡片地图 | AI |
 
-<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/zoom-zh.gif" width="880" alt="一篇论文从全文折叠成章节地图，再展开回来">
-
 ## 也可以用在 Agent 输出上
 
 Agent 写的，总比你有空读的多。一个 [Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview) 用同样的方式折叠每条回答，一个键一个层级；Pi 里也有一个扩展做同样的事。[了解更多 ↓](#在-claude-code-和-pi-里)
@@ -55,10 +49,12 @@ Agent 写的，总比你有空读的多。一个 [Claude Code mod](https://code.
 <img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/textfold.gif" width="880" alt="Claude Code 里的一条回答从全文折到每段两句，再折到一句，然后展开回来，每次按一个键">
 
 <a name="在浏览器里用"></a>
-<details>
-<summary><h2>🚀 新功能：在浏览器里用</h2></summary>
+
+## 🚀 新功能：在浏览器里用
 
 Chrome、Edge 和 Brave 上的一个按钮，把你正在读的网页按你看到的样子发给 TextFold：登录后的、你付费订阅的、由网页脚本画出来的内容都一样。浏览器像阅读模式那样找出正文，保留标题、图、公式和脚注，再由 TextFold 折叠。TextFold 开着时，阅读器会在网页旁边打开。暂不支持 Firefox。
+
+<img src="https://raw.githubusercontent.com/chenxiachan/textfold/main/docs/assets/browser.gif" width="880" alt="Chrome 里的一篇维基百科文章，点一下 TextFold 按钮传进 TextFold，再一层层从全文折叠成章节地图">
 
 **从 GitHub 安装。** 按钮正在 Chrome 网上应用店审核，在那之前：
 
@@ -70,8 +66,6 @@ Chrome、Edge 和 Brave 上的一个按钮，把你正在读的网页按你看�
 文件夹不要挪走，浏览器是从它加载按钮的。要更新，就重新下载到原处，再在 `chrome://extensions` 里点按钮卡片上的 ↻。按钮上架 Chrome 网上应用店后，先移除这个副本，再从商店安装。要看到各层，先[连接模型 ↓](#连接模型)。
 
 按钮只在你点它时读取网页，只交给本机的 TextFold，不交给任何别处（[隐私政策](https://chenxiachan.github.io/textfold/privacy.html#zh)）。原理见 [docs/web-capture.md](https://github.com/chenxiachan/textfold/blob/main/docs/web-capture.md)。
-
-</details>
 
 ## 一种折叠，三个地方
 
