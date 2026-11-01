@@ -2208,7 +2208,9 @@
     const t = T[ui];
     selbar.innerHTML = `<button type="button" data-act="hl">${esc(t.n_highlight)}</button>${swatches('hl', toneOf({ anchor: anchors[0] }), 0, lastShade)}` +
       `<button type="button" data-act="note">${esc(t.n_note)}</button>` +
-      `<button type="button" data-act="ask">${esc(t.n_ask)}</button>`;
+      `<button type="button" data-act="ask">${esc(t.n_ask)}</button>` +
+      // the author's words, in a document whose text can be put right (a PDF read wrong: app.js, editText)
+      (window.DRApp && window.DRApp.editText && anchors[0].tokens ? `<button type="button" data-act="edit">${esc(t.ed_fix)}</button>` : '');
     selbar.hidden = false;
     const r = getSelection().getRangeAt(0).getBoundingClientRect(), w = selbar.offsetWidth;
     selbar.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
@@ -2227,6 +2229,12 @@
     // a dot marks the selection in its shade; Highlight, and a note (opened to write), in the shade last chosen
     const b = e.target.closest('button'), act = b && b.dataset.act, anchors = selAnchors;
     if (!act || !anchors) return;
+    if (act === 'edit') {
+      hideSelbar();
+      getSelection().removeAllRanges();
+      window.DRApp.editText(anchors[0].quote.exact);
+      return;
+    }
     if (act === 'hl' && b.dataset.s) useShade(+b.dataset.s);
     const c = act !== 'ask' && lastShade !== 2 ? { shade: lastShade } : {};
     const made = anchors.map((a, k) => ({ id: noteId(), kind: k === 0 && act === 'note' ? 'note' : 'highlight', anchor: a, text: '', ask: null, ...c }));

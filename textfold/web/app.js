@@ -1085,11 +1085,47 @@
       if (bar) bar.before(acc);
       acc.onclick = async () => {
         const T = t();
-        if (!confirm(`${T.convert_acc}? ${T.tier_accurate}.`)) return;
+        if (!confirm(`${T.convert_acc}? ${T.tier_accurate}.${PAPER.replaced ? `\n\n${T.conv_edited}` : ''}`)) return;
         acc.disabled = true;
         const lang = (window.__reader && window.__reader.lang) || 'en', update = toastFor(lang);
         try { watch(await api('/api/convert', { paper: PAPER.id, tier: 'accurate', lang }), update); }
         catch (x) { update.fail(x); acc.disabled = false; }
+      };
+    }
+    // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
+    // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
+    // for the sections that changed. A Markdown file's and a converted file's; an arXiv paper or a web page has none.
+    async function editText(words) {
+      const T = t();
+      if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
+      let text;
+      try { text = (await api(`/api/text/${encodeURIComponent(PAPER.id)}`)).text; } catch (x) { alert(errText(x.message)); return; }
+      const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
+      dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_title)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
+        <div class="stp-body"><p class="st-note">${esc(T.ed_note)}</p><textarea class="ed-text" spellcheck="false"></textarea></div>
+        <footer class="stp-foot"><p>${esc(T.ed_whole)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button><button type="button" class="primary ed-save">${esc(modelName ? T.ed_save : T.save)}</button></footer></div>`;
+      const ta = dlg.querySelector('.ed-text'), save = dlg.querySelector('.ed-save');
+      dlg.addEventListener('close', () => dlg.remove());
+      dlg.querySelector('.stp-x').onclick = dlg.querySelector('.ed-cancel').onclick = () => dlg.close();
+      dlg.showModal();
+      // the words selected, else their first few, else the top: the text above them measured where it wraps
+      const at = [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0) ?? 0;
+      ta.value = text.slice(0, at);
+      const above = ta.scrollHeight;
+      ta.value = text;
+      ta.focus();
+      ta.setSelectionRange(at, at + (words && text.startsWith(words, at) ? words.length : 0));
+      ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
+      save.onclick = async () => {
+        if (ta.value === text) { dlg.close(); return; }
+        save.disabled = true;
+        try { await api('/api/import', { id: PAPER.id, text: ta.value }); }
+        catch (x) { save.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+        dlg.close();
+        const lang = (window.__reader && window.__reader.lang) || 'en';
+        if (!modelName) { reopen(lang); return; }
+        const update = toastFor(lang);
+        submit(PAPER.id, lang, true, update).catch(update.fail);
       };
     }
     // A translation stored with paragraphs it has none for (PAPER.gaps: a call that failed, a paragraph the model left
@@ -1119,6 +1155,7 @@
         submit(PAPER.id, lang, force, update).catch(update.fail);
       },
       fill(lang) { fillGaps(lang, true); },
+      editText: /^(md|pdf|doc)-/.test(PAPER.id) ? editText : null,
       // questions go to an agent on this computer, which can look them up on the web (reader.js: the switch by a question)
       askAgent() {
         const d = modelData, m = d && (d.models || []).find((x) => x.id === (d.askModel || d.selected));

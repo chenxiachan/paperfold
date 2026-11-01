@@ -147,7 +147,7 @@ class Replace(Base):
         self.assertEqual(json.loads((d / "previous" / "notes.json").read_text(encoding="utf-8"))["notes"][0]["id"], "n-cop")
         self.assertEqual(store.papers()[0]["id"], pid)
 
-    def test_only_a_markdown_document_is_replaced(self):
+    def test_only_a_document_with_a_text_of_its_own_is_replaced(self):
         with self.assertRaises(LookupError):
             local.replace_text("md-not-there-12345678", TEXT)
         d = store.pdir("2512.23916")
@@ -160,6 +160,22 @@ class Replace(Base):
         with self.assertRaises(ValueError):
             local.replace_text(pid, TEXT, "diary.docx")
         self.assertEqual((store.pdir(pid) / "source.md").read_text(encoding="utf-8"), TEXT)
+        self.assertEqual(local.text_of(pid), TEXT)
+        self.assertIsNone(local.text_of("2512.23916"))
+
+    def test_its_pictures_stay_though_the_folder_they_came_from_is_gone(self):
+        from PIL import Image
+        text = TEXT.replace("Nobody felt the change.", "Nobody felt the change.\n\n![A plot](figs/plot.png)\n\n![Gone](figs/gone.png)")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "figs").mkdir()
+            Image.new("RGB", (40, 30), "red").save(Path(tmp) / "figs" / "plot.png")
+            pid = local.import_text(text, "diary.md", base=Path(tmp))
+        d = store.pdir(pid)
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
+        local.replace_text(pid, text.replace("emptied by noon", "emptied at noon"))   # (a converted PDF's: its engine folder)
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
+        self.assertEqual((d / "img" / "01-plot.png").read_bytes(), (d / "previous" / "img" / "01-plot.png").read_bytes())
+        self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
 
 
 class Notes(Base):
@@ -341,6 +357,16 @@ class Server(Base):
         self.assertEqual((code, got), (200, {"paper": pid, "title": "Diary", "replaced": True}))
         self.assertEqual(self.post("/api/import", {"text": TEXT, "id": "md-gone-12345678"})[0], 404)
         self.assertEqual(self.post("/api/import", {"text": TEXT, "id": "../papers"})[0], 404)
+
+    def test_the_text_to_edit(self):
+        pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
+        url = f"http://127.0.0.1:{self.httpd.server_port}/api/text/"
+        with urllib.request.urlopen(url + pid, timeout=30) as r:
+            self.assertEqual(json.loads(r.read()), {"text": TEXT})
+        for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers"):
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(url + gone, timeout=30)
+            self.assertEqual(e.exception.code, 404)
 
     def test_no_replace_while_it_is_generated(self):
         pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]

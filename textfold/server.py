@@ -10,10 +10,12 @@
   POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time. paper: an arXiv id or
                               link, a PMC or PPR id, a DOI (Europe PMC, epmc.py), or a stored document's id
   POST /api/import            {name, text, id?}: store a Markdown file as a paper (local.py); its id, to generate. With
-                              id (a Markdown document stored before, md-…): its text replaced by this one under the same
-                              id, its notes found again in it and its levels set aside ({paper, title, replaced: true};
-                              not while it is being generated); then /api/generate with force folds it again, asking the
-                              model only for the sections that changed
+                              id (a Markdown document stored before, md-…, or a converted PDF or file, pdf-… doc-…): its
+                              text replaced by this one under the same id, its notes found again in it and its levels
+                              set aside ({paper, title, replaced: true}; not while it is being generated); then
+                              /api/generate with force folds it again, asking the model only for the sections that changed
+  GET  /api/text/<id>         {text}: the Markdown such a document was read from, for the reader to put right (a PDF's
+                              OCR) and send back to /api/import with its id
   GET  /api/models            saved configuration and the last model discovery results (no service probes); its "lang", the
                               reader's language as the page last told it (null until it has), for other programs
   GET  /api/langs             the languages a text can be read in: [{code, name}], each by its own name (langs.py)
@@ -662,6 +664,10 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
+                m = re.fullmatch(r"/api/text/([\w.-]+)", u.path)
+                if m:
+                    text = local.text_of(m.group(1)) if store.valid_id(m.group(1)) else None
+                    return self.json({"text": text}) if text is not None else self.json({"error": "no text to edit"}, 404)
                 m = re.fullmatch(r"/api/doc/([\w.-]+)", u.path)   # (a document not folded yet: its local levels, said so)
                 if m:
                     pid, lang = m.group(1), (parse_qs(u.query).get("lang") or [None])[0]   # (none: the text's own)
@@ -783,7 +789,7 @@ def make_handler(jobs):
                     text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]
                     if not text.strip():
                         return self.json({"error": "empty"}, 400)
-                    if body.get("id"):   # an edited text in place of the one stored (a note folded again where it is written)
+                    if body.get("id"):   # an edited text in place of the one stored (a note folded again where it is written, a PDF's OCR put right)
                         pid = str(body["id"])
                         if any(j["pid"] == pid and j["status"] in ("queued", "running") for j in jobs.list()):
                             return self.json({"error": "busy"}, 409)

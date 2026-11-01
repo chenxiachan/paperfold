@@ -510,6 +510,12 @@ label.st-main { cursor: default; }
 .zlib-open svg { width: 20px; height: 20px; flex: none; }
 .zlib-open:hover, .zlib-open:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
 dialog.settings.zlib { width: min(980px, calc(100vw - 32px)); }
+/* the Markdown a document was read from, put right by the reader (app.js, editText) */
+dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
+.edtext .stp-body { overflow: hidden; padding-bottom: 14px; }
+.ed-text { display: block; width: 100%; height: min(62vh, 640px); box-sizing: border-box; margin-top: 10px; resize: vertical; padding: 12px 14px;
+  font: 13px/1.6 var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; outline: none; }
+.ed-text:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .zl-head { display: flex; align-items: center; gap: 12px; }
 .zl-head h2 { margin: 0 !important; flex: 1; }
 .st .zl-lib { font-size: 14px; padding: 6px 10px; max-width: 45%; }

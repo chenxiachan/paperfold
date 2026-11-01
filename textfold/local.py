@@ -4,7 +4,8 @@ parse.py reads), the file as it came (source.md), meta.json, and img/ with the i
 A document's id is its title and a hash of its text: the same file opened twice is one paper, and an edited file is a
 new one, since the stored layers belong to the text they were made from. A document already stored is not written
 again: its source stays the one its layers were made from. Unless it is replaced by name (replace_text: a note edited
-where it lives, folded again): then it keeps its id, its notes and its folder, and its levels are made again.
+where it lives, folded again; or a converted PDF's text, its OCR put right by the reader): then it keeps its id, its
+notes and its folder, and its levels are made again.
 
 Its paragraphs are named by their words ("unit_ids": "text", parse.py), so an edit leaves every other paragraph's id,
 and the notes and links on it, as they were. (Documents stored before keep the ids they were read with, u<n>, until
@@ -44,11 +45,13 @@ def make_id(title, text):
 class Images:
     """Where each image of the document is kept (img/NN-name, or NN-name.webp, kept smaller: picture.py): copied from
     beside the file, downloaded, or decoded from a data URI. One that cannot be had is left out (the page shows its
-    name)."""
+    name), unless the text it is in replaces one whose pictures are kept (kept: that text's img/): then it is the
+    picture kept under its name (a converted PDF's pictures were read from the engine's folder, which is gone)."""
 
-    def __init__(self, folder, base, get=None, pre=None):
+    def __init__(self, folder, base, get=None, pre=None, kept=None):
         self.folder, self.base, self.seen, self.get = folder, base, {}, get   # get(url) -> (bytes, url): a source's own
         self.pre = pre or {}   # src -> (bytes, name), read beforehand (prefetch)
+        self.kept = {f.name.split("-", 1)[-1]: f for f in sorted(Path(kept).iterdir())} if kept and Path(kept).is_dir() else {}
 
     def resolve(self, src):
         if src in self.seen:
@@ -58,7 +61,13 @@ class Images:
         except Exception:
             data, name = None, ""
         where = None
-        if data and len(data) <= MAX_IMG:
+        old = None if data else self._kept(src)
+        if old is not None:   # as it was kept (made smaller then)
+            fn = f"{len(self.seen) + 1:02d}-{old.name.split('-', 1)[-1]}"
+            self.folder.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(old, self.folder / fn)
+            where = f"img/{fn}"
+        elif data and len(data) <= MAX_IMG:
             name = re.sub(r"[^\w.\-]", "_", name)[-60:] or "image"
             data, fn = picture.compact(data, f"{len(self.seen) + 1:02d}-{name}")   # (kept smaller: picture.py)
             self.folder.mkdir(parents=True, exist_ok=True)
@@ -66,6 +75,13 @@ class Images:
             where = f"img/{fn}"
         self.seen[src] = where
         return where
+
+    def _kept(self, src):
+        """The picture kept for the replaced text under the name resolve gave it then (NN-name, or NN-name.webp)."""
+        if not self.kept or src.startswith("data:"):
+            return None
+        name = re.sub(r"[^\w.\-]", "_", urllib.parse.unquote(urllib.parse.urlparse(src).path).rsplit("/", 1)[-1])[-60:] or "image"
+        return self.kept.get(name) or self.kept.get(name + ".webp")
 
     def _read(self, src):
         if src in self.pre:
@@ -136,31 +152,47 @@ def import_text(text, name="document.md", base=None):
 # what a replaced text takes with it to previous/: the text, what was read from it, and the levels made from it
 REPLACED = ("source.md", "source.html", "meta.json", "img", "layers")
 _REPLACING = threading.Lock()   # one replace at a time (the server answers on several threads; a note saved twice)
+EDITABLE = ("md-", "pdf-", "doc-")   # a Markdown file's text, and a converted file's (pdfdoc.py), kept as Markdown
+
+
+def text_of(pid):
+    """The Markdown a stored document was read from (source.md), to be edited and put in its place (replace_text); None
+    for one that has none to edit (an arXiv paper, a web page, a document from Europe PMC)."""
+    d = store.pdir(pid)
+    if pid.startswith(EDITABLE) and store.valid_id(pid) and all((d / f).exists() for f in ("meta.json", "source.html", "source.md")):
+        return store.read_text(d / "source.md")
+    return None
 
 
 def replace_text(pid, text, name=None, base=None):
-    """A stored Markdown document's text replaced by an edited one, under the same id. Its notes, its folder and the
-    model's replies (llm-cache) stay; its notes are found again in the new text (notes.reanchor). Its levels belonged
-    to the old text: they go to previous/ with it (the one replaced last, notes as they were included), and the next
-    generation makes them again from the replies kept, so the model is asked only for the sections whose text changed
-    (pipeline.py). Returns the new title. LookupError: no such Markdown document."""
+    """A stored document's text replaced by an edited one, under the same id: a Markdown file's, or a converted file's
+    (a PDF's Markdown, its OCR put right by the reader; its title, authors and source stay the file's, and the file
+    stays beside it). Its notes, its folder and the model's replies (llm-cache) stay; its notes are found again in the
+    new text (notes.reanchor), its pictures among the ones kept for the old (Images). Its levels belonged to the old
+    text: they go to previous/ with it (the one replaced last, notes as they were included), and the next generation
+    makes them again from the replies kept, so the model is asked only for the sections whose text changed
+    (pipeline.py). Returns the new title. LookupError: no such document, or none with a text to edit (text_of)."""
     with _REPLACING:
         return _replace(pid, text, name, base)
 
 
 def _replace(pid, text, name, base):
     d = store.pdir(pid)
-    if not (pid.startswith("md-") and store.valid_id(pid) and (d / "meta.json").exists() and (d / "source.html").exists()):
+    if text_of(pid) is None:
         raise LookupError(pid)
     was = json.loads(store.read_text(d / "meta.json"))
-    title, html, meta = _read_md(text, name or (was.get("source") or {}).get("name") or "document.md")
+    if pid.startswith("md-"):
+        title, html, meta = _read_md(text, name or (was.get("source") or {}).get("name") or "document.md")
+    else:   # a converted file's: what was read from the file itself (its title, authors, Zotero's) stays
+        html, title, meta = markdown.to_html(text)[0], was.get("title", ""), {}
     meta = {**was, **meta, "id": pid, "replaced": store.stamp()}
     old = store.parsed(pid)
     tmp = d.with_name(d.name + ".tmp")
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     try:
-        page, new = ids.freeze(semantic.normalize(html, resolve_img=Images(tmp / "img", base).resolve, sizes=True), meta, old, ids.load(pid))
+        page, new = ids.freeze(semantic.normalize(html, resolve_img=Images(tmp / "img", base, kept=d / "img").resolve, sizes=True),
+                               meta, old, ids.load(pid))
         (tmp / "source.html").write_text(page, encoding="utf-8")
         (tmp / "source.md").write_text(text, encoding="utf-8")
         (tmp / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
