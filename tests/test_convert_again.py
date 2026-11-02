@@ -201,7 +201,16 @@ class Edited(Converted):
         anchor = notes.read(PID)["notes"][0]["anchor"]
         self.assertEqual((anchor["unit"], anchor.get("lost")), (tank, None))
         self.assertIsNone(store.read(PID, "en"))   # its levels were the old text's
-        self.assertTrue((d / "previous" / "layers" / "en.json").exists())
+        self.assertEqual(local.history_text(PID, 1), md)   # the text read wrong, kept in its history
+
+    def test_converted_again_the_texts_it_had_stay_in_its_history(self):
+        self.store([self.WRONG, self.TANK], replace=False)
+        md = local.text_of(PID)
+        local.replace_text(PID, md.replace("cornpressor", "compressor"))
+        self.store([self.HOUSE, self.WRONG, self.TANK], replace=True)   # converted again (accurately): the edit is gone
+        self.assertIn("cornpressor", local.text_of(PID))
+        self.assertEqual([v["read"] for v in local.history(PID)], [True, False])
+        self.assertEqual(local.history_text(PID, 2), md.replace("cornpressor", "compressor"))   # but can be put back
 
 
 if __name__ == "__main__":

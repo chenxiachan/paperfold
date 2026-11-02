@@ -15,8 +15,9 @@
                               set aside ({paper, title, replaced: true, pending: the languages they were in}; not
                               while it is being generated); then /api/generate in each folds it again, asking the model
                               only for the sections that changed
-  GET  /api/text/<id>         {text}: the Markdown such a document was read from, for the reader to put right (a PDF's
-                              OCR) and send back to /api/import with its id
+  GET  /api/text/<id>         {text, history}: the Markdown such a document was read from, for the reader to put right
+                              (a PDF's OCR) and send back to /api/import with its id; history: the texts it had before
+                              ([{n, at, read}], oldest first: local.history)  ·  GET /api/text/<id>/<n>: {text}, one of them
   GET  /api/models            saved configuration and the last model discovery results (no service probes); its "lang", the
                               reader's language as the page last told it (null until it has), for other programs
   GET  /api/langs             the languages a text can be read in: [{code, name}], each by its own name (langs.py)
@@ -667,10 +668,13 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
-                m = re.fullmatch(r"/api/text/([\w.-]+)", u.path)
+                m = re.fullmatch(r"/api/text/([\w.-]+)(?:/(\d{1,6}))?", u.path)
                 if m:
-                    text = local.text_of(m.group(1)) if store.valid_id(m.group(1)) else None
-                    return self.json({"text": text}) if text is not None else self.json({"error": "no text to edit"}, 404)
+                    pid, n = m.groups()
+                    text = (local.history_text(pid, n) if n else local.text_of(pid)) if store.valid_id(pid) else None
+                    if text is None:
+                        return self.json({"error": "no text to edit"}, 404)
+                    return self.json({"text": text} if n else {"text": text, "history": local.history(pid)})
                 m = re.fullmatch(r"/api/doc/([\w.-]+)", u.path)   # (a document not folded yet: its local levels, said so)
                 if m:
                     pid, lang = m.group(1), (parse_qs(u.query).get("lang") or [None])[0]   # (none: the text's own)

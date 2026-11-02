@@ -14,6 +14,7 @@ their text is replaced.)
 import base64
 import hashlib
 import json
+import os
 import re
 import shutil
 import threading
@@ -45,13 +46,14 @@ def make_id(title, text):
 class Images:
     """Where each image of the document is kept (img/NN-name, or NN-name.webp, kept smaller: picture.py): copied from
     beside the file, downloaded, or decoded from a data URI. One that cannot be had is left out (the page shows its
-    name), unless the text it is in replaces one whose pictures are kept (kept: that text's img/): then it is the
-    picture kept under its name (a converted PDF's pictures were read from the engine's folder, which is gone)."""
+    name), unless the text it is in replaces one whose pictures are kept (kept: that text's img/, and its history's,
+    the later first): then it is the picture kept under its name (a converted PDF's pictures were read from the
+    engine's folder, which is gone)."""
 
-    def __init__(self, folder, base, get=None, pre=None, kept=None):
+    def __init__(self, folder, base, get=None, pre=None, kept=()):
         self.folder, self.base, self.seen, self.get = folder, base, {}, get   # get(url) -> (bytes, url): a source's own
         self.pre = pre or {}   # src -> (bytes, name), read beforehand (prefetch)
-        self.kept = {f.name.split("-", 1)[-1]: f for f in sorted(Path(kept).iterdir())} if kept and Path(kept).is_dir() else {}
+        self.kept = {f.name.split("-", 1)[-1]: f for k in kept if Path(k).is_dir() for f in sorted(Path(k).iterdir())}
 
     def resolve(self, src):
         if src in self.seen:
@@ -149,8 +151,10 @@ def import_text(text, name="document.md", base=None):
     return store_doc(pid, html, {"id": pid, **meta}, "source.md", text, lambda folder: Images(folder, base).resolve, sizes=True)
 
 
-# what a replaced text takes with it to previous/: the text, what was read from it, and the levels made from it
+# what a replaced text takes with it: the text (kept in its history: keep_text), what was read from it, its pictures
+# (kept there too), and the levels made from it
 REPLACED = ("source.md", "source.html", "meta.json", "img", "layers")
+HISTORY = "history"   # the texts a document had before it was edited or converted again (keep_text)
 _REPLACING = threading.Lock()   # one replace at a time (the server answers on several threads; a note saved twice)
 EDITABLE = ("md-", "pdf-", "doc-")   # a Markdown file's text, and a converted file's (pdfdoc.py), kept as Markdown
 
@@ -164,14 +168,62 @@ def text_of(pid):
     return None
 
 
+def history(pid):
+    """The texts a document had before (keep_text), oldest first: [{n, at, read}] (at: when it was saved, or the day it
+    was read in; read: the text read from its file, not one put right by the reader). Each is had by history_text."""
+    f = store.pdir(pid) / HISTORY / "index.json"
+    return json.loads(store.read_text(f)) if store.valid_id(pid) and f.exists() else []
+
+
+def history_text(pid, n):
+    """One of the texts a document had before (history), or None."""
+    f = store.pdir(pid) / HISTORY / f"{int(n):04d}.md"
+    return store.read_text(f) if store.valid_id(pid) and f.exists() else None
+
+
+def keep_text(d):
+    """The text a stored document (its folder, d) has now, kept in its history before another takes its place: an edit
+    saved (replace_text) or the file converted again (pdfdoc.store_pdf), so that it can be put back, by being saved
+    again (the page's Edit text, History). As history/NNNN.md, listed in history/index.json; its pictures in
+    history/img, the last of each name, where a text put back finds them (Images: a converted PDF's were read from the
+    engine's folder, which is gone). The text an earlier TextFold kept in previous/ goes in first."""
+    hist = d / HISTORY
+    index = json.loads(store.read_text(hist / "index.json")) if (hist / "index.json").exists() else []
+    for src in ([d / "previous"] if not index else []) + [d]:
+        if not (src / "source.md").exists():
+            continue
+        try:
+            was = json.loads(store.read_text(src / "meta.json"))
+        except (OSError, ValueError):
+            was = {}
+        n = len(index) + 1
+        (hist / "img").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / "source.md", hist / f"{n:04d}.md")
+        index.append({"n": n, "at": was.get("replaced") or was.get("snapshot") or "", "read": not was.get("replaced")})
+        pool = {f.name.split("-", 1)[-1]: f for f in sorted((hist / "img").iterdir())}
+        for f in sorted((src / "img").iterdir()) if (src / "img").is_dir() else []:
+            name = f.name.split("-", 1)[-1]
+            had = pool.get(name)
+            if had is not None and had.stat().st_size == f.stat().st_size:
+                continue
+            if had is not None:
+                had.unlink()
+            shutil.copy2(f, hist / "img" / f.name)
+            pool[name] = hist / "img" / f.name
+    if index:
+        tmp = hist / "index.json.tmp"
+        tmp.write_text(json.dumps(index, indent=1), encoding="utf-8")
+        os.replace(tmp, hist / "index.json")
+
+
 def replace_text(pid, text, name=None, base=None):
     """A stored document's text replaced by an edited one, under the same id: a Markdown file's, or a converted file's
     (a PDF's Markdown, its OCR put right by the reader; its title, authors and source stay the file's, and the file
     stays beside it). Its notes, its folder and the model's replies (llm-cache) stay; its notes are found again in the
-    new text (notes.reanchor), its pictures among the ones kept for the old (Images). Its levels belonged to the old
-    text: they go to previous/ with it (the one replaced last, notes as they were included), and the next generation
+    new text (notes.reanchor), its pictures among the ones kept for the old (Images). The old text goes to its history
+    (keep_text), from which it can be put back. Its levels belonged to the old text: they go, and the next generation
     makes them again from the replies kept, so the model is asked only for the sections whose text changed
-    (pipeline.py). The languages they were in are kept in its meta ("pending", with those of an edit before not made
+    (pipeline.py); none at all for a text put back. The languages they were in are kept in its meta ("pending", with those of an edit before not made
     again yet): the page says they are to be generated again, and does it for all of them at once (app.js), so a text
     can be put right in several places first and the model asked once. Returns the new title. LookupError: no such
     document, or none with a text to edit (text_of)."""
@@ -192,27 +244,27 @@ def _replace(pid, text, name, base):
     had = ([store.text_lang(pid, en)] if en else []) + store.languages(pid)
     meta = {**was, **meta, "id": pid, "replaced": store.stamp(), "pending": list(dict.fromkeys(had + was.get("pending", [])))}
     old = store.parsed(pid)
-    tmp = d.with_name(d.name + ".tmp")
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
+    tmp, gone = d.with_name(d.name + ".tmp"), d.with_name(d.name + ".old")
+    for f in (tmp, gone):
+        shutil.rmtree(f, ignore_errors=True)
+        f.mkdir(parents=True)
     try:
-        page, new = ids.freeze(semantic.normalize(html, resolve_img=Images(tmp / "img", base, kept=d / "img").resolve, sizes=True),
-                               meta, old, ids.load(pid))
+        page, new = ids.freeze(semantic.normalize(html, resolve_img=Images(tmp / "img", base, kept=(d / HISTORY / "img", d / "img")).resolve,
+                                                  sizes=True), meta, old, ids.load(pid))
         (tmp / "source.html").write_text(page, encoding="utf-8")
         (tmp / "source.md").write_text(text, encoding="utf-8")
         (tmp / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-        prev = d / "previous"
-        shutil.rmtree(prev, ignore_errors=True)
-        prev.mkdir()
-        if (d / "notes.json").exists():
-            shutil.copy2(d / "notes.json", prev / "notes.json")
+        if store.read_text(d / "source.md") != text:   # (not when saved again unchanged)
+            keep_text(d)
         for f in REPLACED:   # each moved by a rename: a page opened meanwhile reads a file old or new, never half of one
             if (d / f).exists():
-                (d / f).rename(prev / f)
+                (d / f).rename(gone / f)
             if (tmp / f).exists():
                 (tmp / f).rename(d / f)
+        shutil.rmtree(d / "previous", ignore_errors=True)   # (an earlier TextFold's: in the history now)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(gone, ignore_errors=True)
     ids.remember(pid, old, new)
     notes.reanchor(pid, old, new)
     return title

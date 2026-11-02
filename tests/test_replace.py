@@ -142,9 +142,9 @@ class Replace(Base):
         self.assertEqual(notes.read(pid)["paper"]["title"], title)
         self.assertTrue((d / "llm-cache" / "abc.json").exists())   # the model's replies stay
         self.assertFalse((d / "layers").exists())                  # the levels went with the old text
-        self.assertTrue((d / "previous" / "layers" / "en.json").exists())
-        self.assertEqual((d / "previous" / "source.md").read_text(encoding="utf-8"), TEXT)
-        self.assertEqual(json.loads((d / "previous" / "notes.json").read_text(encoding="utf-8"))["notes"][0]["id"], "n-cop")
+        self.assertEqual([(v["n"], v["read"]) for v in local.history(pid)], [(1, True)])   # which is kept in its history
+        self.assertEqual(local.history_text(pid, 1), TEXT)
+        self.assertFalse((d / "previous").exists())
         self.assertEqual(store.papers()[0]["id"], pid)
 
     def test_only_a_document_with_a_text_of_its_own_is_replaced(self):
@@ -174,8 +174,46 @@ class Replace(Base):
         self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
         local.replace_text(pid, text.replace("emptied by noon", "emptied at noon"))   # (a converted PDF's: its engine folder)
         self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
-        self.assertEqual((d / "img" / "01-plot.png").read_bytes(), (d / "previous" / "img" / "01-plot.png").read_bytes())
+        self.assertEqual((d / "img" / "01-plot.png").read_bytes(), (d / local.HISTORY / "img" / "01-plot.png").read_bytes())
         self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
+
+    def test_every_text_it_had_is_kept_and_one_is_put_back_with_its_pictures(self):
+        """The editor's History: each text replaced is kept (local.keep_text), the one read from the file first; put
+        back by being saved again, a picture an edit left out comes back from the history, its file being gone."""
+        from PIL import Image
+        text = TEXT.replace("Nobody felt the change.", "Nobody felt the change.\n\n![A plot](figs/plot.png)")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "figs").mkdir()
+            Image.new("RGB", (40, 30), "red").save(Path(tmp) / "figs" / "plot.png")
+            pid = local.import_text(text, "diary.md", base=Path(tmp))
+        d = store.pdir(pid)
+        first = text.replace("\n\n![A plot](figs/plot.png)", "").replace("emptied by noon", "emptied at noon")
+        local.replace_text(pid, first)
+        saved = json.loads((d / "meta.json").read_text(encoding="utf-8"))["replaced"]
+        self.assertFalse((d / "img").exists())   # the picture left out
+        local.replace_text(pid, first.replace("how loud it was", "how loud it was at night"))
+        local.replace_text(pid, first.replace("how loud it was", "how loud it was at night"))   # saved again unchanged
+        got = local.history(pid)
+        self.assertEqual([(v["n"], v["read"]) for v in got], [(1, True), (2, False)])
+        self.assertEqual(got[1]["at"], saved)   # when that edit was saved
+        self.assertEqual((local.history_text(pid, 1), local.history_text(pid, 2)), (text, first))
+        self.assertIsNone(local.history_text(pid, 3))
+        local.replace_text(pid, local.history_text(pid, 1))   # the text read from the file, put back
+        self.assertEqual(local.text_of(pid), text)
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
+        self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
+        self.assertEqual(len(local.history(pid)), 3)   # the text it replaced, kept too: putting back can be undone
+
+    def test_the_text_an_earlier_textfold_kept_goes_first(self):
+        pid = local.import_text(TEXT, "diary.md")
+        d = store.pdir(pid)
+        (d / "previous").mkdir()   # as an earlier TextFold kept the text an edit replaced, the last one only
+        (d / "previous" / "source.md").write_text("# Older\n\nThe text before.\n", encoding="utf-8")
+        (d / "previous" / "meta.json").write_text(json.dumps({"replaced": "2026-10-01T09:00:00"}), encoding="utf-8")
+        local.replace_text(pid, TEXT.replace("how loud", "how quiet"))
+        self.assertEqual([(v["n"], v["at"], v["read"]) for v in local.history(pid)][0], (1, "2026-10-01T09:00:00", False))
+        self.assertEqual((local.history_text(pid, 1), local.history_text(pid, 2)), ("# Older\n\nThe text before.\n", TEXT))
+        self.assertFalse((d / "previous").exists())
 
 
 class Notes(Base):
@@ -390,8 +428,14 @@ class Server(Base):
         pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
         url = f"http://127.0.0.1:{self.httpd.server_port}/api/text/"
         with urllib.request.urlopen(url + pid, timeout=30) as r:
+            self.assertEqual(json.loads(r.read()), {"text": TEXT, "history": []})
+        self.post("/api/import", {"text": TEXT.replace("# Heat pump diary", "# Diary"), "id": pid})
+        with urllib.request.urlopen(url + pid, timeout=30) as r:
+            got = json.loads(r.read())
+        self.assertEqual([(v["n"], v["read"]) for v in got["history"]], [(1, True)])   # the texts it had before
+        with urllib.request.urlopen(f"{url}{pid}/1", timeout=30) as r:
             self.assertEqual(json.loads(r.read()), {"text": TEXT})
-        for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers"):
+        for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers", f"{pid}/2", "2512.23916/1"):
             with self.assertRaises(urllib.error.HTTPError) as e:
                 urllib.request.urlopen(url + gone, timeout=30)
             self.assertEqual(e.exception.code, 404)

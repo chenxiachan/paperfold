@@ -516,6 +516,23 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-text { display: block; width: 100%; height: min(62vh, 640px); box-sizing: border-box; margin-top: 10px; resize: vertical; padding: 12px 14px;
   font: 13px/1.6 var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; outline: none; }
 .ed-text:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.ed-top { display: flex; align-items: baseline; gap: 12px; }
+.ed-top .st-note { flex: 1; }
+.ed-text[hidden], .ed-past[hidden], .ed-histbtn[hidden] { display: none; }
+/* its History: a text it had, compared with the one in the editor, paragraph by paragraph and word by word */
+.ed-pbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.stp .ed-pbar select { max-width: 55%; }
+.ed-count { flex: 1; font-size: 12.5px; color: var(--muted); }
+.ed-diff { height: calc(min(62vh, 640px) - 44px); box-sizing: border-box; overflow: auto; margin-top: 10px; padding: 2px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.ed-diff section { padding: 10px 0; border-bottom: 1px solid var(--line-2); }
+.ed-diff section:last-child { border-bottom: 0; }
+.ed-diff h4 { margin: 0 0 4px; font: 600 12px var(--sans); color: var(--muted); }
+.ed-diff b { display: block; margin: 6px 0 2px; font: 600 11.5px var(--sans); color: var(--muted); }
+.ed-diff pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 var(--mono); color: var(--ink); }
+.ed-diff del { color: inherit; background: color-mix(in srgb, var(--r-limitation) 18%, transparent);
+  text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--r-limitation) 65%, transparent); }
+.ed-diff ins { text-decoration: none; background: color-mix(in srgb, var(--r-result) 22%, transparent); }
 /* its text edited and saved, its levels not made again yet (app.js, PAPER.pending): in the top bar, the button that does it */
 .edbtn { order: 3; flex: none; display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px var(--sans); color: var(--ink-2); background: none;
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
