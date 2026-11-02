@@ -223,7 +223,8 @@ last opened, and kept in folders, one level deep, a document in one at most: dra
 right click opens on it. Folders and dates are in `library.json` beside `papers/` (`library.py`). The format, the contract for every export, is `docs/notes-format.md`; the server keeps notes in
 `papers/<id>/notes.json`, a static page in the browser.
 
-Links: the author's cross-references (parsed) and argument links (one model call: supports / builds on / qualifies /
+Links: the author's cross-references (parsed) and argument links (one model call over the paper's takeaways, in parts
+for a text too long for one: supports / builds on / qualifies /
 explains) show as margin notes at Full, Brief and Key; on the Topic map, hovering a chip
 keeps its linked chips lit and lets the rest step back. Hovering a reference previews its target; clicking jumps there
 and a Back pill returns.
@@ -427,7 +428,7 @@ textfold/pdffigs.py  an arXiv drawing whose words the browser set (TikZ): cut fr
 textfold/zotero.py   a Zotero library through Zotero Desktop's local API; an item read as a link or a dropped file
 textfold/tokens.py   tokenizer, sentence splitter, LCS alignment
 textfold/ladder.py   one model call per section; validation; written words aligned to source words for the morph
-textfold/links.py    argument links, one call over the whole paper
+textfold/links.py    argument links, one call over the whole paper (in parts of 400 units for a longer one)
 textfold/translate.py  any language: sentence-aligned translation + short levels, one call per section (langs.py: the languages a text can be read in)
 textfold/store.py    versioned layers per paper; assembling a reader from them
 textfold/pipeline.py fetch → parse → ladder + links in the text's own language (once) → translation, with progress
