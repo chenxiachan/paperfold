@@ -89,9 +89,8 @@ def _server_url():
     pid = s.get("pid") if isinstance(s, dict) else None
     if not isinstance(pid, int) or not isinstance(s.get("url"), str):
         return None
-    try:
-        os.kill(pid, 0)
-    except (OSError, ValueError):
+    from .storage_settings import _process_alive
+    if not _process_alive(pid):
         return None   # (a server ended outright leaves its file behind)
     return s["url"]
 
