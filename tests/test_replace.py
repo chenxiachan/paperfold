@@ -202,6 +202,34 @@ class Replace(Base):
         self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (None, False))
         self.assertFalse((d / local.HISTORY).exists())
 
+    def test_each_place_is_found_where_it_is_read(self):
+        """The edit history on the page (app.js, review): a place of the Markdown found in the page's words (local.places),
+        a formula's whole, a heading's section; the word a place taken out was before (after, at the end); a place read
+        nowhere (a link's address), none."""
+        text = TEXT.replace("## Tuesday", "## Tuesday night") + "\nIts noise is $x^2$ loud, **very** loud: [see](https://example.org/noise).\n"
+        pid = local.import_text(text, "diary.md")
+        doc = store.parsed(pid)
+        span = lambda w, after="": [text.index(w, text.index(after)), text.index(w, text.index(after)) + len(w)]
+        point = lambda w: [text.index(w)] * 2
+        words = lambda x: [notes._quoted(doc["units"][w["unit"]]["toks"], doc["atoms"], *w["tokens"]) for w in x["words"]]
+        at = lambda x: (notes._quoted(doc["units"][x["at"]["unit"]]["toks"], doc["atoms"], x["at"]["token"], x["at"]["token"]), x["at"]["after"])
+        tank, night, sq, very, gone, end, url, both = local.places(pid, [
+            span("buffer tank held"), span("night", "## Tuesday"), span("^2"), span("very"), point(" asked how"), [len(text)] * 2,
+            span("example.org"), span("heater started.\n\nThe neighbours")])
+        self.assertEqual((words(tank), at(tank)), (["buffer tank held"], ("buffer", False)))
+        self.assertEqual(night, {"section": next(c["id"] for c in doc["chunks"] if c["title"] == "Tuesday night")})
+        self.assertEqual(words(sq), ["$x^2$"])   # the formula, whole
+        self.assertEqual(words(very), ["very"])
+        self.assertEqual((words(gone), at(gone)), ([], ("asked", False)))
+        self.assertEqual((words(end), at(end)), ([], (".", True)))
+        self.assertIsNone(url)
+        self.assertEqual(words(both), ["heater started.", "The neighbours"])   # a run in each paragraph
+        # words taken out where a line begins (its marks go back past the line's end, so a heading's # stays one): the
+        # paragraph they began, under a heading too; a heading's words, its section
+        starts, under, head = local.places(pid, [point("The buffer tank held"), point("A cold front"), span("## Tuesday")])
+        self.assertEqual((at(starts), at(under)), (("The", False), ("A", False)))
+        self.assertEqual(head, night)
+
     def test_the_text_an_earlier_textfold_kept_goes(self):
         pid = local.import_text(TEXT, "diary.md")
         d = store.pdir(pid)
@@ -447,6 +475,14 @@ class Server(Base):
             with self.assertRaises(urllib.error.HTTPError) as e:
                 urllib.request.urlopen(url + gone, timeout=30)
             self.assertEqual(e.exception.code, 404)
+
+    def test_where_the_places_are(self):
+        pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
+        i = TEXT.index("buffer")
+        code, got = self.post("/api/places", {"id": pid, "spans": [[i, i + 6]]})
+        self.assertEqual((code, [w["tokens"][1] - w["tokens"][0] for w in got["places"][0]["words"]]), (200, [0]))
+        self.assertEqual(self.post("/api/places", {"id": pid, "spans": [[i]]})[0], 400)
+        self.assertEqual(self.post("/api/places", {"id": "md-gone-12345678", "spans": []})[0], 404)
 
     def test_no_replace_while_it_is_generated(self):
         pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-// The edit history (app.js showHistory): each place the edits changed in a text since it was last generated
+// The edit history (app.js review): each place the edits changed in a text since it was last generated
 // (placesOf), found by comparing it with the text before them, paragraph by paragraph and then word by word (diffOf).
 const app = fs.readFileSync(path.join(__dirname, '..', 'textfold', 'web', 'app.js'), 'utf8');
 const code = app.slice(app.indexOf('    function diffOf(a, b) {'), app.indexOf('    // The Markdown a document was read from'));

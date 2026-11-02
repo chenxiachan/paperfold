@@ -18,6 +18,9 @@
   GET  /api/text/<id>         {text, original}: the Markdown such a document was read from, for the reader to put
                               right (a PDF's OCR) and send back to /api/import with its id; original: the text it had
                               when it was last generated, before the edits since (null: none; local.original)
+  POST /api/places            {id, spans: [[from, to], ...]}: where each place of that text is read on the page
+                              ({places: [{words: [{unit, tokens}], at: {unit, token, after}} | {section} | null]}:
+                              local.places), the edit history's changes marked on it
   GET  /api/models            saved configuration and the last model discovery results (no service probes); its "lang", the
                               reader's language as the page last told it (null until it has), for other programs
   GET  /api/langs             the languages a text can be read in: [{code, name}], each by its own name (langs.py)
@@ -792,6 +795,14 @@ def make_handler(jobs):
                 if u.path == "/api/jobs/stop":
                     job = jobs.stop(body.get("id", ""))
                     return self.json(job) if job else self.json({"error": "no such job"}, 404)
+                if u.path == "/api/places":   # the edit history's places, shown on the page (app.js, review)
+                    pid, spans = str(body.get("id") or ""), body.get("spans")
+                    if not (isinstance(spans, list) and all(isinstance(x, list) and len(x) == 2 and all(isinstance(n, int) for n in x) for x in spans)):
+                        return self.json({"error": "spans: [[from, to], ...]"}, 400)
+                    try:
+                        return self.json({"places": local.places(pid, spans)})   # (text_of: an id of no such document, none)
+                    except LookupError:
+                        return self.json({"error": "no text"}, 404)
                 if u.path == "/api/import":
                     text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]
                     if not text.strip():

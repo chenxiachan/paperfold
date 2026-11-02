@@ -12,6 +12,7 @@ and the notes and links on it, as they were. (Documents stored before keep the i
 their text is replaced.)
 """
 import base64
+import difflib
 import hashlib
 import json
 import os
@@ -170,7 +171,7 @@ def text_of(pid):
 
 def original(pid):
     """The text a document had when it was last generated (or read in), before the edits since (keep_text), or None:
-    the page's edit history shows what they changed in it, and puts any of it back (app.js, showHistory)."""
+    the page's edit history shows what they changed in it, and puts any of it back (app.js, review)."""
     f = store.pdir(pid) / HISTORY / "source.md"
     return store.read_text(f) if store.valid_id(pid) and f.exists() else None
 
@@ -178,7 +179,7 @@ def original(pid):
 def keep_text(d):
     """The text a stored document (its folder, d) has now, kept as an edit takes its place (replace_text) if it is the
     first since the document was last generated, until it is generated again (settle): the page's edit history shows
-    each change the edits made to it, and puts any of them back (app.js, showHistory). As history/source.md, its
+    each change the edits made to it, and puts any of them back (app.js, review). As history/source.md, its
     pictures in history/img, where a text put back finds them (Images: a converted PDF's were read from the engine's
     folder, which is gone)."""
     hist = d / HISTORY
@@ -222,15 +223,20 @@ def replace_text(pid, text, name=None, base=None):
         return _replace(pid, text, name, base)
 
 
+def _html_of(pid, text, was, name=None):
+    """A stored document's text (its Markdown) as HTML, with the title and meta it gives (a converted file's are what was
+    read from the file itself: its title, authors, Zotero's, stay)."""
+    if pid.startswith("md-"):
+        return _read_md(text, name or (was.get("source") or {}).get("name") or "document.md")
+    return was.get("title", ""), markdown.to_html(text)[0], {}
+
+
 def _replace(pid, text, name, base):
     d = store.pdir(pid)
     if text_of(pid) is None:
         raise LookupError(pid)
     was = json.loads(store.read_text(d / "meta.json"))
-    if pid.startswith("md-"):
-        title, html, meta = _read_md(text, name or (was.get("source") or {}).get("name") or "document.md")
-    else:   # a converted file's: what was read from the file itself (its title, authors, Zotero's) stays
-        html, title, meta = markdown.to_html(text)[0], was.get("title", ""), {}
+    title, html, meta = _html_of(pid, text, was, name)
     en = store.read(pid, "en")
     had = ([store.text_lang(pid, en)] if en else []) + store.languages(pid)
     meta = {**was, **meta, "id": pid, "replaced": store.stamp(), "pending": list(dict.fromkeys(had + was.get("pending", [])))}
@@ -261,6 +267,100 @@ def _replace(pid, text, name, base):
     ids.remember(pid, old, new)
     notes.reanchor(pid, old, new)
     return title
+
+
+MARK = 0xE000   # Unicode's private use: characters no text has, put in a text to see where its places are read (places)
+
+
+def places(pid, spans):
+    """Where each of the places [from, to) of a document's text (text_of: its Markdown; the edit history's, app.js) is
+    read on its page, found by a mark put at each end of each and the text read as the page is (two characters of
+    Unicode's private use for each place): {words: [{unit, tokens: [first, last]}], at: {unit, token, after}}, the words
+    it is (one run for each paragraph it is in; none for words taken out) and the word before which (after: after
+    which, at a paragraph's end) it begins; or {section: id}, for a place in a heading; or None, for one read nowhere (a
+    picture's address) or where the marks changed what the text is read as (one before a list's dash). A paragraph is
+    known by its words: the one with the same words, the marks aside, among the page's. LookupError: no such
+    document, or none with a text."""
+    text = text_of(pid)
+    if text is None:
+        raise LookupError(pid)
+    spans = [(min(max(0, int(a)), len(text)), min(max(int(a), int(b)), len(text))) for a, b in spans][:(0xF8FF - MARK) // 2]
+
+    def back(at):   # a mark goes before the white space it follows: at a line's start, it would be read as its first
+        while at and text[at - 1].isspace():   # word, and a heading's # or a list's dash, after it, as words
+            at -= 1
+        return at
+    ends = sorted([(back(a), k, 0) for k, (a, b) in enumerate(spans)] + [(back(b), k, 1) for k, (a, b) in enumerate(spans)])
+    marked, last = [], 0
+    for at, k, end in ends:
+        marked += [text[last:at], chr(MARK + 2 * k + end)]
+        last = at
+    marked.append(text[last:])
+    d = store.pdir(pid)
+    _, html, meta = _html_of(pid, "".join(marked), json.loads(store.read_text(d / "meta.json")))
+    _, doc = ids.freeze(semantic.normalize(html, resolve_img=lambda src: src), meta)
+    now = store.parsed(pid)
+    plain = lambda x: re.sub("[\ue000-\uf8ff]", "", x)
+    found = {}   # mark -> (unit, offset in its text) or ("§", section)
+    ours, theirs = list(now["units"].items()), list(doc["units"].items())
+    texts = [notes._spans(u["toks"], now["atoms"])[0] for _, u in ours]
+    marks = [notes._spans(u["toks"], doc["atoms"])[0] for _, u in theirs]
+    same = {i + k: j + k for i, j, n in difflib.SequenceMatcher(None, [plain(x).strip() for x in marks], texts, autojunk=False).get_matching_blocks()
+            for k in range(n)}
+    last = None
+    for i, x in enumerate(marks):
+        j = same.get(i)
+        if j is None and plain(x).strip() or j is None and last is None:
+            continue
+        lead, gone = len(plain(x)) - len(plain(x).lstrip()), 0   # (a mark of its own, after a line's end: a space before it)
+        for at, c in enumerate(x):
+            if MARK <= ord(c) <= 0xF8FF:   # (marks alone where a paragraph ends make one: the end of the one before)
+                found[ord(c)] = (j, min(len(texts[j]), max(0, at - gone - lead))) if j is not None else (last, len(texts[last]))
+                gone += 1
+        last = j if j is not None else last
+    heads = [(c["num"] + c["title"]) for c in now["chunks"]]
+    for i, j, n in difflib.SequenceMatcher(None, [plain(c["num"] + c["title"]) for c in doc["chunks"]], heads, autojunk=False).get_matching_blocks():
+        for k in range(n):
+            for c in doc["chunks"][i + k]["num"] + doc["chunks"][i + k]["title"]:
+                if MARK <= ord(c) <= 0xF8FF:
+                    found[ord(c)] = ("§", now["chunks"][j + k]["id"])
+    out = []
+    for k in range(len(spans)):
+        a, b = found.get(MARK + 2 * k), found.get(MARK + 2 * k + 1)
+        crossed = "\n" in text[back(spans[k][0]):spans[k][0]]   # (its marks went back past a line's end)
+        if crossed and spans[k][0] == spans[k][1] and a is not None and a[0] == "§":   # (into a heading: the first paragraph under it)
+            a = b = next(((i, 0) for i, (_, u) in enumerate(ours) if u.get("chunk") == a[1]), None)
+        if b is not None and b[0] == "§":   # (ending in a heading: its start, gone back past the line's end, may be in the paragraph before)
+            out.append({"section": b[1]})
+            continue
+        if b is not None and (a is None or a[0] == "§"):   # (beginning a paragraph after a heading: its start went back into it)
+            a = (b[0], 0)
+        if a is None or b is None:
+            out.append(None)
+            continue
+        if a[1] >= len(texts[a[0]]) and crossed and (
+                a[0] < b[0] or a == b and a[0] + 1 < len(ours) and ours[a[0] + 1][1].get("chunk") == ours[a[0]][1].get("chunk")):
+            a = (a[0] + 1, 0)   # (gone back past a paragraph's end: it begins the next one, under the same heading)
+            b = max(a, b)
+        out.append({"words": [w for w in (_words(now, ours[i], a[1] if i == a[0] else 0, b[1] if i == b[0] else len(texts[i]))
+                                          for i in range(a[0], b[0] + 1)) if w],
+                    "at": _word_at(now, ours[a[0]], a[1])})
+    return out
+
+
+def _words(doc, unit, start, end):
+    """The tokens of characters [start, end) of a unit's text (notes._spans), or None: none there (a space)."""
+    uid, u = unit
+    inside = [i for i, (a, b) in enumerate(notes._spans(u["toks"], doc["atoms"])[1]) if b > start and a < end]
+    return {"unit": uid, "tokens": [inside[0], inside[-1]]} if inside else None
+
+
+def _word_at(doc, unit, at):
+    """The token of a unit at (or after) a character of its text; at its end, its last token."""
+    uid, u = unit
+    ends = [b for _, b in notes._spans(u["toks"], doc["atoms"])[1]]
+    i = next((i for i, b in enumerate(ends) if b > at), None)
+    return {"unit": uid, "token": i, "after": False} if i is not None else {"unit": uid, "token": len(ends) - 1, "after": True}
 
 
 def store_doc(pid, html, meta, raw_name, raw, resolver, sizes=False, old=None):

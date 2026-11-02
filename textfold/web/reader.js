@@ -125,6 +125,7 @@
   }
 
   // ── pieces: what a unit shows at a level ─────────────────────────────
+  let review = null;   // an edit's places shown (setReview, below)
   function pieces(uid, L) {
     const v = view(uid), p = `${uid}:${v.p}`;
     const ev = new Set(v.ev);
@@ -206,6 +207,8 @@
     }
     const fm = findMarks.get(uid);   // the words found (find in the text, below)
     if (fm) for (const x of out) x.fd = fm.get(x.id) || 0;
+    const rv = review && L >= 4 && !v.p ? review.units.get(uid) : null;   // an edit's places (review, below)
+    if (rv) for (const x of out) { x.rv = rv.put.get(x.i); x.rvb = rv.before.get(x.i); x.rva = rv.after.get(x.i); }
     return out;
   }
 
@@ -237,9 +240,16 @@
       el.className = 'tk' + (p.gap ? ' gap' : '') + atCls(t) + (t.f ? ' ' + t.f : '');
       el._base = el.className;
     }
-    el.className = el._base + (p.lead ? ' lead' : '') + (p.kept ? ' kept' : '') + hlCls(p) + fdCls(p);
+    el.className = el._base + (p.lead ? ' lead' : '') + (p.kept ? ' kept' : '') + hlCls(p) + fdCls(p) + rvCls(p);
+    if (p.rvb) el.dataset.was = p.rvb.was; else delete el.dataset.was;
+    if (p.rva) el.dataset.wasAfter = p.rva.was; else delete el.dataset.wasAfter;
   }
   const fdCls = (p) => (p.fd ? (p.fd === 2 ? ' fd fdc' : ' fd') : '');
+  // an edit's place (review): its words put in, and before a word (after the last), the words taken out; the one the
+  // reader is at, stronger
+  const rvCls = (p) => (p.rv !== undefined ? ` rv${p.rv === review.cur ? ' rvc' : ''}` : '') +
+    (p.rvb ? ` rvb${p.rvb.k === review.cur ? ' rvbc' : ''}` : '') + (p.rva ? ` rva${p.rva.k === review.cur ? ' rvac' : ''}` : '');
+  const rvDel = (d) => `<span class="rvdel${d.k === review.cur ? ' rvc' : ''}" data-was="${esc(d.was)}"></span>`;
 
   // where a line may break between two pieces written without a space: between Chinese characters yes (except
   // before closing or after opening punctuation), inside a Latin word or formula group no
@@ -324,9 +334,10 @@
       else if (group) { group.appendChild(s); group = null; }
       else frag.appendChild(s);
       if (space) {   // a space inside a highlight is highlighted too
-        const both = p.hl && !last && pcs[n + 1].hl, found = p.fd && !last && pcs[n + 1].fd;
+        const both = p.hl && !last && pcs[n + 1].hl, found = p.fd && !last && pcs[n + 1].fd, put = p.rv !== undefined && !last && pcs[n + 1].rv === p.rv;
         frag.appendChild(both ? h('span', `hlsp${p.hl === pcs[n + 1].hl && p.sh === pcs[n + 1].sh ? hlCls(p).replace(' hl', '') : ''}`, ' ')
-          : found ? h('span', `fdsp${p.fd === 2 && pcs[n + 1].fd === 2 ? ' fdc' : ''}`, ' ') : document.createTextNode(' '));
+          : found ? h('span', `fdsp${p.fd === 2 && pcs[n + 1].fd === 2 ? ' fdc' : ''}`, ' ')
+          : put ? h('span', `rvsp${p.rv === review.cur ? ' rvc' : ''}`, ' ') : document.createTextNode(' '));
       }
     });
     el._tx.replaceChildren(frag);
@@ -339,11 +350,14 @@
     const flush = () => { if (buf) html += run ? `<span class="${run}">${buf}</span>` : buf; buf = ''; };
     pcs.forEach((p, n) => {
       const t = p.tok || {};
-      const cls = p.gap ? 'tr gap' : `tr${p.lead ? ' lead' : ''}${p.kept ? ' kept' : ''}${t.f ? ' ' + t.f : ''}${hlCls(p)}${fdCls(p)}`;
+      const cls = p.gap ? 'tr gap' : `tr${p.lead ? ' lead' : ''}${p.kept ? ' kept' : ''}${t.f ? ' ' + t.f : ''}${hlCls(p)}${fdCls(p)}${p.rv !== undefined ? rvCls({ rv: p.rv }) : ''}`;
+      if (p.rvb) { flush(); run = null; html += rvDel(p.rvb); }
       if (cls !== run) { flush(); run = cls; }
       buf += p.gap ? '…' : t.a ? A[t.a].html : t.x ? `<span class="texsrc">${esc(t.x)}</span>` : esc(t.t);
+      if (p.rva) { flush(); run = null; html += rvDel(p.rva); }
       if (n < pcs.length - 1 && (p.gap || t.s || pcs[n + 1].gap)) {
-        if ((p.hl && !pcs[n + 1].hl) || (p.fd && !pcs[n + 1].fd)) { flush(); run = null; }   // a highlight ends on its last word, not the space after it
+        // a highlight ends on its last word, not the space after it
+        if ((p.hl && !pcs[n + 1].hl) || (p.fd && !pcs[n + 1].fd) || (p.rv !== undefined && pcs[n + 1].rv !== p.rv)) { flush(); run = null; }
         buf += ' ';
       }
     });
@@ -4803,13 +4817,53 @@ math { font-size: 1.05em; }
     store.set(UI_KEY, code);
     if (AVAIL.includes(code) && code !== lang) setLang(code); else applyLang();
   }
+  // ── an edit's places on the page (app.js, review: the edit history): the words each put in lit, the words it took out
+  //    struck through before the word they were before (the mark's own content, not the text's: a selection or a
+  //    note does not take them), a heading it changed lit whole; the one the reader is at (cur), stronger, and gone to.
+  //    At Full, in the text's own words, which are the ones an edit changed. list: local.places, with was (the words
+  //    taken out), each or null; none: the page as it was ──
+  function setReview(list, cur = 0) {
+    const was = review, touched = new Set(was ? was.units.keys() : []);
+    review = null;
+    if (list) {
+      review = { units: new Map(), heads: new Map(), list, cur };
+      const of = (uid) => { if (!review.units.has(uid)) review.units.set(uid, { put: new Map(), before: new Map(), after: new Map() }); touched.add(uid); return review.units.get(uid); };
+      list.forEach((x, k) => {
+        if (!x) return;
+        if (x.section) { review.heads.set(x.section, [...(review.heads.get(x.section) || []), k]); return; }
+        for (const w of x.words) { if (U[w.unit]) for (let i = w.tokens[0]; i <= w.tokens[1]; i++) of(w.unit).put.set(i, k); }
+        const text = (x.was || '').replace(/\s+/g, ' ').trim() || (x.was ? '¶' : '');   // (a paragraph's end taken out: ¶)
+        if (text && U[x.at.unit]) of(x.at.unit)[x.at.after ? 'after' : 'before'].set(x.at.token, { was: text, k });
+      });
+    }
+    for (const [cid, sc] of secs) {
+      sc.hd.classList.toggle('rvh', !!(review && review.heads.has(cid)));
+      sc.hd.classList.toggle('rvc', !!(review && review.heads.has(cid) && review.heads.get(cid).includes(cur)));
+    }
+    if (review && level !== 4) { if (goal !== 4) setLevel(4); return; }   // (drawn as it zooms in)
+    for (const uid of touched) if (unitEl.has(uid)) renderUnit(uid, unitEl.get(uid)._mode === 'tok');
+  }
+  // the reader at another place: lit, and in the middle of the page
+  function reviewGo(k) {
+    if (!review || !review.list[k]) return;
+    const x = review.list[k], before = review.cur;
+    review.cur = k;
+    if (level !== 4) { if (goal !== 4) setLevel(4); setTimeout(() => { if (level === 4) reviewGo(k); }, DUR + 120); return; }
+    const near = [before, k].map((j) => review.list[j]).filter(Boolean);
+    if (near.some((y) => y.section)) setReview(review.list, k);
+    else for (const uid of new Set(near.flatMap((y) => [y.at.unit, ...y.words.map((w) => w.unit)]))) if (unitEl.has(uid)) renderUnit(uid, unitEl.get(uid)._mode === 'tok');
+    const el = x.section ? (secs.get(x.section) || {}).hd : unitEl.get(x.words.length ? x.words[0].unit : x.at.unit);
+    if (!el) return;
+    const at = el.querySelector('.rvc, .rvbc, .rvac') || el, r = at.getBoundingClientRect();
+    window.scrollTo({ top: scrollY + r.top - innerHeight * 0.38, behavior: reduced ? 'auto' : 'smooth' });
+  }
   // the name the reader gave the text in the library, changed while it is open: its head and the window's title follow
   function rename(name) {
     D.meta.name = name || undefined;
     document.title = name || D.meta.title;
     applyLang();
   }
-  window.__reader = { setLevel, setLang, setUi, rename, get ui() { return ui; }, zoomBy,
+  window.__reader = { setLevel, setLang, setUi, rename, review: setReview, reviewGo, get ui() { return ui; }, zoomBy,
     get compared() { if (!cmp || !cmp.grams) return null; const ids = [...order.keys()]; return { units: ids.length, found: ids.filter((id) => locate(id)).length, words: cmp.words.length }; }, get level() { return level; }, get lang() { return lang; }, get pos() { return pos; },
     get staged() { return !!stage; }, get _caps() { return caps; }, get keyframes() { return caps.map((c) => (c ? c.P.size : 0)); },
     // holding the zoom at a position, as a hand would (for looking at the motion frame by frame)

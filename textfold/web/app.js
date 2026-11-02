@@ -1111,6 +1111,7 @@
           .then((j) => others.push(j.id)))))
         .catch(update.fail);
     }
+    let reviewing = null;   // the edit history on the page (review, below): {k, stop}, the place the reader is at
     // its text edited and saved without being generated again: said in the top bar, by the button that does it (which
     // says first that the edit history goes once it is done); the edit history beside it
     if ((PAPER.pending || []).length) {
@@ -1132,7 +1133,12 @@
       b.textContent = t().ed_history;
       const bar = document.querySelector('.topbar .cmpbtn') || document.querySelector('.topbar .langpick');
       if (bar) bar.before(b);
-      b.onclick = showHistory;
+      b.onclick = () => (reviewing ? reviewing.stop() : review());
+      try {   // the page opened again after an edit made in the review: it goes on, at the same place
+        const r = JSON.parse(sessionStorage.getItem('pf-review') || 'null');
+        sessionStorage.removeItem('pf-review');
+        if (r && r.pid === PAPER.id) review(r.k);
+      } catch { /* private window */ }
     }
     // What differs between two lists (a text's paragraphs, a paragraph's words), in order: ['=', x], ['-', x] (only in
     // a), ['+', x] (only in b). What both begin and end with is set aside first (an edit is mostly a few words), the
@@ -1200,8 +1206,9 @@
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
     // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
-    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none.
-    async function editText(words) {
+    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none. span: the
+    // characters of the Markdown to open at, in place of the words (a place of the review)
+    async function editText(words, span = null) {
       const T = t();
       if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
       let text;
@@ -1217,12 +1224,12 @@
       dlg.querySelector('.stp-x').onclick = dlg.querySelector('.ed-cancel').onclick = () => dlg.close();
       dlg.showModal();
       // the words selected, else their first few, else the top: the text above them measured where it wraps
-      const at = [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0) ?? 0;
+      const at = span ? span[0] : [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0) ?? 0;
       ta.value = text.slice(0, at);
       const above = ta.scrollHeight;
       ta.value = text;
       ta.focus();
-      ta.setSelectionRange(at, at + (words && text.startsWith(words, at) ? words.length : 0));
+      ta.setSelectionRange(at, span ? span[1] : at + (words && text.startsWith(words, at) ? words.length : 0));
       ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
       const keep = async (generate) => {
         if (ta.value === text) { dlg.close(); return; }
@@ -1233,77 +1240,74 @@
         catch (x) { save.disabled = false; if (only) only.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
         dlg.close();
         const lang = (window.__reader && window.__reader.lang) || 'en';
-        if (generate) regenerate(r.pending.length ? r.pending : [lang]);
-        else reopen(lang);
+        if (generate) { if (reviewing) reviewing.stop(); regenerate(r.pending.length ? r.pending : [lang]); return; }
+        try { if (reviewing) sessionStorage.setItem('pf-review', JSON.stringify({ pid: PAPER.id, k: reviewing.k })); } catch { /* private window */ }
+        reopen(lang);
       };
       save.onclick = () => keep(!!modelName);
       if (only) only.onclick = () => keep(false);
     }
-    // Its edit history, from the top bar (PAPER.history): each place the edits since it was last generated changed
-    // (placesOf), the words taken out and put in, among the words around them; each edited or undone by itself, or all
-    // at once, saved as an edit is (the page opens on the text so saved as the dialog closes). Generated again in every
-    // language, the history goes (local.settle).
-    async function showHistory() {
-      const T = t();
-      let text, original;
-      try { ({ text, original } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
-      const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
-      dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_history)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
-        <div class="stp-body"><p class="st-note">${esc(T.ed_hist_note)}</p><div class="ed-diff"></div></div>
-        <footer class="stp-foot"><p class="ed-count"></p><button type="button" class="st-btn ed-all">${esc(T.ed_undo_all)}</button></footer></div>`;
-      const box = dlg.querySelector('.ed-diff'), count = dlg.querySelector('.ed-count'), all = dlg.querySelector('.ed-all');
-      let places = [], saved = false, saving = false;
-      dlg.addEventListener('close', () => {
-        dlg.remove();
-        if (saved) reopen((window.__reader && window.__reader.lang) || 'en');
-      });
-      dlg.querySelector('.stp-x').onclick = () => dlg.close();
-      const shown = (x) => esc(x).replace(/\n+/g, (n) => `¶${n}`);   // (a paragraph's end, taken out or put in)
-      const show = () => {
+    // Its edit history, on the page itself (from the top bar: PAPER.history): each place the edits since it was last
+    // generated changed (placesOf), found where it is read (local.places) and marked in the text at Full (reader.js,
+    // setReview), with a bar to go from one to the next (4 / 14), undo it (the text saved with its words as they were)
+    // or edit it (the editor, at its words). Each saved, the page opens again at the same place, the review going on
+    // (pf-review). Generated again, they are all taken: the history goes (local.settle).
+    async function review(k = 0) {
+      const T = t(), lang = () => (window.__reader && window.__reader.lang) || 'en';
+      if (reviewing) return;
+      let text, original, places, where;
+      try {
+        ({ text, original } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`));
         places = original === null ? [] : placesOf(original, text);
-        count.textContent = places.length ? T.ed_diffs.replace('{n}', places.length) : '';
-        all.disabled = !places.length;
-        const heads = [...text.matchAll(/^#{1,6}\s+(.+)$/gm)];
-        box.innerHTML = places.length ? places.map((p, i) => {
-          const end = p.at + p.now.length, head = heads.filter((m) => m.index < p.at).pop();
-          // the words around it, in its paragraph
-          let before = text.slice(Math.max(0, p.at - 90), p.at), after = text.slice(end, end + 90);
-          before = /\n\n/.test(before) ? before.split(/\n{2,}/).pop() : p.at > 90 ? `…${before.replace(/^\S*\s/, '')}` : before;
-          after = /\n\n/.test(after) ? after.split(/\n{2,}/)[0] : end + 90 < text.length ? `${after.replace(/\s\S*$/, '')}…` : after;
-          return `<section data-i="${i}">${head ? `<h4>${esc(head[1])}</h4>` : ''}` +
-            `<pre>${esc(before)}${p.was ? `<del>${shown(p.was)}</del>` : ''}${p.now ? `<ins>${shown(p.now)}</ins>` : ''}${esc(after)}</pre>` +
-            `<div class="ed-acts"><button type="button" class="st-btn ed-edit">${esc(T.ed_edit)}</button><button type="button" class="st-btn ed-undo">${esc(T.ed_undo)}</button></div></section>`;
-        }).join('') : `<p class="ed-first">${esc(T.ed_same)}</p>`;
+        if (places.length) ({ places: where } = await api('/api/places', { id: PAPER.id, spans: places.map((p) => [p.at, p.at + p.now.length]) }));
+      } catch (x) { alert(errText(x.message)); return; }
+      const R = window.__reader;   // (the page just opened: in by now)
+      if (!places.length || !R || reviewing) return;
+      const bar = h('div', 'rvbar');
+      bar.setAttribute('role', 'toolbar');
+      bar.innerHTML = `<button type="button" class="rv-prev" title="${esc(T.rv_prev)}" aria-label="${esc(T.rv_prev)}">‹</button><span class="rv-n"></span>` +
+        `<button type="button" class="rv-next" title="${esc(T.rv_next)}" aria-label="${esc(T.rv_next)}">›</button><i class="rv-sep"></i>` +
+        `<button type="button" class="rv-undo">${esc(T.ed_undo)}</button><button type="button" class="rv-edit">${esc(T.ed_edit)}</button>` +
+        `<button type="button" class="rv-regen">${esc(T.rv_regen)}</button>` +
+        `<button type="button" class="rv-x" title="${esc(T.close)}" aria-label="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button>` +
+        '<p class="rv-gone" hidden></p>';
+      document.body.append(bar);
+      const $ = (c) => bar.querySelector(c), list = places.map((p, i) => where[i] && { ...where[i], was: p.was });
+      const stop = () => { reviewing = null; bar.remove(); R.review(null); };
+      const go = (j) => {
+        k = Math.max(0, Math.min(places.length - 1, j));
+        reviewing = { k, stop };
+        $('.rv-n').textContent = `${k + 1} / ${places.length}`;
+        $('.rv-n').title = T.rv_of.replace('{k}', k + 1).replace('{n}', places.length);
+        $('.rv-prev').disabled = k === 0;
+        $('.rv-next').disabled = k === places.length - 1;
+        const p = places[k], gone = $('.rv-gone');   // (one read nowhere on the page: its words, here)
+        gone.hidden = !!list[k];
+        if (!list[k]) gone.innerHTML = `${esc(T.rv_gone)} ${p.was ? `<del>${esc(p.was)}</del>` : ''} ${p.now ? `<ins>${esc(p.now)}</ins>` : ''}`;
+        R.reviewGo(k);
       };
-      const save = async (next) => {
-        if (saving) return;
+      const saved = () => {   // the page again, at the same place: the one after the one undone
+        try { sessionStorage.setItem('pf-review', JSON.stringify({ pid: PAPER.id, k })); } catch { /* private window */ }
+        reopen(lang());
+      };
+      $('.rv-prev').onclick = () => go(k - 1);
+      $('.rv-next').onclick = () => go(k + 1);
+      $('.rv-undo').onclick = async () => {
         if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
-        saving = true;
-        try { await api('/api/import', { id: PAPER.id, text: next }); }
+        const p = places[k];
+        try { await api('/api/import', { id: PAPER.id, text: text.slice(0, p.at) + p.was + text.slice(p.at + p.now.length) }); }
         catch (x) { alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
-        finally { saving = false; }
-        text = next; saved = true;
-        if (text === original) dlg.close(); else show();
+        saved();
       };
-      const withPlace = (p, words) => text.slice(0, p.at) + words + text.slice(p.at + p.now.length);
-      box.onclick = (e) => {
-        const b = e.target.closest('button'), sec = b && b.closest('section[data-i]');
-        if (!sec) return;
-        const p = places[+sec.dataset.i];
-        if (b.classList.contains('ed-undo')) save(withPlace(p, p.was));
-        else if (b.classList.contains('ed-edit')) {   // its words put in, to be written anew
-          const acts = sec.querySelector('.ed-acts');
-          acts.innerHTML = `<textarea class="ed-text ed-put" spellcheck="false"></textarea><button type="button" class="st-btn ed-back">${esc(T.cancel)}</button><button type="button" class="st-btn ed-ok">${esc(T.save)}</button>`;
-          const ta = acts.querySelector('textarea');
-          ta.value = p.now;
-          ta.focus();
-          acts.querySelector('.ed-back').onclick = show;
-          acts.querySelector('.ed-ok').onclick = () => (ta.value === p.now ? show() : save(withPlace(p, ta.value)));
-        }
+      $('.rv-edit').onclick = () => editText(null, [places[k].at, places[k].at + places[k].now.length]);
+      $('.rv-regen').onclick = () => {
+        if (!confirm(T.ed_clears_ask)) return;
+        stop();
+        regenerate((PAPER.pending || []).length ? PAPER.pending : [lang()]);
       };
-      all.onclick = () => { if (confirm(T.ed_undo_all_ask)) save(original); };
-      show();
-      dlg.showModal();
+      $('.rv-x').onclick = stop;
+      R.review(list, k);
+      go(k);
     }
     // A translation stored with paragraphs it has none for (PAPER.gaps: a call that failed, a paragraph the model left
     // out; or made before TextFold asked for them again): they are asked for as it is opened, with the model in use, the
