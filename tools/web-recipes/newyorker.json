@@ -1,0 +1,15 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "newyorker.com",
+ "pages": "*",
+ "article": "article.main-content",
+ "drop": [
+  "[data-testid='cne-audio-embed-figure']",
+  "[data-testid='ContentHeaderRubric']"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "Condé Nast's class names are generated (BodyWrapper-cuqCAc), so the recipe holds to the article element, its named classes and data-testid. The audio player is furniture. The paragraphs marked .paywall are the article: shown in full to a first reader (isAccessibleForFree true); a browser's snapshot taken after the meter ran out holds what that reader sees, and is partial."
+}

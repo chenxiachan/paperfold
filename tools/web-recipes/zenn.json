@@ -1,0 +1,15 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "zenn.dev",
+ "pages": "/*/articles/*",
+ "article": "article",
+ "drop": [
+  "article > aside",
+  "article header"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "Zenn builds its class names (VeVOXq_container), so the recipe holds to article and its direct aside (the publication card) and header; the notes boxes inside the text are asides of the text and stay."
+}

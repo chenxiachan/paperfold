@@ -1,0 +1,15 @@
+[
+  {
+    "version": "0.10.43",
+    "en": [
+      ["Fix a converted PDF’s text where you read it", "Select the words the conversion got wrong and choose Edit text. The text opens at those words. Save, and only the sections you changed are generated again. Your notes stay where they were."],
+      ["Edit in several places, generate once", "Save only keeps an edit without asking the model. When you are done, Edited · Regenerate in the top bar generates each language once."],
+      ["Your changes, marked in the text", "Edit history shows each change on the page: words added are underlined, words removed are struck through. Go from one to the next, undo one, or edit it again. Regenerating accepts them all."]
+    ],
+    "zh": [
+      ["在阅读的地方改正 PDF 的文字", "选中转换读错的字，点“修改原文”，文字会在这几个字的位置打开。保存后只重新生成改过的章节，笔记留在原处。"],
+      ["改好几处，只生成一次", "“仅保存”只保存修改，不调用模型。全部改完后，点顶栏的“已修改 · 重新生成”，每种语言只生成一次。"],
+      ["修改直接标在原文上", "点“修改记录”，每处修改都标在文章里：新加的字有下划线，删掉的字被划掉。可以逐处跳转、撤销，或者再改。重新生成就是全部接受。"]
+    ]
+  }
+]

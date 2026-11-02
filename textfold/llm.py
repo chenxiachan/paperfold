@@ -9,6 +9,10 @@
 Replies are cached on disk by a hash of everything that shapes them, so a rebuild costs nothing until
 the prompt, the schema, the model or its effort changes. `force` skips the cache read: that is what
 "regenerate" means, a new sample from the model.
+
+A reply is written whole, to a .tmp beside it and then moved onto its name, and a file that is not a
+reply (half of one, when a process died in the middle of writing it) is dropped and asked for again:
+the rule forget() already applies to a reply its caller could not read.
 """
 import hashlib
 import json
@@ -78,6 +82,17 @@ def label(model):
     return spec_of(model)["id"]
 
 
+def kept(f):
+    """The reply kept in a file, or None when the file is not one: half written when the process died, or written by a
+    version that kept something else. A reply is what every caller reads of it: `out`, `cost`, `models`."""
+    from .store import read_text   # (store imports ladder, which imports this)
+    try:
+        rec = json.loads(read_text(f))
+    except (OSError, ValueError):
+        return None
+    return rec if isinstance(rec, dict) and "out" in rec else None
+
+
 def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, system=SYSTEM, stop=None):
     """(system: the generation's role unless a caller has another, as the questions about a paper do)"""
     spec = spec_of(model)
@@ -92,8 +107,10 @@ def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, syste
     cache_dir.mkdir(parents=True, exist_ok=True)
     f = cache_dir / f"{key}.json"
     if f.exists() and not force:
-        from .store import read_text   # (store imports ladder, which imports this)
-        return {**json.loads(read_text(f)), "file": str(f)}, True
+        rec = kept(f)
+        if rec is not None:
+            return {**rec, "file": str(f)}, True
+        f.unlink(missing_ok=True)   # (not a reply: asked for again, where before it was asked for on every generation)
     if os.environ.get("TEXTFOLD_NO_MODELS"):   # (agents.scan): a reply kept is read, none is asked for, whatever model is named
         raise RuntimeError("No model is available: TEXTFOLD_NO_MODELS is set")
     note = None
@@ -112,7 +129,10 @@ def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, syste
     rec = {"out": out, "cost": cost, "models": [spec["id"]] + ([effort] if effort else [])}
     if note:
         rec["note"] = note
-    f.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
+    # written beside it and moved onto its name: a process that dies here leaves a .tmp, never half a reply to read back
+    half = f.with_name(f.name + ".tmp")
+    half.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(half, f)
     return {**rec, "file": str(f)}, False
 
 
@@ -143,6 +163,19 @@ def forget(rec):
 def _once(prompt, schema, spec, timeout, system, stop=None):
     effort, tools = spec.get("effort"), bool(spec.get("tools"))   # (tools: the agent's own web tools, agents.py)
     if spec["kind"] == "agent":
+        if spec["runtime"] == "custom":   # (a command of the reader's, run by the driver of the agent it speaks as: agents.py)
+            found = agents.command_of(spec["command"])
+            if not found:
+                raise RuntimeError(f"{spec['agent']}: {spec['command'].split()[0]} was not found on this computer")
+            if spec["protocol"] == "claude-code":
+                return _claude(prompt, schema, spec["model"], effort, timeout, system, tools, cmd=found[0])
+            run = agents.run_codex if spec["protocol"] == "codex" else agents.run_pi
+            options = {"cmd": found[0]}
+            if spec["protocol"] == "codex":
+                options["capabilities"] = {"efforts": spec.get("efforts") or []}
+                if stop is not None:
+                    options["stop"] = stop
+            return run(spec["model"], prompt, schema, system, effort, timeout, tools, **options)
         if spec["runtime"] == "claude-code":
             return _claude(prompt, schema, spec["model"], effort, timeout, system, tools)
         if spec["runtime"] == "codex":
@@ -157,16 +190,19 @@ def _once(prompt, schema, spec, timeout, system, stop=None):
     return openai_call(prompt, schema, spec, system, timeout)
 
 
-def _claude(prompt, schema, model, effort, timeout, system=SYSTEM, tools=False):
-    path = agents.path_of("claude-code")
-    if not path:
-        raise RuntimeError("Claude Code was not found on this computer")
+def _claude(prompt, schema, model, effort, timeout, system=SYSTEM, tools=False, cmd=None):
+    """(cmd: the command that starts it, a custom agent's; else the Claude Code found here)"""
+    if cmd is None:
+        path = agents.path_of("claude-code")
+        if not path:
+            raise RuntimeError("Claude Code was not found on this computer")
+        cmd = agents.argv(path)
     if tools:   # the web alone (agents.py), allowed without asking, no MCP server; its own system prompt with ours after it
-        cmd = [*agents.argv(path), "-p", "--model", model, "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch",
+        cmd = [*cmd, "-p", "--model", model, "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch",
                "--strict-mcp-config", "--no-session-persistence", "--output-format", "json", "--json-schema", json.dumps(schema),
                "--append-system-prompt", system]
     else:
-        cmd = [*agents.argv(path), "-p", "--model", model, "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+        cmd = [*cmd, "-p", "--model", model, "--tools", "", "--strict-mcp-config", "--no-session-persistence",
                "--output-format", "json", "--json-schema", json.dumps(schema), "--system-prompt", system]
     env = agents.child_env()
     if effort == "off":   # Claude Code has no such level: no thinking is a thinking budget of nothing

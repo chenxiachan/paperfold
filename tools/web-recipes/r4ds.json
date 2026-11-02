@@ -1,0 +1,15 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "r4ds.hadley.nz",
+ "pages": "*",
+ "article": "main#quarto-document-content",
+ "drop": [
+  "nav.page-navigation",
+  "button.code-copy-button"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "Quarto: the chapter is main#quarto-document-content; its footnotes use DPUB-ARIA; the previous/next links and the copy buttons are furniture."
+}

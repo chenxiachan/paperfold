@@ -37,6 +37,10 @@ an unavailable explicit level chooses the nearest supported lower level, or the
 minimum if no lower level exists. Missing capabilities leave `off` to the CLI
 default rather than probing with an assumed `none` request. Unrecognized future
 levels use the advertised default or first supported option.
+Custom Codex commands use their own saved model capabilities, retain their
+command prefix, and receive the same cancellation signal. Their replies keep
+upstream's separate custom-agent cache identity. Native Codex capabilities are
+never borrowed for a custom command with the same model name.
 
 This mapping happens only when constructing CLI arguments. The original model
 specification, prompt, schema, logical effort and cache-key calculation are
@@ -45,6 +49,9 @@ replies previously obtained through the `off` → `low` fallback. Cache reads do
 not invoke model discovery or a model subprocess. A mixed cached/unfinished
 generation requests only the unfinished chapter; explicit force regeneration
 retains its existing cache-bypass meaning.
+Upstream's atomic cache writes and invalid-reply recovery remain intact: valid
+old replies stay cache hits, while only malformed or incomplete replies are
+requested again.
 
 The regression suite uses stand-in model replies and disposable Python child
 processes, never a real Codex/bridge process. It checks slow-section completion,

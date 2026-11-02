@@ -233,7 +233,8 @@ For each unit:
 - takeaway: {one} of at most {b['takeaway']} {count} stating what this unit establishes: the claim, design choice, number or finding itself, conclusion first, packed like a headline. Name the thing itself, not the activity ("this paragraph describes", "the authors discuss", "details of"). Keep the paper's own terms. Someone reading only the takeaways of the whole paper in order should be able to follow its argument.
 - topic: the unit's subject as a bare noun phrase of at most {b['topic']} {count}, copied VERBATIM from inside the takeaway.
 - reason: {more} of at most {b['reason']} {count} that reads on from the takeaway and gives its main reason, mechanism, condition or consequence; do not restate the takeaway. Use "" when the unit is a single short sentence.
-- evidence: the numbers of the 1 or 2 sentences (3 only when the unit has 7 or more) whose verbatim text best backs the takeaway, ascending; prefer sentences that state a result, a definition or a decision over sentences that only set up or list.{rules}
+- evidence: the numbers of the 1 or 2 sentences (3 only when the unit has 7 or more) whose verbatim text best backs the takeaway, ascending; prefer sentences that state a result, a definition or a decision over sentences that only set up or list.
+- A unit that is not a passage of the text (a label, a heading read as a line of text, an author's note or address, a date), or that is already as short as its takeaway would be, stays as written: give its takeaway, topic and reason as "".{rules}
 
 For the section: takeaway, ONE sentence of at most {b['section']} {count} {job} topic, at most {b['topic']} {count} copied verbatim from that takeaway.
 

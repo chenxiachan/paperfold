@@ -1,0 +1,18 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "already-clean.goodfire.com",
+ "pages": "*",
+ "article": "article#essay",
+ "drop": [],
+ "notes": [],
+ "content": [
+  "td button",
+  "th button"
+ ],
+ "figures": [
+  "#essay figure:not(:has(img, table))",
+  "#essay div.wide:not(:has(figure, table, img))"
+ ],
+ "why": "The essay is article#essay; its footnotes and references already carry role=tooltip. Its four tables hold their numbers in buttons, one per cell. Most figures and the wide panels are drawn by scripts (svg, canvas): kept as their captions with a link back. Figures with a table or pictures stay as they are."
+}

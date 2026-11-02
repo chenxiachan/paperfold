@@ -4,19 +4,22 @@ translated: asked for, it is the ladder.
 
 Every step reports through `progress(stage, done, total)`; the server turns that into a progress bar. A set `stop`
 (a threading.Event) ends it with llm.Stopped at the next step: what the model has already written stays in the cache,
-so the same generation started again goes on from there.
+so the same generation started again goes on from there. The argument links are an extra: when their call fails (one
+call over every takeaway, or the parts of a text too long for one), the levels are stored without them (and not asked
+for again unless the text is folded again).
 
 `force` asks the model again for every section (a new sample), with one exception: a document whose text was replaced
 in place (local.replace_text) has no layers until it is folded again, and those are made from the replies kept for it,
 so only the sections whose prompts changed are asked. A section's prompt holds the title, the opening, the outline and
 its own text: an edit in one section asks for that section alone (and the argument links, one call over every
-paragraph's takeaway, when a takeaway came back changed); an edit to the title, the opening or a heading asks for every
+paragraph's takeaway, in parts for a text too long for one, when a takeaway came back changed); an edit to the title,
+the opening or a heading asks for every
 section. A translation's prompt also numbers the formulas, links and other atoms of the whole text in order, so a
 section after an atom added or taken out is translated again too.
 """
 import urllib.error
 
-from . import biorxiv, epmc, github, ladder, links, llm, models, notes, store, translate, webpage, wiki
+from . import biorxiv, epmc, github, ladder, links, llm, local, models, notes, store, translate, webpage, wiki
 from .fetch import fetch
 
 
@@ -69,7 +72,10 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
         ladder.build(doc, task(cfg, "ladder"), cache, jobs=jobs, log=log, progress=lambda a, b: progress("ladder", a, b), force=again, stop=stop)
         check()
         progress("links", 0, 1)
-        links.build(doc, task(cfg, "links"), cache, log=log, force=again)
+        try:
+            links.build(doc, task(cfg, "links"), cache, log=log, force=again, jobs=jobs)
+        except Exception as e:   # the links are one call over every takeaway, an extra: failed (a long text's reply cut
+            log(f"  ! links: {e}")   # off, a timeout), the levels are kept without them, as a failed section's are kept
         check()   # (stopped meanwhile, its text converted again: what it made is of the old text, and is not written)
         store.save_en(doc, model)
         en = store.read(pid, "en")
@@ -93,5 +99,6 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
                 was = tr.get("model") or model
                 check()
                 store.save_tr(doc, lang, en["version"], was if was == model else f"{was} + {model}")
+    local.settle(pid)   # (its text edited: once generated in every language it was in, its edit history goes)
     progress("done", 1, 1)
     return pid

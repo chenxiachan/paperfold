@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "読んでいるページを、見えているとおりにこのコンピュータの TextFold に送り、五つの層で読めます。"
+  },
+  "action_title": {
+    "message": "TextFold に送る"
+  },
+  "sending": {
+    "message": "TextFold に送信中…"
+  },
+  "saved": {
+    "message": "TextFold のライブラリに入りました。"
+  },
+  "already": {
+    "message": "このページはすでに TextFold のライブラリにあります。"
+  },
+  "saved_closed": {
+    "message": "TextFold のライブラリに入りました。TextFold を開くと読めます。"
+  },
+  "err_notext": {
+    "message": "このページには読める文章が少なすぎます。"
+  },
+  "err_notweb": {
+    "message": "TextFold が読むのはウェブページ（http と https）だけです。"
+  },
+  "err_nopage": {
+    "message": "このページを読み取れませんでした。"
+  },
+  "err_update": {
+    "message": "TextFold の更新が必要です。開いたタブを見てください。"
+  },
+  "err_setup": {
+    "message": "TextFold に接続されていません。開いたタブを見てください。"
+  },
+  "err_other": {
+    "message": "ページは保存されませんでした（$CODE$）。",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "TextFold に接続"
+  },
+  "ok_title": {
+    "message": "TextFold に接続されています"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ が応答しています。読んでいるページで TextFold ボタンを押すと、そのページが送られます。",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "このブラウザから TextFold が見つかりません"
+  },
+  "missing_text": {
+    "message": "このボタンはページを TextFold に渡します。TextFold はこのコンピュータで動く無料のアプリです。最初に一度だけ設定します："
+  },
+  "forbidden_title": {
+    "message": "TextFold がまだこの拡張機能を受け入れていません"
+  },
+  "forbidden_text": {
+    "message": "このコンピュータの TextFold はこの拡張機能より古いバージョンです。更新してください："
+  },
+  "exited_title": {
+    "message": "TextFold が起動しませんでした"
+  },
+  "exited_text": {
+    "message": "前回開いたあとに移動または削除された可能性があります。次のようにしてください："
+  },
+  "update_title": {
+    "message": "TextFold の更新が必要です"
+  },
+  "update_text": {
+    "message": "この拡張機能は、このコンピュータの TextFold より新しいバージョンです。更新してください："
+  },
+  "step_download": {
+    "message": "macOS 版または Windows 版の TextFold をダウンロードしてインストールします。"
+  },
+  "step_update": {
+    "message": "最新の TextFold をダウンロードし、古いものに上書きでインストールします。"
+  },
+  "step_open": {
+    "message": "TextFold を一度開きます。このブラウザに自動で接続されます。"
+  },
+  "step_again": {
+    "message": "ページに戻り、もう一度 TextFold ボタンを押します。"
+  },
+  "download": {
+    "message": "TextFold をダウンロード"
+  },
+  "check": {
+    "message": "もう一度確認"
+  },
+  "checking": {
+    "message": "確認中…"
+  },
+  "pip_title": {
+    "message": "Python 版の TextFold を使っていますか？"
+  },
+  "pip_text": {
+    "message": "インストールまたは更新してから、次のコマンドを一度だけ実行してください："
+  },
+  "privacy_note": {
+    "message": "拡張機能はページをこのコンピュータの TextFold にだけ渡し、ほかには送りません。各層は、TextFold の設定で選んだモデルが書きます。"
+  }
+}

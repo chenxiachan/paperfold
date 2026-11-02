@@ -99,7 +99,10 @@ def to_html(xml):
                 for a in apps:
                     title = _text(a.find(lambda t: _local(t) == "title", recursive=False)) or ("Acknowledgments" if name == "ack" else "")
                     label = _text(a.find(lambda t: _local(t) == "label", recursive=False))
-                    out.append(f"<h2{_id(a)}>{escape(' '.join(x for x in (label, title) if x))}</h2>")
+                    # the appendix is the source's own <app>: its heading carries the mark semantic._sections turns
+                    # into the section's ltx_appendix class (an <ack> is not an appendix)
+                    mark = ' class="ltx_title ltx_title_appendix"' if name in ("app", "app-group") else ""
+                    out.append(f"<h2{mark}{_id(a)}>{escape(' '.join(x for x in (label, title) if x))}</h2>")
                     out.extend(_blocks(a, 3, notes, ctx))
             elif name == "fn-group":
                 notes.extend(ch.find_all(lambda t: _local(t) == "fn"))

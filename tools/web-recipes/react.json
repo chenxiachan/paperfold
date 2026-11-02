@@ -1,0 +1,12 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "react.dev",
+ "pages": "/blog/*",
+ "article": "main article",
+ "drop": [],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "react.dev: the post is the article in main; its notes boxes (expandable-callout) are its text."
+}

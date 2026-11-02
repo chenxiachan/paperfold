@@ -9,6 +9,10 @@ It includes the fonts Inter and Source Serif 4 (SIL Open Font License 1.1, in we
 (MIT License, in web/vendor/katex), Mermaid (MIT License, in web/vendor/mermaid) and PDF.js (Apache License 2.0,
 in web/vendor/pdfjs), kept with TextFold so that its pages ask no other server for anything.
 
+Its browser extension includes Defuddle (MIT License, with temml and mathml-to-latex, MIT License; changed as
+tools/defuddle/build.mjs says, in extension/vendor/defuddle) and Readability (Apache License 2.0, in
+extension/vendor/readability).
+
 
 Papers and their licenses
 

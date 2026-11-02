@@ -1,0 +1,17 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "arstechnica.com",
+ "pages": "/*/20*",
+ "article": "article.h-entry",
+ "drop": [
+  ".text-settings-dropdown-story",
+  ".author-mini-bio",
+  "[class*='ad-wrapper']",
+  ".pswp-caption-content"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "The story is article.h-entry (microformats); its text is split into several div.post-content around ads. The class names are utility classes (Tailwind), so the recipe holds to h-entry, post-content and the named parts. The text-size menu, the author's card and the lightbox's second copy of the caption are furniture."
+}

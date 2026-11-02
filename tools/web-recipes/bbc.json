@@ -1,0 +1,12 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "bbc.com",
+ "pages": "/news/articles/*",
+ "article": "main article",
+ "drop": [],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "BBC News: the story is the article in main; its classes are styled-components (...-sc-...), so the recipe holds to the elements."
+}

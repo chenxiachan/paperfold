@@ -1,0 +1,12 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "lilianweng.github.io",
+ "pages": "/posts/*",
+ "article": "div.post-content",
+ "drop": [],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "A Hugo (PaperMod) post: the text is div.post-content; the table of contents and tags are outside it. Figures are pictures with captions."
+}

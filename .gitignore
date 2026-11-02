@@ -18,6 +18,9 @@ launch/
 desktop/node_modules/
 desktop/payload/
 desktop/out/
+# what the extension's readers are built from (tools/defuddle: npm ci, node build.mjs)
+tools/defuddle/node_modules/
+tools/defuddle/.build/
 # the maintainer's working log, kept on this computer
 STATUS.md
 

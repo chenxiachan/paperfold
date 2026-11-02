@@ -68,9 +68,10 @@ def visible(page, url):
     from lxml import html as lhtml
     root = lhtml.fromstring(page)
     root.make_links_absolute(url, resolve_base_href=True)
-    gone = [el for el in root.iter() if isinstance(el.tag, str) and (
-        el.get("hidden") is not None or el.get("aria-hidden") == "true" or HIDDEN_STYLE.search(el.get("style") or "")
-        or HIDDEN_CLASS.search(el.get("class") or "") or el.tag in ("template", "noscript"))]
+    # (one a browser's snapshot marked as not shown is left for _hover_marks: a note on its mark, or out after)
+    gone = [el for el in root.iter() if isinstance(el.tag, str) and (el.get("aria-hidden") == "true" or el.tag in ("template", "noscript") or (
+        not el.get("data-tf-css-hidden") and (el.get("hidden") is not None or HIDDEN_STYLE.search(el.get("style") or "")
+                                              or HIDDEN_CLASS.search(el.get("class") or ""))))]
     for el in gone:
         if el.getparent() is not None:
             el.drop_tree()
@@ -131,12 +132,15 @@ def _notes(root):
     mark that names it (aria-describedby); DPUB-ARIA's doc-footnote within a paragraph, under its doc-noteref;
     Distill's <d-footnote> and Tufte's sidenote, numbered as their pages number them; Tufte's marginnote. Each is taken
     out of its sentence, its mark's place kept (NOTE), and given back: [(the mark as the page shows it, its words as
-    HTML, as text)]. A tooltip without a mark (a figure's, a button's, a word's) is not the article's text, and goes."""
+    HTML, as text)]. A tooltip without a mark (a figure's, a button's, a word's) is not the article's text, and goes.
+    A site's recipe (adapt.py) names the others: a note data-tf-note="k", its mark data-tf-mark="k"."""
     named = {}
     for el in root.iter():
         if isinstance(el.tag, str):
             for i in (el.get("aria-describedby") or "").split():
                 named.setdefault(i, el)
+            if el.get("data-tf-mark"):
+                named.setdefault("tf:" + el.get("data-tf-mark"), el)
             if el.get("role") == "doc-noteref" and urllib.parse.urldefrag(el.get("href") or "")[1]:
                 named.setdefault(urllib.parse.urldefrag(el.get("href"))[1], el)
     inside = lambda el: any(a.tag in IN_TEXT for a in el.iterancestors())  # noqa: E731
@@ -145,7 +149,7 @@ def _notes(root):
         if not isinstance(el.tag, str):
             continue
         role, cls = el.get("role") or "", (el.get("class") or "").split()
-        kind = ("tip" if role == "tooltip" else "dpub" if role in ("doc-footnote", "doc-endnote") and inside(el)
+        kind = ("given" if el.get("data-tf-note") else "tip" if role == "tooltip" else "dpub" if role in ("doc-footnote", "doc-endnote") and inside(el)
                 else "distill" if el.tag == "d-footnote" else "side" if el.tag == "span" and "sidenote" in cls and inside(el)
                 else "margin" if el.tag == "span" and "marginnote" in cls and inside(el) else None)
         if kind:
@@ -155,7 +159,8 @@ def _notes(root):
         if not _within(el, root):   # (in a note taken out already: its words went with it)
             continue
         count[kind] = count.get(kind, 0) + 1
-        mark_el = named.get(el.get("id")) if el.get("id") else None
+        mark_el = (named.get("tf:" + el.get("data-tf-note")) if kind == "given"
+                   else named.get(el.get("id")) if el.get("id") else None)
         if kind in ("side", "margin"):   # Tufte's toggle beside it: a label (⊕ for a margin note) and its checkbox
             for sib in list(el.itersiblings(preceding=True))[:2]:
                 if "margin-toggle" in (sib.get("class") or "").split():
@@ -181,6 +186,39 @@ def _notes(root):
             _swap(el, NOTE.format(len(notes)))
         notes.append((mark, *words))
     return notes
+
+
+def _hover_marks(root):
+    """In a browser's snapshot (the app's, an extension's), what the browser did not show is marked data-tf-css-hidden.
+    One that hangs on a mark (the element just before it, or the one holding it, reads 1, [10] or *) is a note shown
+    on hover, whatever the page calls it: marked for _notes as a recipe's note is. The rest goes (_hidden_out)."""
+    k = 0
+    for el in root.xpath('//*[@data-tf-css-hidden]'):
+        if el.get("role") == "tooltip" or el.get("data-tf-note") or el.tag == "d-footnote" or not _within(el, root) \
+                or any(a.get("data-tf-css-hidden") for a in el.iterancestors()):
+            continue
+        prev = el.getprevious()
+        while prev is not None and not isinstance(prev.tag, str):
+            prev = prev.getprevious()
+        mark = None
+        if prev is not None and not prev.get("data-tf-css-hidden") and MARK.fullmatch(re.sub(r"\s+", "", prev.text_content())) \
+                and not (el.getprevious() is prev and (prev.tail or "").strip()):
+            mark = prev
+        else:
+            parent = el.getparent()
+            rest = re.sub(r"\s+", "", parent.text_content().replace(el.text_content(), "", 1)) if parent is not None else ""
+            if parent is not None and parent is not root and MARK.fullmatch(rest):
+                mark = parent
+        if mark is not None and el.text_content().strip():
+            k += 1
+            mark.set("data-tf-mark", f"h{k}")
+            el.set("data-tf-note", f"h{k}")
+
+
+def _hidden_out(root):
+    for el in root.xpath('//*[@data-tf-css-hidden]'):
+        if _within(el, root):
+            _swap(el, "")
 
 
 def _noted(html, notes):
@@ -226,37 +264,227 @@ def _clean(md, title):
     return "\n".join(lines).strip() + "\n"
 
 
-def fetch(pid, progress=None):
-    """Store a web page's article (once)."""
+def read(page, final):
+    """A page's article as TextFold reads it with no recipe (adapt.py has the ones written for a site): its Markdown,
+    its HTML, and what the page says of itself (title, site, authors, date, license)."""
     import warnings
     # (macOS's own Python is built with LibreSSL; urllib3, which trafilatura brings, says so on import, harmlessly)
     warnings.filterwarnings("ignore", message="urllib3 v2 only supports OpenSSL")
     import trafilatura
-    d = store.pdir(pid)
-    if (d / "meta.json").exists() and (d / "source.html").exists():
-        return pid
-    url = store.read_text(d / "url.txt").strip()
-    data, final, charset = _get(url)
-    page = data.decode(charset or "utf-8", "replace") if charset else data
     tree = visible(page, final)
+    _hover_marks(tree)
     notes = _notes(tree)
+    _hidden_out(tree)
     md = trafilatura.extract(tree, url=final, output_format="markdown", include_images=True, include_links=True,
                              include_tables=True, include_formatting=True, favor_recall=True) or ""
     if len(md.split()) < MIN_WORDS:
         raise ValueError("web-notext")
+    info = about(tree, final)
+    md = _clean(md, info["title"])
+    html, _ = markdown.to_html(md)
+    return _md_noted(md, notes), _noted(html, notes), info
+
+
+# ── an article a reading view gave (the browser's button: extension/reader.js) ──────────────
+VIEWS = ("defuddle", "readability")
+LINKS_ONLY = 12   # words: a block at the head all of whose words are links (View PDF, Next article) is the site's
+
+
+def view_of(read):
+    """Which of the readings the browser's button sent to take: (its name, it), or (None, None) when neither has the
+    words to read (the snapshot is read then). Defuddle's, which keeps a page's formulas, abstract and code, unless
+    Readability's has half as many words again: Defuddle took away what it should not have."""
+    got = {k: v for k, v in (read or {}).items() if k in VIEWS and isinstance(v, dict) and isinstance(v.get("html"), str)
+           and isinstance(v.get("words"), (int, float)) and v["words"] >= MIN_WORDS}
+    d, r = got.get("defuddle"), got.get("readability")
+    if d and not (r and r["words"] >= 1.5 * d["words"]):
+        return "defuddle", d
+    return ("readability", r) if r else (None, None)
+
+
+def _key(s):
+    return re.sub(r"\W+", " ", s or "").strip().lower()
+
+
+def _from_title(root, title):
+    """The article from its title on: the heading that is the page's title and what stands before it (a publisher's
+    name, a breadcrumb) gone, when that is a small part of the reading."""
+    want, total = _key(title), len(root.text_content().split())
+    if not want:
+        return
+    for h in root.iter("h1", "h2", "h3"):
+        if _key(h.text_content()) != want:
+            continue
+        before, el = [], h
+        while el is not root:
+            before += list(el.itersiblings(preceding=True))
+            el = el.getparent()
+        if sum(len(b.text_content().split()) for b in before) > total * 0.15:
+            return
+        el = h
+        while el is not root:
+            parent = el.getparent()
+            parent.text = None
+            for b in el.itersiblings(preceding=True):
+                parent.remove(b)
+            el = parent
+        _swap(h, "")
+        return
+
+
+HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+BULLET = re.compile(r"^\s*[•◦▪▫‣⁃∙·●○■□►▸–—-]\s*$")
+
+
+def _site_bits(el):
+    """A short block that is none of the article's words: all its words links (View PDF, Next article), a picture that
+    is a link (a journal's logo), or nothing but punctuation (what a removed button left: ",")."""
+    words = el.text_content().split()
+    if len(words) > LINKS_ONLY:
+        return False
+    if not re.search(r"\w", el.text_content()):
+        return all(img.getparent() is not None and any(a.tag == "a" for a in img.iterancestors()) for img in el.iter("img"))
+    linked = sum(len(a.text_content().split()) for a in el.iter("a"))
+    return linked == len(words) and all(any(a.tag == "a" for a in img.iterancestors()) for img in el.iter("img"))
+
+
+def _head(root):
+    """The head of the article as a reading view leaves it on a publisher's page: the site's bits before the article's
+    own words (_site_bits), and then the headings left with nothing under them (Published by), gone."""
+    blocks = ("p", "div", "ul", "ol", "section", "figure")
+    heads = []
+    for el in list(root.iter(*blocks, *HEADINGS)):
+        if not _within(el, root):
+            continue
+        if el.tag in HEADINGS:
+            heads.append(el)
+            continue
+        if any(d.tag in blocks or d.tag in HEADINGS for d in el.iterdescendants()):
+            continue   # (its blocks are looked at one by one)
+        words = el.text_content().split()
+        if len(words) >= 30 and sum(len(a.text_content().split()) for a in el.iter("a")) < len(words) / 2:
+            break   # (the article's own words have begun)
+        if not _site_bits(el):
+            continue
+        while True:
+            parent = el.getparent()
+            _swap(el, "")
+            if parent is root or parent.tag not in blocks or (parent.text_content().strip() and not _site_bits(parent)):
+                break
+            el = parent
+    for h in heads:   # (a heading whose next words, in the order they are read, are another heading's)
+        if not _within(h, root) or (h.tail or "").strip():
+            continue
+        order = list(root.iter())
+        for e in order[order.index(h) + 1:]:
+            if not isinstance(e.tag, str) or any(a is h for a in e.iterancestors()):
+                continue
+            if e.tag in HEADINGS:
+                _swap(h, "")
+                break
+            if (e.text or "").strip() or (e.tail or "").strip() or e.tag == "img":
+                break
+
+
+def _bullets(root):
+    """A list's item that writes its own bullet (•) before its words: the list has one already."""
+    for li in root.iter("li"):
+        if li.text and BULLET.match(li.text):
+            li.text = None
+        first = li[0] if len(li) else None
+        if first is not None and not (li.text or "").strip() and len(first) == 0 and BULLET.match(first.text_content() or ""):
+            _swap(first, "")
+
+
+def _math_views(root):
+    """Formulas Readability leaves as the page drew them, as their MathML (KaTeX keeps it beside its drawing, MathJax 3
+    in mjx-assistive-mml): the drawing goes."""
+    for box in root.xpath('//*[contains(concat(" ", normalize-space(@class), " "), " katex ")] | //mjx-container'):
+        m = next((x for x in box.iter() if isinstance(x.tag, str) and x.tag.rsplit("}", 1)[-1] == "math"), None)
+        if m is not None and box.getparent() is not None:
+            if box.tag == "mjx-container" and box.get("display") == "true":
+                m.set("display", "block")
+            m.tail = box.tail
+            box.getparent().replace(box, m)
+
+
+def _footnote_list(box, root):
+    """Defuddle's list of footnotes (div#footnotes) as normalize knows one; an item no link in the text points to (a
+    reference list Defuddle took for footnotes, its citations named otherwise) stays where the list is, as a list."""
+    from lxml import html as lhtml
+    cited = {a.get("href")[1:] for a in root.iter("a") if (a.get("href") or "").startswith("#") and not _within(a, box)}
+    loose = lhtml.Element("ol")
+    for li in [li for li in box.iter("li") if li.get("id") not in cited]:
+        li.getparent().remove(li)
+        for back in li.xpath('.//a[contains(@class, "footnote-backref")]'):
+            _swap(back, "")
+        li.attrib.pop("id", None)
+        loose.append(li)
+    if len(loose):
+        box.addprevious(loose)
+    if box.find(".//li") is None:
+        _swap(box, "")
+    else:
+        box.set("class", "footnotes " + (box.get("class") or ""))
+
+
+def read_view(view, page, final):
+    """A reading view's article as TextFold reads it: its HTML for semantic.normalize (links and pictures as full
+    addresses; the page's title, what stands before it and the site's bits at its head gone; bullets written into list
+    items gone; formulas as MathML, not as drawn; Defuddle's footnote list as normalize knows one), and what the
+    page says of itself, from the snapshot (about): its title the reading view's when the page names itself nowhere
+    TextFold reads."""
+    from lxml import html as lhtml
+    info = about(visible(page, final), final)
+    host = re.sub(r"^www\.", "", urllib.parse.urlparse(final).hostname or "")
+    if info["title"] == host and (view.get("title") or "").strip():
+        info["title"] = view["title"].strip()[:300]
+    root = lhtml.fragment_fromstring(view["html"], create_parent="div")
+    root.make_links_absolute(final, resolve_base_href=False)
+    for a in root.iter("a"):   # (a place on the page, a footnote's mark: there again)
+        if (a.get("href") or "").startswith(final + "#"):
+            a.set("href", a.get("href")[len(final):])
+    _from_title(root, info["title"])
+    _head(root)
+    _bullets(root)
+    _math_views(root)
+    for box in root.xpath('//div[@id="footnotes"]'):
+        _footnote_list(box, root)
+    html = lhtml.tostring(root, encoding="unicode")
+    if len(re.sub(r"<[^>]+>", " ", html).split()) < MIN_WORDS and not re.search(r"[぀-ヿ㐀-鿿]", html):
+        raise ValueError("web-notext")
+    return html, info
+
+
+def about(tree, final):
+    """What a page says of itself: its title (the site's name off its end), site, authors, date and license."""
+    import trafilatura
     m = trafilatura.extract_metadata(tree, default_url=final)
     host = re.sub(r"^www\.", "", urllib.parse.urlparse(final).hostname or "")
     site = (m.sitename if m and m.sitename else "") or host
     title = NOTE_AT.sub("", (m.title if m and m.title else "") or host)
     for name in {site, host}:   # "How to Do Great Work - Paul Graham": the site's name off the end
         title = re.sub(rf"\s*[-|–—·:]\s*{re.escape(name)}\s*$", "", title, flags=re.I) if name else title
-    md = _clean(md, title)
-    html, _ = markdown.to_html(md)
-    html, md = _noted(html, notes), _md_noted(md, notes)
     authors = [a.strip() for a in re.split(r";|\band\b", (m.author if m and m.author else "")) if a.strip()]
-    meta = {"id": pid, "version": "", "title": title.strip() or host, "authors": authors[:12], "date": (m.date if m and m.date else "") or "",
-            "snapshot": time.strftime("%Y-%m-%d"), "abs_url": final, "html_url": "",
-            "license": m.license if m and m.license and re.match(r"https?://", m.license) else "",
-            "source": {"kind": "web", "site": site, "url": final}, "label": site}
+    return {"title": title.strip() or host, "site": site, "authors": authors[:12], "date": (m.date if m and m.date else "") or "",
+            "license": m.license if m and m.license and re.match(r"https?://", m.license) else ""}
+
+
+def meta_of(pid, final, info):
+    return {"id": pid, "version": "", "title": info["title"], "authors": info["authors"], "date": info["date"],
+            "snapshot": time.strftime("%Y-%m-%d"), "abs_url": final, "html_url": "", "license": info["license"],
+            "source": {"kind": "web", "site": info["site"], "url": final}, "label": info["site"]}
+
+
+def fetch(pid, progress=None):
+    """Store a web page's article (once)."""
+    d = store.pdir(pid)
+    if (d / "meta.json").exists() and (d / "source.html").exists():
+        return pid
+    url = store.read_text(d / "url.txt").strip()
+    data, final, charset = _get(url)
+    page = data.decode(charset or "utf-8", "replace") if charset else data
+    md, html, info = read(page, final)
     pre = local.prefetch(re.findall(r'<img[^>]*\ssrc="([^"]+)"', html))
-    return local.store_doc(pid, html, meta, "source.md", md, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)
+    return local.store_doc(pid, html, meta_of(pid, final, info), "source.md", md,
+                           lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)

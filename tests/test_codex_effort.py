@@ -142,6 +142,35 @@ class CodexEffort(unittest.TestCase):
                 self.assertEqual(result['out']['chapter'], chapter)
             self.assertEqual({p: p.read_bytes() for p in originals}, originals)
 
+    def test_custom_codex_keeps_its_command_capabilities_stop_and_cache_identity(self):
+        import threading
+        from textfold import _agent_process, models
+        settings = {'custom_agents': [{'key': 'fixture', 'name': 'Fixture', 'protocol': 'codex',
+                     'command': 'fixture-wrapper codex', 'models': [{'id': self.model, 'efforts': ['high', 'medium']}]}]}
+        spec = models.resolve('custom/fixture/' + self.model, settings)
+        spec['effort'] = 'off'
+        stop = threading.Event()
+        def completed(args, **kwargs):
+            self.assertEqual(args[:2], ['fixture-wrapper', 'codex'])
+            self.assertIn('model_reasoning_effort=medium', args)
+            self.assertIs(kwargs['stop'], stop)
+            Path(args[args.index('-o') + 1]).write_text('{"ok":true}', encoding='utf-8')
+            return subprocess.CompletedProcess(args, 0, '', '')
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ), \
+                mock.patch.dict(agents.STATE, self.catalog(['none', 'low'])), \
+                mock.patch.object(agents, 'command_of', return_value=(['fixture-wrapper', 'codex'], 'fixture-wrapper')), \
+                mock.patch.object(agents, 'path_of', side_effect=AssertionError('borrowed native Codex command')), \
+                mock.patch.object(_agent_process, 'run', side_effect=completed) as run:
+            os.environ.pop('TEXTFOLD_NO_MODELS', None)
+            rec, cached = llm.call('custom chapter', {}, spec, Path(folder), stop=stop)
+            self.assertFalse(cached)
+            path = Path(rec['file'])
+            self.assertEqual(path.name, self.legacy_key('custom chapter', {}, spec))
+            raw = path.read_bytes()
+            self.assertTrue(llm.call('custom chapter', {}, spec, Path(folder), stop=stop)[1])
+            self.assertEqual(path.read_bytes(), raw)
+            self.assertEqual(run.call_count, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -375,6 +375,8 @@ def assemble(pid, only=None):
     else:
         for u in doc["units"].values():
             u["lad"] = ladder.local(u, doc["atoms"], cjk)
+    meta["pending"] = pending(pid, meta, en)
+    meta["history"] = (pdir(pid) / HISTORY / "source.md").exists()   # (its edit history: in the top bar)
     for lang in languages(pid):
         if only is not None and lang not in only:
             continue
@@ -394,6 +396,18 @@ def assemble(pid, only=None):
             if n:
                 meta.setdefault("gaps", {})[lang] = n
     return doc
+
+
+HISTORY = "history"   # the text a document was last generated from, kept as it is edited (local.keep_text)
+
+
+def pending(pid, meta, en):
+    """The languages a document's levels were in before its text was edited (local.replace_text) and are not made again
+    yet: its folding and links (its own language), its translations."""
+    if not meta.get("pending"):
+        return []
+    base, have = text_lang(pid, en), languages(pid)
+    return [lang for lang in meta["pending"] if not (en if lang == base else lang in have)]
 
 
 def papers():
@@ -423,7 +437,7 @@ def papers():
         out.append({"id": d.name, "title": meta["title"], "titles": titles, "authors": meta.get("authors", []),
                     "langs": langs_, "updated": max(mtimes) if mtimes else mf.stat().st_mtime,
                     "notes": len(json.loads(read_text(nf)).get("notes", [])) if nf.exists() else 0,
-                    **({"zotero": True} if meta.get("zotero") else {})})
+                    **({"zotero": True} if meta.get("zotero") else {}), **({"pending": True} if pending(d.name, meta, en) else {})})
     return sorted(out, key=lambda p: -p["updated"])
 
 

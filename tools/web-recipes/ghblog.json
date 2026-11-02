@@ -1,0 +1,14 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "github.blog",
+ "pages": "*",
+ "article": "section.post__content",
+ "drop": [
+  "div.content-table-wrap"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "WordPress at GitHub: the post is section.post__content; its table of contents is furniture; the related posts are outside it."
+}

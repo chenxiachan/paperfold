@@ -142,12 +142,11 @@ class Replace(Base):
         self.assertEqual(notes.read(pid)["paper"]["title"], title)
         self.assertTrue((d / "llm-cache" / "abc.json").exists())   # the model's replies stay
         self.assertFalse((d / "layers").exists())                  # the levels went with the old text
-        self.assertTrue((d / "previous" / "layers" / "en.json").exists())
-        self.assertEqual((d / "previous" / "source.md").read_text(encoding="utf-8"), TEXT)
-        self.assertEqual(json.loads((d / "previous" / "notes.json").read_text(encoding="utf-8"))["notes"][0]["id"], "n-cop")
+        self.assertEqual(local.original(pid), TEXT)                # which is kept in its history
+        self.assertFalse((d / "previous").exists())
         self.assertEqual(store.papers()[0]["id"], pid)
 
-    def test_only_a_markdown_document_is_replaced(self):
+    def test_only_a_document_with_a_text_of_its_own_is_replaced(self):
         with self.assertRaises(LookupError):
             local.replace_text("md-not-there-12345678", TEXT)
         d = store.pdir("2512.23916")
@@ -160,6 +159,85 @@ class Replace(Base):
         with self.assertRaises(ValueError):
             local.replace_text(pid, TEXT, "diary.docx")
         self.assertEqual((store.pdir(pid) / "source.md").read_text(encoding="utf-8"), TEXT)
+        self.assertEqual(local.text_of(pid), TEXT)
+        self.assertIsNone(local.text_of("2512.23916"))
+
+    def test_its_pictures_stay_though_the_folder_they_came_from_is_gone(self):
+        from PIL import Image
+        text = TEXT.replace("Nobody felt the change.", "Nobody felt the change.\n\n![A plot](figs/plot.png)\n\n![Gone](figs/gone.png)")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "figs").mkdir()
+            Image.new("RGB", (40, 30), "red").save(Path(tmp) / "figs" / "plot.png")
+            pid = local.import_text(text, "diary.md", base=Path(tmp))
+        d = store.pdir(pid)
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
+        local.replace_text(pid, text.replace("emptied by noon", "emptied at noon"))   # (a converted PDF's: its engine folder)
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
+        self.assertEqual((d / "img" / "01-plot.png").read_bytes(), (d / local.HISTORY / "img" / "01-plot.png").read_bytes())
+        self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
+
+    def test_the_text_before_the_edits_is_kept_and_put_back_with_its_pictures(self):
+        """The edit history: the text it had before its first edit is kept (local.keep_text), the one every edit after
+        is told against; a change put back (the text saved with it undone: app.js, showHistory), a picture an edit left
+        out comes back from the history, its file being gone; every change put back, nothing is kept."""
+        from PIL import Image
+        plot = "Nobody felt the change.\n\n![A plot](figs/plot.png)"
+        text = TEXT.replace("Nobody felt the change.", plot)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "figs").mkdir()
+            Image.new("RGB", (40, 30), "red").save(Path(tmp) / "figs" / "plot.png")
+            pid = local.import_text(text, "diary.md", base=Path(tmp))
+        d = store.pdir(pid)
+        first = text.replace(plot, "Nobody felt the change.").replace("emptied by noon", "emptied at noon")
+        local.replace_text(pid, first)
+        self.assertFalse((d / "img").exists())   # the picture left out
+        second = first.replace("how loud it was", "how loud it was at night")
+        local.replace_text(pid, second)
+        self.assertEqual(local.original(pid), text)   # the text before the first edit, still
+        local.replace_text(pid, second.replace("Nobody felt the change.", plot).replace("emptied at noon", "emptied by noon"))
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])   # (the first edit undone)
+        self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
+        self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (text, True))
+        local.replace_text(pid, text)   # the second undone too
+        self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (None, False))
+        self.assertFalse((d / local.HISTORY).exists())
+
+    def test_each_place_is_found_where_it_is_read(self):
+        """The edit history on the page (app.js, review): a place of the Markdown found in the page's words (local.places),
+        a formula's whole, a heading's section; the word a place taken out was before (after, at the end); a place read
+        nowhere (a link's address), none."""
+        text = TEXT.replace("## Tuesday", "## Tuesday night") + "\nIts noise is $x^2$ loud, **very** loud: [see](https://example.org/noise).\n"
+        pid = local.import_text(text, "diary.md")
+        doc = store.parsed(pid)
+        span = lambda w, after="": [text.index(w, text.index(after)), text.index(w, text.index(after)) + len(w)]
+        point = lambda w: [text.index(w)] * 2
+        words = lambda x: [notes._quoted(doc["units"][w["unit"]]["toks"], doc["atoms"], *w["tokens"]) for w in x["words"]]
+        at = lambda x: (notes._quoted(doc["units"][x["at"]["unit"]]["toks"], doc["atoms"], x["at"]["token"], x["at"]["token"]), x["at"]["after"])
+        tank, night, sq, very, gone, end, url, both = local.places(pid, [
+            span("buffer tank held"), span("night", "## Tuesday"), span("^2"), span("very"), point(" asked how"), [len(text)] * 2,
+            span("example.org"), span("heater started.\n\nThe neighbours")])
+        self.assertEqual((words(tank), at(tank)), (["buffer tank held"], ("buffer", False)))
+        self.assertEqual(night, {"section": next(c["id"] for c in doc["chunks"] if c["title"] == "Tuesday night")})
+        self.assertEqual(words(sq), ["$x^2$"])   # the formula, whole
+        self.assertEqual(words(very), ["very"])
+        self.assertEqual((words(gone), at(gone)), ([], ("asked", False)))
+        self.assertEqual((words(end), at(end)), ([], (".", True)))
+        self.assertIsNone(url)
+        self.assertEqual(words(both), ["heater started.", "The neighbours"])   # a run in each paragraph
+        # words taken out where a line begins (its marks go back past the line's end, so a heading's # stays one): the
+        # paragraph they began, under a heading too; a heading's words, its section
+        starts, under, head = local.places(pid, [point("The buffer tank held"), point("A cold front"), span("## Tuesday")])
+        self.assertEqual((at(starts), at(under)), (("The", False), ("A", False)))
+        self.assertEqual(head, night)
+
+    def test_the_text_an_earlier_textfold_kept_goes(self):
+        pid = local.import_text(TEXT, "diary.md")
+        d = store.pdir(pid)
+        (d / "previous").mkdir()   # as an earlier TextFold kept the text an edit replaced, the last one only
+        (d / "previous" / "source.md").write_text("# Older\n\nThe text before.\n", encoding="utf-8")
+        local.replace_text(pid, TEXT.replace("how loud", "how quiet"))
+        self.assertEqual(local.original(pid), TEXT)   # (that edit's was generated since: the text before this one is)
+        self.assertFalse((d / "previous").exists())
 
 
 class Notes(Base):
@@ -303,6 +381,45 @@ class Refold(Base):
         self.assertEqual(doc["meta"]["langs"], ["en"])
         self.assertTrue(all(u["lad"].get("model") == "fake/model" for u in doc["units"].values()))
 
+    def test_edits_saved_one_after_another_are_generated_once_in_every_language(self):
+        """Saved without being generated (the page's Save only), one edit after another: the languages its levels were
+        in wait to be made again (store.pending: the top bar says so), and each is made once, the model asked for the
+        sections changed since they were made."""
+        pid = local.import_text(TEXT, "diary.md")
+        asked = []
+        with mock.patch.object(llm, "_once", fake_model(asked)), mock.patch.dict(os.environ):
+            os.environ.pop("TEXTFOLD_NO_MODELS", None)   # (the build runs the tests with it: the model here is a stand-in)
+            pipeline.generate(pid, "en", self.SPEC)
+            translated = lambda: store.write(pid, "tr-zh", {"version": store.stamp(), "base": store.read(pid, "en")["version"], "units": {}, "chunks": {}})
+            translated()   # (as a translation is stored: the stand-in does not translate)
+            self.assertEqual(store.assemble(pid)["meta"]["pending"], [])
+            once = TEXT.replace("how loud it was", "how loud it was at night")
+            local.replace_text(pid, once)
+            local.replace_text(pid, once.replace("Nobody felt the change.", "Nobody felt the change at all."))
+            self.assertEqual(store.assemble(pid)["meta"]["pending"], ["en", "zh"])
+            self.assertTrue(store.papers()[0]["pending"])   # (listed as a document to open, not one to go on generating)
+            self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (TEXT, True))   # its edit history
+            asked.clear()
+            pipeline.generate(pid, "en", self.SPEC)
+            self.assertEqual(len(asked), 3)   # Monday, Tuesday and the links over the whole text
+            self.assertEqual(store.assemble(pid)["meta"]["pending"], ["zh"])
+            self.assertEqual(local.original(pid), TEXT)   # (still to be generated in Chinese)
+            translated()
+            local.settle(pid)   # (as the generation that translates it does at its end)
+        self.assertEqual(store.assemble(pid)["meta"]["pending"], [])
+        self.assertNotIn("pending", store.papers()[0])
+        self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (None, False))   # gone, as the page said
+        self.assertNotIn("pending", json.loads((store.pdir(pid) / "meta.json").read_text(encoding="utf-8")))
+
+    def test_generated_after_an_edit_its_edit_history_goes(self):
+        pid = local.import_text(TEXT, "diary.md")
+        with mock.patch.object(llm, "_once", fake_model([])), mock.patch.dict(os.environ):
+            os.environ.pop("TEXTFOLD_NO_MODELS", None)   # (the build runs the tests with it: the model here is a stand-in)
+            local.replace_text(pid, TEXT.replace("how loud", "how quiet"))   # (never generated: nothing pending)
+            self.assertEqual(local.original(pid), TEXT)
+            pipeline.generate(pid, "en", self.SPEC)
+        self.assertIsNone(local.original(pid))
+
 
 class FakeJobs:
     def __init__(self):
@@ -338,9 +455,34 @@ class Server(Base):
         self.assertEqual((code, set(got)), (200, {"paper", "title"}))
         pid = got["paper"]
         code, got = self.post("/api/import", {"name": "diary.md", "text": TEXT.replace("# Heat pump diary", "# Diary"), "id": pid})
-        self.assertEqual((code, got), (200, {"paper": pid, "title": "Diary", "replaced": True}))
+        self.assertEqual((code, got), (200, {"paper": pid, "title": "Diary", "replaced": True, "pending": []}))
+        store.write(pid, "en", {"version": store.stamp(), "model": "fake", "units": {}, "chunks": {}, "edges": []})
+        code, got = self.post("/api/import", {"text": TEXT, "id": pid})   # folded: its language, to be folded again
+        self.assertEqual((code, got["pending"]), (200, ["en"]))
         self.assertEqual(self.post("/api/import", {"text": TEXT, "id": "md-gone-12345678"})[0], 404)
         self.assertEqual(self.post("/api/import", {"text": TEXT, "id": "../papers"})[0], 404)
+
+    def test_the_text_to_edit(self):
+        pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
+        url = f"http://127.0.0.1:{self.httpd.server_port}/api/text/"
+        with urllib.request.urlopen(url + pid, timeout=30) as r:
+            self.assertEqual(json.loads(r.read()), {"text": TEXT, "original": None})
+        edited = TEXT.replace("# Heat pump diary", "# Diary")
+        self.post("/api/import", {"text": edited, "id": pid})
+        with urllib.request.urlopen(url + pid, timeout=30) as r:
+            self.assertEqual(json.loads(r.read()), {"text": edited, "original": TEXT})   # and the text before the edit
+        for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers", f"{pid}/1"):
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                urllib.request.urlopen(url + gone, timeout=30)
+            self.assertEqual(e.exception.code, 404)
+
+    def test_where_the_places_are(self):
+        pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
+        i = TEXT.index("buffer")
+        code, got = self.post("/api/places", {"id": pid, "spans": [[i, i + 6]]})
+        self.assertEqual((code, [w["tokens"][1] - w["tokens"][0] for w in got["places"][0]["words"]]), (200, [0]))
+        self.assertEqual(self.post("/api/places", {"id": pid, "spans": [[i]]})[0], 400)
+        self.assertEqual(self.post("/api/places", {"id": "md-gone-12345678", "spans": []})[0], 404)
 
     def test_no_replace_while_it_is_generated(self):
         pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]

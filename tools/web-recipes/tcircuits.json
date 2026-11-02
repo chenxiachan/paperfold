@@ -1,0 +1,12 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "transformer-circuits.pub",
+ "pages": "*",
+ "article": "d-article",
+ "drop": [],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "The Distill template: the article is d-article; its footnotes are d-footnote and its citations open on hover, which TextFold reads by itself in a browser snapshot; formulas are KaTeX in shadow roots, spelled out there."
+}

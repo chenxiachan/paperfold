@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "Отправьте страницу, которую читаете, в TextFold на этом компьютере такой, какой её видите, и читайте на пяти уровнях."
+  },
+  "action_title": {
+    "message": "Отправить в TextFold"
+  },
+  "sending": {
+    "message": "Отправка в TextFold…"
+  },
+  "saved": {
+    "message": "В вашей библиотеке TextFold."
+  },
+  "already": {
+    "message": "Уже в вашей библиотеке TextFold."
+  },
+  "saved_closed": {
+    "message": "В вашей библиотеке TextFold. Откройте TextFold, чтобы прочитать."
+  },
+  "err_notext": {
+    "message": "На этой странице слишком мало текста для TextFold."
+  },
+  "err_notweb": {
+    "message": "TextFold читает только веб-страницы (http и https)."
+  },
+  "err_nopage": {
+    "message": "Эту страницу не удалось прочитать."
+  },
+  "err_update": {
+    "message": "TextFold нужно обновить. Посмотрите открывшуюся вкладку."
+  },
+  "err_setup": {
+    "message": "TextFold не подключён. Посмотрите открывшуюся вкладку."
+  },
+  "err_other": {
+    "message": "Страница не сохранена ($CODE$).",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "Подключить TextFold"
+  },
+  "ok_title": {
+    "message": "TextFold подключён"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ отвечает. Нажмите кнопку TextFold на любой странице, которую читаете, чтобы отправить её туда.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "Браузер не находит TextFold"
+  },
+  "missing_text": {
+    "message": "Кнопка передаёт каждую страницу в TextFold, бесплатное приложение на этом компьютере. Настройте его один раз:"
+  },
+  "forbidden_title": {
+    "message": "TextFold пока не допускает это расширение"
+  },
+  "forbidden_text": {
+    "message": "TextFold на этом компьютере старше этого расширения. Обновите его:"
+  },
+  "exited_title": {
+    "message": "TextFold не запустился"
+  },
+  "exited_text": {
+    "message": "Возможно, его переместили или удалили после последнего запуска. Тогда:"
+  },
+  "update_title": {
+    "message": "TextFold нужно обновить"
+  },
+  "update_text": {
+    "message": "Это расширение новее, чем TextFold на этом компьютере. Обновите его:"
+  },
+  "step_download": {
+    "message": "Скачайте TextFold для macOS или Windows и установите его."
+  },
+  "step_update": {
+    "message": "Скачайте последнюю версию TextFold и установите её поверх старой."
+  },
+  "step_open": {
+    "message": "Откройте TextFold один раз. Он сам подключится к этому браузеру."
+  },
+  "step_again": {
+    "message": "Вернитесь на страницу и снова нажмите кнопку TextFold."
+  },
+  "download": {
+    "message": "Скачать TextFold"
+  },
+  "check": {
+    "message": "Проверить снова"
+  },
+  "checking": {
+    "message": "Проверка…"
+  },
+  "pip_title": {
+    "message": "Пользуетесь TextFold из Python?"
+  },
+  "pip_text": {
+    "message": "Установите или обновите его, затем один раз выполните эту команду, чтобы браузер его нашёл:"
+  },
+  "privacy_note": {
+    "message": "Расширение передаёт страницу только в TextFold на этом компьютере и никуда больше. Уровни TextFold пишет с помощью модели, выбранной в его настройках."
+  }
+}

@@ -151,7 +151,7 @@
       }
       const langs = p.langs.map((l) => `<span${l === readLang ? ' class="on"' : ''}>${SHORT[l] || l.toUpperCase()}</span>`).join('');
       const active = PAPER && PAPER.id === p.id;
-      const unfinished = !j && !p.langs.length;   // stopped (or failed) before its first language: a click goes on with it
+      const unfinished = !j && !p.langs.length && !p.pending;   // stopped (or failed) before its first language: a click goes on with it
       return `<div class="sb-row${chosen.has(p.id) ? ' chosen' : ''}" data-pid="${p.id}" data-q="${esc(hay(p))}"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
         <span class="sb-t">${esc(title)}</span><span class="sb-m"><span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span></span>
         ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
@@ -962,13 +962,11 @@
       last = s;
       clearTimeout(fade);
       const T = t(), v = (x) => esc(x.replace('{v}', (s && s.version) || ''));
-      box.hidden = !s || s.dismissed || !['updated', 'available', 'downloading', 'ready', 'failed', ...Object.keys(SAID)].includes(s.kind);
+      box.hidden = !s || s.dismissed || !['available', 'downloading', 'ready', 'failed', ...Object.keys(SAID)].includes(s.kind);
       if (box.hidden) return;
       const x = shut(T.close);
       const go = (label, primary) => `<span class="g-acts"><button type="button" class="g-go${primary ? ' primary' : ''}">${esc(label)}</button></span>`;
-      const link = (href, label) => `<span class="g-acts"><a class="g-go" href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}${svg('out')}</a></span>`;
       box.innerHTML = SAID[s.kind] ? `${sign(s.kind === 'latest' ? 'done' : 'warn', s.kind === 'latest' ? 'ok' : 'warn')}<b>${esc(T[SAID[s.kind]])}</b>${x}`
-        : s.kind === 'updated' ? `${sign('done', 'ok')}<b>${v(T.up_done)}</b>${x}${link(s.notes, T.up_whatsnew)}`
         : s.kind === 'available' ? `${sign('down')}<b>${v(T.up_new)}</b>${x}${go(T.up_get, true)}`
         : s.kind === 'downloading' ? `${sign('down')}<b>${esc(T.up_getting.replace('{p}', s.percent || 0))}</b><span class="sb-prog"><i style="width:${Math.max(3, s.percent || 0)}%"></i></span>`
         : s.kind === 'ready' ? `${sign('restart')}<b>${v(T.up_ready)}</b>${x}${go(T.up_restart, true)}`
@@ -983,6 +981,35 @@
     D.updateState().then(show).catch(() => {});
     document.addEventListener('tf-lang', () => show(last));
   }
+
+  // ── what is new (news.py): the first time TextFold opens after an update, the words of the releases since the one
+  //    the reader was last told of, in a dialog (theirs, in Chinese or else in English); a quiet release only says it is
+  //    installed. Settings opens the newest release's words again ──
+  const REPO = 'https://github.com/chenxiachan/textfold';
+  function showNews(list) {
+    const T = t(), v = list[0].version, words = (e) => e[uiLang] || (uiLang === 'zh-Hant' && e.zh) || e.en || [];
+    const dlg = h('dialog', 'settings prefs news'); document.body.append(dlg);
+    dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.wn_title.replace('{v}', v))}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}">${svg('x')}</button></header>
+      <div class="stp-body">${list.map((e) => (list.length > 1 ? `<h3 class="wn-v">TextFold ${esc(e.version)}</h3>` : '') +
+        words(e).map(([title, text]) => `<div class="wn-item"><b>${esc(title)}</b><p>${esc(text)}</p></div>`).join('')).join('')}</div>
+      <footer class="stp-foot"><p><a href="${REPO}" target="_blank" rel="noopener">★ ${esc(T.wn_star)}</a></p>
+        <a class="st-btn wn-more" href="${REPO}/releases/tag/v${encodeURIComponent(v)}" target="_blank" rel="noopener">${esc(T.wn_more)}${svg('out')}</a>
+        <button type="button" class="primary wn-ok">${esc(T.wn_ok)}</button></footer></div>`;
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('.stp-x').onclick = dlg.querySelector('.wn-ok').onclick = () => dlg.close();
+    dlg.showModal();
+  }
+  api('/api/whatsnew').then((w) => {
+    if (!w.updated) return;
+    if (w.news.length) showNews(w.news);
+    else {   // (a quiet release: that it is installed, for a moment)
+      const box = h('div', 'gen-toast'); toasts.append(box);
+      box.innerHTML = `${sign('done', 'ok')}<b>${esc(t().up_done.replace('{v}', w.version))}</b>${shut(t().close)}`;
+      box.querySelector('.g-x').onclick = () => box.remove();
+      setTimeout(() => box.remove(), 8000);
+    }
+    api('/api/whatsnew', { seen: w.version }).catch(() => {});
+  }).catch(() => {});
 
   // ── on a reader page: generate a language, or regenerate the current one ──
   if (PAPER) {
@@ -1085,12 +1112,229 @@
       if (bar) bar.before(acc);
       acc.onclick = async () => {
         const T = t();
-        if (!confirm(`${T.convert_acc}? ${T.tier_accurate}.`)) return;
+        if (!confirm(`${T.convert_acc}? ${T.tier_accurate}.${PAPER.replaced ? `\n\n${T.conv_edited}` : ''}`)) return;
         acc.disabled = true;
         const lang = (window.__reader && window.__reader.lang) || 'en', update = toastFor(lang);
         try { watch(await api('/api/convert', { paper: PAPER.id, tier: 'accurate', lang }), update); }
         catch (x) { update.fail(x); acc.disabled = false; }
       };
+    }
+    // The languages a document's levels were in before its text was edited (PAPER.pending, store.pending), made again
+    // at once: the one the page was asked in first (it opens in it when that is done), the others queued after it, each
+    // from the replies kept, so the model is asked only for the sections that changed. Stopped, the others stop with it
+    // (at once: queued after it, one would start as it ends), and once it has, the page opens on the text as edited,
+    // which the top bar says is to be generated (as after Save only)
+    function regenerate(langs) {
+      const want = new URLSearchParams(location.search).get('lang') || (window.__reader && window.__reader.lang);
+      const first = langs.includes(want) ? want : langs[0], update = toastFor(first), others = [];
+      let halted = null;
+      const follow = (j) => {
+        update(j);
+        if ((j.stopping || j.status === 'stopped') && !halted) halted = Promise.all(others.map((id) => api('/api/jobs/stop', { id }).catch(() => {})));
+        if (j.status === 'stopped') halted.then(() => reopen(first));
+      };
+      submit(PAPER.id, first, false, follow)
+        .then(() => Promise.all(langs.filter((l) => l !== first).map((l) => api('/api/generate', { paper: PAPER.id, lang: l, force: false })
+          .then((j) => others.push(j.id)))))
+        .catch(update.fail);
+    }
+    let reviewing = null;   // the edit history on the page (review, below): {k, stop}, the place the reader is at
+    // its text edited and saved without being generated again: said in the top bar, by the button that does it (which
+    // says first that the edit history goes once it is done); the edit history beside it
+    if ((PAPER.pending || []).length) {
+      const b = h('button', 'edbtn');
+      b.type = 'button';
+      b.innerHTML = `<i></i>${esc(t().ed_pending)}`;
+      b.title = t().ed_pending_tip.replace('{langs}', PAPER.pending.map(nameOf).join(', '));
+      const bar = document.querySelector('.topbar .cmpbtn') || document.querySelector('.topbar .langpick');
+      if (bar) bar.before(b);
+      b.onclick = () => {
+        if (PAPER.history && !confirm(t().ed_clears_ask)) return;
+        b.disabled = true;
+        regenerate(PAPER.pending);
+      };
+    }
+    if (PAPER.history) {
+      const b = h('button', 'edbtn edhist');
+      b.type = 'button';
+      b.textContent = t().ed_history;
+      const bar = document.querySelector('.topbar .cmpbtn') || document.querySelector('.topbar .langpick');
+      if (bar) bar.before(b);
+      b.onclick = () => (reviewing ? reviewing.stop() : review());
+      try {   // the page opened again after an edit made in the review: it goes on, at the same place
+        const r = JSON.parse(sessionStorage.getItem('pf-review') || 'null');
+        sessionStorage.removeItem('pf-review');
+        if (r && r.pid === PAPER.id) review(r.k);
+      } catch { /* private window */ }
+    }
+    // What differs between two lists (a text's paragraphs, a paragraph's words), in order: ['=', x], ['-', x] (only in
+    // a), ['+', x] (only in b). What both begin and end with is set aside first (an edit is mostly a few words), the
+    // rest compared by its longest common part; when that is too long to compare, all of a's rest out and b's in.
+    function diffOf(a, b) {
+      let s = 0, e = 0;
+      while (s < a.length && s < b.length && a[s] === b[s]) s++;
+      while (e < a.length - s && e < b.length - s && a[a.length - 1 - e] === b[b.length - 1 - e]) e++;
+      const A = a.slice(s, a.length - e), B = b.slice(s, b.length - e), n = A.length, m = B.length, w = m + 1, mid = [];
+      if (n * m > 1e6) {
+        A.forEach((x) => mid.push(['-', x]));
+        B.forEach((x) => mid.push(['+', x]));
+      } else {
+        const L = new Uint32Array((n + 1) * w);   // L[i * w + j]: how much A from i and B from j have in common
+        for (let i = n - 1; i >= 0; i--) {
+          for (let j = m - 1; j >= 0; j--) L[i * w + j] = A[i] === B[j] ? L[(i + 1) * w + j + 1] + 1 : Math.max(L[(i + 1) * w + j], L[i * w + j + 1]);
+        }
+        let i = 0, j = 0;
+        while (i < n && j < m) {
+          if (A[i] === B[j]) { mid.push(['=', A[i]]); i++; j++; }
+          else if (L[(i + 1) * w + j] >= L[i * w + j + 1]) mid.push(['-', A[i++]]);
+          else mid.push(['+', B[j++]]);
+        }
+        while (i < n) mid.push(['-', A[i++]]);
+        while (j < m) mid.push(['+', B[j++]]);
+      }
+      return [...a.slice(0, s).map((x) => ['=', x]), ...mid, ...b.slice(b.length - e).map((x) => ['=', x])];
+    }
+    // Each place the edits made since a text was last generated (was: local.original) changed in the one it has now:
+    // [{at, was, now}], at: where it is in now. Compared paragraph by paragraph, then word by word in the paragraphs
+    // that differ (words as each language has them: a Chinese sentence has no spaces between its words); the white
+    // space between two changes is part of the place they make together. All are told against the one text, so none
+    // overlaps another: each is undone (its was in place of its now) or written anew by itself.
+    const wordSeg = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
+    function placesOf(was, now) {
+      const paras = (x) => x.split(/(\n{2,})/).filter(Boolean);
+      const words = (x) => (wordSeg ? Array.from(wordSeg.segment(x), (w) => w.segment) : x.split(/(\s+)/).filter(Boolean));
+      const ops = [], run = { '-': [], '+': [] };
+      const flush = () => {
+        ops.push(...diffOf(words(run['-'].join('')), words(run['+'].join(''))));
+        run['-'] = []; run['+'] = [];
+      };
+      for (const [k, x] of diffOf(paras(was), paras(now))) {
+        if (k !== '=') { run[k].push(x); continue; }
+        flush();
+        ops.push([k, x]);
+      }
+      flush();
+      const out = [];
+      let at = 0, place = null, gap = '';
+      for (const [k, x] of ops) {
+        if (k === '=') {
+          gap += x;
+          if (!/^\s+$/.test(x)) place = null;
+        } else {
+          if (!place) out.push(place = { at, was: '', now: '' });
+          else { place.was += gap; place.now += gap; }
+          place[k === '-' ? 'was' : 'now'] += x;
+          gap = '';
+        }
+        if (k !== '-') at += x.length;
+      }
+      return out;
+    }
+    // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
+    // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
+    // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
+    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none. span: the
+    // characters of the Markdown to open at, in place of the words (a place of the review)
+    async function editText(words, span = null) {
+      const T = t();
+      if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
+      let text;
+      try { text = (await api(`/api/text/${encodeURIComponent(PAPER.id)}`)).text; } catch (x) { alert(errText(x.message)); return; }
+      const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
+      dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_title)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
+        <div class="stp-body"><p class="st-note">${esc(T.ed_note)}</p><textarea class="ed-text" spellcheck="false"></textarea></div>
+        <footer class="stp-foot"><p>${esc(T.ed_whole)} ${esc(T.ed_clears)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button>` +
+        (modelName ? `<button type="button" class="st-btn ed-only" title="${esc(T.ed_only_tip)}">${esc(T.ed_only)}</button>` : '') +
+        `<button type="button" class="primary ed-save">${esc(modelName ? T.ed_save : T.save)}</button></footer></div>`;
+      const ta = dlg.querySelector('.ed-text'), save = dlg.querySelector('.ed-save'), only = dlg.querySelector('.ed-only');
+      dlg.addEventListener('close', () => dlg.remove());
+      dlg.querySelector('.stp-x').onclick = dlg.querySelector('.ed-cancel').onclick = () => dlg.close();
+      dlg.showModal();
+      // the words selected, else their first few, else the top: the text above them measured where it wraps
+      const at = span ? span[0] : [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0) ?? 0;
+      ta.value = text.slice(0, at);
+      const above = ta.scrollHeight;
+      ta.value = text;
+      ta.focus();
+      ta.setSelectionRange(at, span ? span[1] : at + (words && text.startsWith(words, at) ? words.length : 0));
+      ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
+      const keep = async (generate) => {
+        if (ta.value === text) { dlg.close(); return; }
+        save.disabled = true;
+        if (only) only.disabled = true;
+        let r;
+        try { r = await api('/api/import', { id: PAPER.id, text: ta.value }); }
+        catch (x) { save.disabled = false; if (only) only.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+        dlg.close();
+        const lang = (window.__reader && window.__reader.lang) || 'en';
+        if (generate) { if (reviewing) reviewing.stop(); regenerate(r.pending.length ? r.pending : [lang]); return; }
+        try { if (reviewing) sessionStorage.setItem('pf-review', JSON.stringify({ pid: PAPER.id, k: reviewing.k })); } catch { /* private window */ }
+        reopen(lang);
+      };
+      save.onclick = () => keep(!!modelName);
+      if (only) only.onclick = () => keep(false);
+    }
+    // Its edit history, on the page itself (from the top bar: PAPER.history): each place the edits since it was last
+    // generated changed (placesOf), found where it is read (local.places) and marked in the text at Full (reader.js,
+    // setReview), with a bar to go from one to the next (4 / 14), undo it (the text saved with its words as they were)
+    // or edit it (the editor, at its words). Each saved, the page opens again at the same place, the review going on
+    // (pf-review). Generated again, they are all taken: the history goes (local.settle).
+    async function review(k = 0) {
+      const T = t(), lang = () => (window.__reader && window.__reader.lang) || 'en';
+      if (reviewing) return;
+      let text, original, places, where;
+      try {
+        ({ text, original } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`));
+        places = original === null ? [] : placesOf(original, text);
+        if (places.length) ({ places: where } = await api('/api/places', { id: PAPER.id, spans: places.map((p) => [p.at, p.at + p.now.length]) }));
+      } catch (x) { alert(errText(x.message)); return; }
+      const R = window.__reader;   // (the page just opened: in by now)
+      if (!places.length || !R || reviewing) return;
+      const bar = h('div', 'rvbar');
+      bar.setAttribute('role', 'toolbar');
+      bar.innerHTML = `<button type="button" class="rv-prev" title="${esc(T.rv_prev)}" aria-label="${esc(T.rv_prev)}">‹</button><span class="rv-n"></span>` +
+        `<button type="button" class="rv-next" title="${esc(T.rv_next)}" aria-label="${esc(T.rv_next)}">›</button><i class="rv-sep"></i>` +
+        `<button type="button" class="rv-undo">${esc(T.ed_undo)}</button><button type="button" class="rv-edit">${esc(T.ed_edit)}</button>` +
+        `<button type="button" class="rv-regen">${esc(T.rv_regen)}</button>` +
+        `<button type="button" class="rv-x" title="${esc(T.close)}" aria-label="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button>` +
+        '<p class="rv-gone" hidden></p>';
+      document.body.append(bar);
+      const $ = (c) => bar.querySelector(c), list = places.map((p, i) => where[i] && { ...where[i], was: p.was });
+      const stop = () => { reviewing = null; bar.remove(); R.review(null); };
+      const go = (j) => {
+        k = Math.max(0, Math.min(places.length - 1, j));
+        reviewing = { k, stop };
+        $('.rv-n').textContent = `${k + 1} / ${places.length}`;
+        $('.rv-n').title = T.rv_of.replace('{k}', k + 1).replace('{n}', places.length);
+        $('.rv-prev').disabled = k === 0;
+        $('.rv-next').disabled = k === places.length - 1;
+        const p = places[k], gone = $('.rv-gone');   // (one read nowhere on the page: its words, here)
+        gone.hidden = !!list[k];
+        if (!list[k]) gone.innerHTML = `${esc(T.rv_gone)} ${p.was ? `<del>${esc(p.was)}</del>` : ''} ${p.now ? `<ins>${esc(p.now)}</ins>` : ''}`;
+        R.reviewGo(k);
+      };
+      const saved = () => {   // the page again, at the same place: the one after the one undone
+        try { sessionStorage.setItem('pf-review', JSON.stringify({ pid: PAPER.id, k })); } catch { /* private window */ }
+        reopen(lang());
+      };
+      $('.rv-prev').onclick = () => go(k - 1);
+      $('.rv-next').onclick = () => go(k + 1);
+      $('.rv-undo').onclick = async () => {
+        if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
+        const p = places[k];
+        try { await api('/api/import', { id: PAPER.id, text: text.slice(0, p.at) + p.was + text.slice(p.at + p.now.length) }); }
+        catch (x) { alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+        saved();
+      };
+      $('.rv-edit').onclick = () => editText(null, [places[k].at, places[k].at + places[k].now.length]);
+      $('.rv-regen').onclick = () => {
+        if (!confirm(T.ed_clears_ask)) return;
+        stop();
+        regenerate((PAPER.pending || []).length ? PAPER.pending : [lang()]);
+      };
+      $('.rv-x').onclick = stop;
+      R.review(list, k);
+      go(k);
     }
     // A translation stored with paragraphs it has none for (PAPER.gaps: a call that failed, a paragraph the model left
     // out; or made before TextFold asked for them again): they are asked for as it is opened, with the model in use, the
@@ -1119,6 +1363,7 @@
         submit(PAPER.id, lang, force, update).catch(update.fail);
       },
       fill(lang) { fillGaps(lang, true); },
+      editText: /^(md|pdf|doc)-/.test(PAPER.id) ? editText : null,
       // questions go to an agent on this computer, which can look them up on the web (reader.js: the switch by a question)
       askAgent() {
         const d = modelData, m = d && (d.models || []).find((x) => x.id === (d.askModel || d.selected));
@@ -1500,15 +1745,19 @@
     let data = modelData || { models: [], agents: [], providers: [], presets: [], bridge: {}, engine: {} };
     let loaded = !!modelData, refreshing = true, refreshError = '';
     let app = null;   // in the app: its version, loaded after the dialog is visible
+    let news = null;  // TextFold's version, and its newest release's words (news.py), loaded after it too
     let form = null;          // the provider being added or edited: {key?, preset, name, base, api_key, found, picked}
+    let agentForm = null;     // the custom agent being added or edited (#15): {key?, command, protocol, name, found, picked, manual, version, err, busy}
     const tests = {};         // the last connection test of each model: the levels' (gen), the questions' (ask)
     let bridgeStarting = false, bridgeState = null;
     let storageDraft = null, storageMode = null, storageBusy = false, storageError = null;   // ({code, message}: why a folder was refused)
+    let engineDraft = null, engineError = null;   // the PDF engine's folder, typed or chosen, and why it was refused
     const dlg = h('dialog', 'settings prefs'); document.body.append(dlg);
     dlg.addEventListener('close', () => { settingsOpen = false; });
     const T = () => t();
     const host = (u) => { try { return new URL(u).host; } catch { return u; } };
-    const groupName = (g) => (data.agents.find((a) => a.runtime === g) || {}).label || (data.providers.find((p) => p.key === g) || {}).name || g;
+    const customOf = (g) => (data.customAgents || []).find((a) => `custom/${a.key}` === g);
+    const groupName = (g) => (data.agents.find((a) => a.runtime === g) || {}).label || (customOf(g) || {}).name || (data.providers.find((p) => p.key === g) || {}).name || g;
 
     // the library's folder (textfold/storage_settings.py): where it is, and another one from the next start, a copy of it
     // or a library already in a folder; why a folder is refused, in the reader's language
@@ -1564,8 +1813,56 @@
       const rows = found.map((a) => `<div class="st-item"><i class="st-dot${a.runnable ? '' : ' warn'}"></i><div class="st-main"><b>${esc(a.label)}</b>
         <span class="st-meta">${a.version ? `${esc(a.version)} · ` : ''}<code title="${esc(a.path)}">${esc(a.binary)}</code></span>${a.error ? `<p class="st-models-err">${esc(a.error)}</p>` : ''}</div>
         <span class="st-aside">${a.runnable ? esc(t.st_models.replace('{n}', a.models)) : esc(t.st_unsupported)}</span></div>`).join('');
-      return `<div class="st-list">${rows}<div class="st-item st-foot-line"><span class="st-main st-meta">${missing.length ? `${esc(t.st_notfound)}: ${missing.map((a) => esc(a.label)).join(', ')}` : ''}</span>
-        <button type="button" class="st-btn st-scan"${data.scanning ? ' disabled' : ''}>${esc(data.scanning ? t.st_scanning : t.st_rescan)}</button></div></div>`;
+      // the reader's own (#15): a command that starts one of the agents above another way, such as `mirasim claude`
+      const custom = (data.customAgents || []).map((a) => `<div class="st-item"><i class="st-dot"></i><div class="st-main"><b>${esc(a.name)}<span class="st-src ui">${esc(t.ca_custom)}</span></b>
+        <span class="st-meta">${esc((data.protocols || {})[a.protocol] || a.protocol)} · <code>${esc(a.command)}</code></span></div>
+        <span class="st-aside">${esc(t.st_models.replace('{n}', a.models.length))}</span>
+        <span class="st-acts"><button type="button" class="st-btn ca-edit" data-key="${esc(a.key)}">${esc(t.st_edit)}</button><button type="button" class="st-btn danger ca-del" data-key="${esc(a.key)}">${esc(t.st_remove)}</button></span></div>`).join('');
+      return `<div class="st-list">${rows}${custom}<div class="st-item st-foot-line"><span class="st-main st-meta">${missing.length ? `${esc(t.st_notfound)}: ${missing.map((a) => esc(a.label)).join(', ')}` : ''}</span>
+        <button type="button" class="st-btn st-scan"${data.scanning ? ' disabled' : ''}>${esc(data.scanning ? t.st_scanning : t.st_rescan)}</button></div>
+        ${agentForm ? customAgentForm() : `<button type="button" class="st-addrow ca-add"><span aria-hidden="true">＋</span>${esc(t.ca_add)}</button>`}</div>`;
+    }
+
+    // a custom agent: its command, and which agent it runs as, chosen by the reader. Detect runs it, says what it found (its
+    // version) and lists that agent's models to tick; models it cannot list are written in by hand.
+    const caName = (command) => { const w = (command || '').trim().split(/\s+/)[0] || ''; const n = w.split(/[\\/]/).pop().replace(/\.(exe|cmd|bat)$/i, ''); return n ? n[0].toUpperCase() + n.slice(1) : ''; };
+    const caManual = (f) => (f.manual || '').split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+    const caModels = (f) => {   // the ticked ones as listed (their names and levels), then the written ones not among them
+      const listed = (f.found || []).filter((m) => f.picked.includes(m.id));
+      return [...listed, ...caManual(f).filter((id) => !listed.some((m) => m.id === id)).map((id) => ({ id }))];
+    };
+    const caReady = (f) => !!(f.command && f.command.trim() && f.protocol && caModels(f).length && !f.busy);
+    function customAgentForm() {
+      const t = T(), f = agentForm, P = data.protocols || {};
+      const protos = `<option value=""${f.protocol ? '' : ' selected'}>—</option>` + Object.entries(P).map(([k, v]) =>
+        `<option value="${esc(k)}"${k === f.protocol ? ' selected' : ''}>${esc(v)}</option>`).join('');
+      const list = f.found && f.found.length ? `<div class="st-label">${esc(t.st_pick)}</div><div class="st-pick">${f.found.map((m) =>
+        `<label data-id="${esc(m.id.toLowerCase())}"><input type="checkbox" value="${esc(m.id)}"${f.picked.includes(m.id) ? ' checked' : ''}>${esc(m.name && m.name.toLowerCase() !== m.id.toLowerCase() ? `${m.name} · ${m.id}` : m.id)}</label>`).join('')}</div>` : '';
+      const found = f.version ? `<span class="st-meta ok">${esc(t.ca_found.replace('{v}', f.version))}</span>` : '';
+      const status = f.busy ? `<span class="st-meta">…</span>` : `${found}${f.err ? ` <span class="pf-err">${esc(f.err)}</span>` : ''}`;
+      return `<div class="st-form ca-form">
+        <label>${esc(t.ca_command)}<input class="ca-command" value="${esc(f.command || '')}" placeholder="mirasim claude" spellcheck="false" autocomplete="off" autocapitalize="off"></label>
+        <p class="st-note">${esc(t.ca_command_hint)}</p>
+        <div class="st-row"><button type="button" class="st-btn ca-detect"${f.busy ? ' disabled' : ''}>${esc(t.ca_detect)}</button>${status}</div>
+        <label>${esc(t.ca_speaks)}<select class="ca-proto">${protos}</select></label>
+        <label>${esc(t.st_name)}<input class="ca-name" value="${esc(f.name || '')}" placeholder="${esc(caName(f.command))}"></label>
+        ${list}
+        <label>${esc(t.ca_manual)}<input class="ca-manual" value="${esc(f.manual || '')}" placeholder="kimi-k2, glm-4.6" spellcheck="false" autocomplete="off"></label>
+        <div class="st-row end"><button type="button" class="st-btn ca-cancel">${esc(t.cancel)}</button><button type="button" class="primary ca-save"${caReady(f) ? '' : ' disabled'}>${esc(t.ca_save)}</button></div></div>`;
+    }
+    async function detectAgent(saved) {   // (saved: the models an edited agent was saved with, ticked again where listed)
+      const f = agentForm;
+      if (!f || !f.command.trim()) return;
+      f.busy = true; f.err = ''; f.version = ''; render();
+      try {
+        const r = await api('/api/agents/probe', { command: f.command, protocol: f.protocol || null });
+        if (agentForm !== f) return;
+        f.version = r.version || ''; f.protocol = r.protocol || f.protocol; f.found = r.models || []; f.err = r.error || (r.protocol ? '' : T().ca_need_proto);
+        const keep = saved || f.picked;
+        f.picked = keep && keep.length ? f.found.map((m) => m.id).filter((id) => keep.includes(id)) : f.found.map((m) => m.id);
+        if (saved) f.manual = saved.filter((id) => !f.found.some((m) => m.id === id)).join(', ');
+      } catch (x) { if (agentForm !== f) return; f.found = null; f.err = x.message; }
+      f.busy = false; render();
     }
 
     function providerSection() {
@@ -1613,7 +1910,7 @@
         <div class="st-row end"><button type="button" class="st-btn pf-cancel">${esc(t.cancel)}</button><button type="button" class="primary pf-save"${form.found && form.found.length ? '' : ' disabled'}>${esc(t.st_save_provider)}</button></div></div>`;
     }
 
-    let formShown = false;
+    let formShown = false, agentFormShown = false;
     function discoveryState() {
       const t = T(), error = refreshError || (data.discovery && data.discovery.error);
       return `<div class="st-discovery" role="status">${refreshing ? `<p class="st-note">${esc(t.st_scanning)}</p>` : error ?
@@ -1626,7 +1923,7 @@
         <div class="stp-body">
         <section><div class="st-list">
           <div class="st-item"><label class="st-main" for="st-ui"><b>${esc(t.language)}</b></label><select class="st-ui" id="st-ui">${I18N.CODES.map((c) => `<option value="${c}"${c === uiLang ? ' selected' : ''}>${esc(I18N.NATIVE[c])}</option>`).join('')}</select></div>
-          ${app ? `<div class="st-item st-app"><div class="st-main"><b>TextFold ${esc(app)}</b><span class="st-meta">${esc(t.up_note)} <a href="https://github.com/chenxiachan/textfold" target="_blank" rel="noopener">★ ${esc(t.up_star)}</a></span><span class="st-upd-msg" aria-live="polite"></span></div><button type="button" class="st-btn st-upd">${esc(t.up_check)}</button></div>` : ''}
+          ${app || news ? `<div class="st-item st-app"><div class="st-main"><b>TextFold ${esc(app || news.version)}</b><span class="st-meta">${app ? `${esc(t.up_note)} ` : ''}<a href="${REPO}" target="_blank" rel="noopener">★ ${esc(t.up_star)}</a></span><span class="st-upd-msg" aria-live="polite"></span></div>${news && news.last ? `<button type="button" class="st-btn st-news">${esc(t.up_whatsnew)}</button>` : ''}${app ? `<button type="button" class="st-btn st-upd">${esc(t.up_check)}</button>` : ''}</div>` : ''}
         </div></section>
         <section><h3>${esc(t.st_models_h)}</h3><div class="st-model-area">${modelSection()}${discoveryState()}</div></section>
         <section><h3>${esc(t.st_agents)}</h3><div class="st-agent-area">${loaded ? agentSection() : ''}</div></section>
@@ -1659,8 +1956,10 @@
 
       renderEngine();
       q('.stp-body').scrollTop = y;   // (after the engine's part, which makes the sections their full height)
-      if (form && !formShown) q('.st-form').scrollIntoView({ block: 'nearest' });   // adding or editing a provider: the form in view
+      if (form && !formShown) q('.st-provider-area .st-form').scrollIntoView({ block: 'nearest' });   // adding or editing a provider: the form in view
       formShown = !!form;
+      if (agentForm && !agentFormShown) q('.ca-form').scrollIntoView({ block: 'nearest' });
+      agentFormShown = !!agentForm;
     }
     const q = (sel) => dlg.querySelector(sel);
     // the PDF engine's own part of the dialog, drawn again on its own while it installs
@@ -1676,10 +1975,26 @@
         : `<div class="st-item"><div class="st-main st-meta st-desc">${esc(t.engine_off)}</div>${act}</div>`;
       const tier = `<div class="st-item"><label class="st-main" for="st-tier"><b>${esc(t.tier)}</b></label><select class="st-tiersel" id="st-tier">${['fast', 'accurate'].map((k) =>
         `<option value="${k}"${(data.pdfTier || 'fast') === k ? ' selected' : ''}>${esc(t['tier_' + k])}</option>`).join('')}</select></div>`;
-      box.innerHTML = `<h3>${esc(t.engine)}</h3><div class="st-list">${state}${tier}</div>`;
+      // not installed: the folder it goes into (textfold/engine.py target), beside the library unless the reader chooses
+      // an empty one (in the same system dialog as the library's folder)
+      const why = engineError ? t[`storage_err_${engineError.code}`] || engineError.message : '';
+      const folder = job || e.installed ? '' : `<div class="st-form"><label>${esc(t.storage_destination)}<div class="st-row" style="margin:0"><input class="st-engine-path" style="flex:1;min-width:0" value="${esc(engineDraft ?? e.path ?? '')}" spellcheck="false">${window.desktop?.chooseLibraryFolder ? `<button type="button" class="st-btn st-engine-pick">${esc(t.storage_choose)}</button>` : ''}</div></label>
+        <p class="st-note">${esc(t.engine_where)}</p>${why ? `<p class="st-note warn" role="alert">${esc(why)}</p>` : ''}</div>`;
+      box.innerHTML = `<h3>${esc(t.engine)}</h3><div class="st-list">${state}${folder}${tier}</div>`;
       box.querySelector('.st-tiersel').onchange = async (ev) => { data = await api('/api/settings', { pdf_tier: ev.target.value }); renderEngine(); };
       const inst = box.querySelector('.st-engine-in');
-      if (inst) inst.onclick = async () => { inst.disabled = true; watch(await api('/api/engine/install', {}), () => {}); follow(); };
+      if (inst) inst.onclick = async () => {
+        inst.disabled = true; engineError = null;
+        const path = (engineDraft ?? '').trim();
+        try { watch(await api('/api/engine/install', path && path !== e.path ? { path } : {}), () => {}); engineDraft = null; follow(); }
+        catch (x) { engineError = { code: x.code, message: errText(x.message) }; renderEngine(); }
+      };
+      const where = box.querySelector('.st-engine-path'), pick = box.querySelector('.st-engine-pick');
+      if (where) where.oninput = () => { engineDraft = where.value; };
+      if (pick) pick.onclick = async () => {
+        const path = await window.desktop.chooseLibraryFolder();
+        if (path) { engineDraft = path; engineError = null; renderEngine(); }
+      };
       const rm = box.querySelector('.st-engine-rm');
       if (rm) rm.onclick = async () => {
         if (!confirm(t.engine_remove_q.replace('{size}', gb(e.bytes)))) return;
@@ -1701,7 +2016,7 @@
       if (!background) { render(); return; }
       // A discovery result must not rebuild a provider form the reader is editing.
       q('.st-model-area').innerHTML = modelSection() + discoveryState();
-      q('.st-agent-area').innerHTML = agentSection();
+      if (!agentForm) q('.st-agent-area').innerHTML = agentSection();
       if (!form) q('.st-provider-area').innerHTML = providerSection();
       renderEngine();
       wire();
@@ -1716,7 +2031,7 @@
         if (!dlg.isConnected) return;
         refreshing = false; refreshError = x.message; data.scanning = false;
         q('.st-model-area').innerHTML = modelSection() + discoveryState();
-        if (loaded) q('.st-agent-area').innerHTML = agentSection();
+        if (loaded && !agentForm) q('.st-agent-area').innerHTML = agentSection();
         wire();
       }
     }
@@ -1725,6 +2040,8 @@
       const retry = q('.st-retry');
       if (retry) retry.onclick = discover;
       dlg.querySelectorAll('.st-close').forEach((b) => { b.onclick = () => dlg.close(); });
+      const nb = q('.st-news');
+      if (nb) nb.onclick = () => showNews([news.last]);
       const up = q('.st-upd');
       if (up) up.onclick = async () => {   // an answer either way; one found shows as the corner's toast too
         const msg = q('.st-upd-msg'), t = T();
@@ -1754,6 +2071,36 @@
         try { update(await api('/api/agents/scan', {}), true); }
         catch (x) { data.scanning = false; refreshError = x.message; update(data, true); }
       };
+      const caAdd = q('.ca-add');
+      if (caAdd) caAdd.onclick = () => { agentForm = { command: '', protocol: '', name: '', found: null, picked: [], manual: '' }; render(); q('.ca-command').focus(); };
+      dlg.querySelectorAll('.ca-del').forEach((b) => { b.onclick = async () => update(await api('/api/agents/remove', { key: b.dataset.key })); });
+      dlg.querySelectorAll('.ca-edit').forEach((b) => {
+        b.onclick = () => {
+          const a = data.customAgents.find((x) => x.key === b.dataset.key);
+          agentForm = { key: a.key, command: a.command, protocol: a.protocol, name: a.name, found: null, picked: [...a.models], manual: a.models.join(', ') };
+          detectAgent([...a.models]);
+        };
+      });
+      if (agentForm) {
+        const f = agentForm, saveBtn = q('.ca-save'), ready = () => { saveBtn.disabled = !caReady(f); };
+        const cmd = q('.ca-command'), proto = q('.ca-proto'), nm = q('.ca-name'), man = q('.ca-manual');
+        cmd.oninput = () => { f.command = cmd.value; nm.placeholder = caName(f.command); ready(); };
+        cmd.onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); detectAgent(); } };
+        nm.oninput = () => { f.name = nm.value; };
+        man.oninput = () => { f.manual = man.value; ready(); };
+        proto.onchange = () => { f.protocol = proto.value; if (f.protocol && f.command.trim()) detectAgent(); else ready(); };
+        const pick = q('.ca-form .st-pick');
+        if (pick) pick.onchange = () => { f.picked = [...pick.querySelectorAll('input:checked')].map((i) => i.value); ready(); };
+        q('.ca-detect').onclick = () => detectAgent();
+        q('.ca-cancel').onclick = () => { agentForm = null; render(); };
+        saveBtn.onclick = async () => {
+          if (!caReady(f)) return;
+          try {
+            const d = await api('/api/agents/save', { key: f.key, name: f.name.trim() || caName(f.command), command: f.command.trim(), protocol: f.protocol, models: caModels(f) });
+            agentForm = null; update(d);
+          } catch (x) { f.err = x.message; render(); }
+        };
+      }
       const td = q('.st-td');
       if (td) td.onchange = async () => update(await api('/api/settings', { use_thoughtdag_env: td.checked }));
       dlg.querySelectorAll('.st-del').forEach((b) => { b.onclick = async () => update(await api('/api/providers/remove', { key: b.dataset.key })); });
@@ -1827,6 +2174,10 @@
     dlg.showModal();
     if (window.desktop && window.desktop.checkForUpdates) window.desktop.version().then((v) => {
       app = v;
+      if (dlg.isConnected && !form) render();
+    }).catch(() => {});
+    api('/api/whatsnew').then((w) => {
+      news = w;
       if (dlg.isConnected && !form) render();
     }).catch(() => {});
     try {

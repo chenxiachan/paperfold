@@ -275,8 +275,9 @@ def _ref_link(soup, m, labels):
 
 def _math(soup, root):
     """markdown-it's and Pandoc's math (span.math.inline, div.math.block, span.math.display) becomes MathML; MathML
-    that came as such keeps its LaTeX annotation as its alttext. markdown-it's display formulas (a Markdown file's $$)
-    are numbered, and any formula's \\tag; a reference to a label is its number."""
+    that came as such keeps its LaTeX annotation as its alttext, and MathML that is nothing but its LaTeX is drawn from
+    it. markdown-it's display formulas (a Markdown file's $$) are numbered, and any formula's \\tag; a reference to a
+    label is its number."""
     found, labels, n = [], {}, 0
     for el in root.find_all(["span", "div"], class_="math"):
         cls = el.get("class", [])
@@ -302,6 +303,12 @@ def _math(soup, root):
             ann = m.find("annotation", attrs={"encoding": "application/x-tex"})
             if ann:
                 m["alttext"] = ann.get_text("").strip()
+            elif m.get("data-latex"):   # (Defuddle's)
+                m["alttext"] = m["data-latex"]
+        if m.get("alttext") and not m.find(lambda t: t.name not in ("semantics", "annotation", "annotation-xml")):
+            drawn = tex_math(m["alttext"], m.get("display") == "block")   # (its LaTeX alone: a page's MathJax drew it)
+            m.replace_with(drawn)
+            m = drawn
         if m.get("display") == "block" and not m.find_parent("table", class_="ltx_equation"):
             ph = soup.new_tag("span")
             m.replace_with(ph)
@@ -694,7 +701,13 @@ def _sections(soup, art, blocks):
                 anchors[slug(text)] = sid
                 if b.get("id"):   # a source's own id for the section (JATS: <sec id="sec2">), which its links use
                     anchors[b["id"]] = sid
-                sec = soup.new_tag("section", attrs={"class": SECTION_CLASS[depth], "id": sid})
+                cls = SECTION_CLASS[depth]
+                # an appendix where the source says so (JATS's <app> reaches the heading as ltx_title_appendix), not
+                # where a heading's words seem to. Its subsections sit inside it, as parse.in_appendix finds them;
+                # the class on them would take their level (SECTION_LEVEL: ltx_appendix is a section's)
+                if "ltx_title_appendix" in (b.get("class") or []):
+                    cls = [cls, "ltx_appendix"]
+                sec = soup.new_tag("section", attrs={"class": cls, "id": sid})
             h = soup.new_tag(f"h{rank}", attrs={"class": "ltx_title ltx_title_section"})
             for x in list(b.contents):
                 h.append(x.extract() if isinstance(x, Tag) else NavigableString(str(x)))

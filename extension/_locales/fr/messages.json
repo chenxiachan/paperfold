@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "Envoyez la page que vous lisez à TextFold sur cet ordinateur, telle que vous la voyez, et lisez-la en cinq niveaux."
+  },
+  "action_title": {
+    "message": "Envoyer à TextFold"
+  },
+  "sending": {
+    "message": "Envoi à TextFold…"
+  },
+  "saved": {
+    "message": "Dans votre bibliothèque TextFold."
+  },
+  "already": {
+    "message": "Déjà dans votre bibliothèque TextFold."
+  },
+  "saved_closed": {
+    "message": "Dans votre bibliothèque TextFold. Ouvrez TextFold pour la lire."
+  },
+  "err_notext": {
+    "message": "TextFold a trouvé trop peu de texte à lire sur cette page."
+  },
+  "err_notweb": {
+    "message": "TextFold ne lit que les pages web (http et https)."
+  },
+  "err_nopage": {
+    "message": "Cette page n’a pas pu être lue."
+  },
+  "err_update": {
+    "message": "TextFold doit être mis à jour. Voyez l’onglet qui s’est ouvert."
+  },
+  "err_setup": {
+    "message": "TextFold n’est pas connecté. Voyez l’onglet qui s’est ouvert."
+  },
+  "err_other": {
+    "message": "La page n’a pas été gardée ($CODE$).",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "Connecter TextFold"
+  },
+  "ok_title": {
+    "message": "TextFold est connecté"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ répond. Cliquez sur le bouton TextFold sur n’importe quelle page que vous lisez pour l’y envoyer.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "Ce navigateur ne trouve pas TextFold"
+  },
+  "missing_text": {
+    "message": "Le bouton confie chaque page à TextFold, une application gratuite sur cet ordinateur. Installez-la une fois :"
+  },
+  "forbidden_title": {
+    "message": "TextFold n’accepte pas encore cette extension"
+  },
+  "forbidden_text": {
+    "message": "Le TextFold de cet ordinateur est plus ancien que cette extension. Mettez-le à jour :"
+  },
+  "exited_title": {
+    "message": "TextFold n’a pas démarré"
+  },
+  "exited_text": {
+    "message": "Il a peut-être été déplacé ou supprimé depuis sa dernière ouverture. Alors :"
+  },
+  "update_title": {
+    "message": "TextFold doit être mis à jour"
+  },
+  "update_text": {
+    "message": "Cette extension est plus récente que le TextFold de cet ordinateur. Mettez-le à jour :"
+  },
+  "step_download": {
+    "message": "Téléchargez TextFold pour macOS ou Windows et installez-le."
+  },
+  "step_update": {
+    "message": "Téléchargez le TextFold le plus récent et installez-le par-dessus l’ancien."
+  },
+  "step_open": {
+    "message": "Ouvrez TextFold une fois. Il se connecte tout seul à ce navigateur."
+  },
+  "step_again": {
+    "message": "Revenez à la page et cliquez de nouveau sur le bouton TextFold."
+  },
+  "download": {
+    "message": "Télécharger TextFold"
+  },
+  "check": {
+    "message": "Vérifier à nouveau"
+  },
+  "checking": {
+    "message": "Vérification…"
+  },
+  "pip_title": {
+    "message": "Vous utilisez TextFold depuis Python ?"
+  },
+  "pip_text": {
+    "message": "Installez-le ou mettez-le à jour, puis lancez une fois cette commande pour que le navigateur le trouve :"
+  },
+  "privacy_note": {
+    "message": "L’extension confie la page à TextFold sur cet ordinateur et à rien d’autre. TextFold en écrit les niveaux avec le modèle choisi dans ses réglages."
+  }
+}

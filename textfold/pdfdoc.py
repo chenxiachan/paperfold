@@ -399,7 +399,7 @@ def store_pdf(pid, folder, sc, name, tier, replace=False):
     structured_content.json, so that its figures and places can be made again without the engine. Converted again
     (replace), the reader's notes and the file stay, the notes found again in the new text (notes.reanchor: its
     paragraphs are named by their places, so an old place now names another paragraph); the levels go, since they
-    belong to the text they were made from."""
+    belong to the text they were made from, and its edit history (local.keep_text) with them."""
     from . import engine
     d = store.pdir(pid)
     ext = "pdf" if pid.startswith("pdf-") else engine.kind_of(name) or "file"

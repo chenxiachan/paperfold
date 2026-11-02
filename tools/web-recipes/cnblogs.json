@@ -1,0 +1,12 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "cnblogs.com",
+ "pages": "/*/p/*",
+ "article": "#cnblogs_post_body",
+ "drop": [],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "博客园: the post is #cnblogs_post_body; the signature, the post data and the comments are outside it."
+}

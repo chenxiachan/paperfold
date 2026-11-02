@@ -1,0 +1,15 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "theguardian.com",
+ "pages": "*",
+ "article": "main article",
+ "drop": [
+  "article aside[data-gu-name]",
+  "aside[data-ad-slot]"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "The Guardian names its classes by build (dcr-...), so the recipe holds to main, article and data-gu-name: the asides holding the section label, the byline block and Share are furniture."
+}
