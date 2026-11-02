@@ -1161,21 +1161,41 @@
       }
       return [...a.slice(0, s).map((x) => ['=', x]), ...mid, ...b.slice(b.length - e).map((x) => ['=', x])];
     }
-    // Where an earlier text (was) and the one in the editor (now) differ, paragraph by paragraph: [{heading, was, now}],
-    // each a run of paragraphs changed, under the last heading before it
-    function changesOf(was, now) {
-      const out = [];
-      let heading = '', at = null;
-      for (const [k, x] of diffOf(was.split(/\n{2,}/), now.split(/\n{2,}/))) {
-        if (k === '=') {
-          at = null;
-          if (/^#{1,6}\s/.test(x)) heading = x.replace(/^#+\s*/, '');
-          continue;
-        }
-        if (!at) out.push(at = { heading, was: [], now: [] });
-        at[k === '-' ? 'was' : 'now'].push(x);
+    // Each place the edits made since a text was last generated (was: local.original) changed in the one it has now:
+    // [{at, was, now}], at: where it is in now. Compared paragraph by paragraph, then word by word in the paragraphs
+    // that differ (words as each language has them: a Chinese sentence has no spaces between its words); the white
+    // space between two changes is part of the place they make together. All are told against the one text, so none
+    // overlaps another: each is undone (its was in place of its now) or written anew by itself.
+    const wordSeg = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
+    function placesOf(was, now) {
+      const paras = (x) => x.split(/(\n{2,})/).filter(Boolean);
+      const words = (x) => (wordSeg ? Array.from(wordSeg.segment(x), (w) => w.segment) : x.split(/(\s+)/).filter(Boolean));
+      const ops = [], run = { '-': [], '+': [] };
+      const flush = () => {
+        ops.push(...diffOf(words(run['-'].join('')), words(run['+'].join(''))));
+        run['-'] = []; run['+'] = [];
+      };
+      for (const [k, x] of diffOf(paras(was), paras(now))) {
+        if (k !== '=') { run[k].push(x); continue; }
+        flush();
+        ops.push([k, x]);
       }
-      return out.map((c) => ({ heading: c.heading, was: c.was.join('\n\n'), now: c.now.join('\n\n') }));
+      flush();
+      const out = [];
+      let at = 0, place = null, gap = '';
+      for (const [k, x] of ops) {
+        if (k === '=') {
+          gap += x;
+          if (!/^\s+$/.test(x)) place = null;
+        } else {
+          if (!place) out.push(place = { at, was: '', now: '' });
+          else { place.was += gap; place.now += gap; }
+          place[k === '-' ? 'was' : 'now'] += x;
+          gap = '';
+        }
+        if (k !== '-') at += x.length;
+      }
+      return out;
     }
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
@@ -1219,60 +1239,71 @@
       save.onclick = () => keep(!!modelName);
       if (only) only.onclick = () => keep(false);
     }
-    // Its edit history, from the top bar (PAPER.history): the texts it had since it was last generated (local.keep_text)
-    // and the one it has, each with what the save that made it changed; one gone back to is saved as its text, as an
-    // edit is, the one it had kept too. Generated again in every language, the history goes (local.settle).
+    // Its edit history, from the top bar (PAPER.history): each place the edits since it was last generated changed
+    // (placesOf), the words taken out and put in, among the words around them; each edited or undone by itself, or all
+    // at once, saved as an edit is (the page opens on the text so saved as the dialog closes). Generated again in every
+    // language, the history goes (local.settle).
     async function showHistory() {
       const T = t();
-      let text, history, now;
-      try { ({ text, history = [], now } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
-      const when = (at) => at.replace('T', ' ').slice(0, 16);
-      const versions = [...history, { ...now, n: 'now' }];   // (oldest first; listed newest first)
-      const name = (v) => (v.read ? `${T.ed_v_read} · ${when(v.at)}` : T.ed_v_edit.replace('{t}', when(v.at))) + (v.n === 'now' ? ` · ${T.ed_current}` : '');
+      let text, original;
+      try { ({ text, original } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
       const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
       dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_history)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
-        <div class="stp-body"><p class="st-note">${esc(T.ed_hist_note)}</p>
-          <div class="ed-pbar"><select class="ed-ver">${versions.map((v, i) => `<option value="${i}">${esc(name(v))}</option>`).reverse().join('')}</select>
-            <span class="ed-count"></span><button type="button" class="st-btn ed-use">${esc(T.ed_use)}</button></div>
-          <div class="ed-diff"></div></div></div>`;
-      const ver = dlg.querySelector('.ed-ver'), use = dlg.querySelector('.ed-use'), box = dlg.querySelector('.ed-diff'), count = dlg.querySelector('.ed-count');
-      dlg.addEventListener('close', () => dlg.remove());
+        <div class="stp-body"><p class="st-note">${esc(T.ed_hist_note)}</p><div class="ed-diff"></div></div>
+        <footer class="stp-foot"><p class="ed-count"></p><button type="button" class="st-btn ed-all">${esc(T.ed_undo_all)}</button></footer></div>`;
+      const box = dlg.querySelector('.ed-diff'), count = dlg.querySelector('.ed-count'), all = dlg.querySelector('.ed-all');
+      let places = [], saved = false, saving = false;
+      dlg.addEventListener('close', () => {
+        dlg.remove();
+        if (saved) reopen((window.__reader && window.__reader.lang) || 'en');
+      });
       dlg.querySelector('.stp-x').onclick = () => dlg.close();
-      dlg.showModal();
-      const texts = new Map([['now', text]]), split = (x) => x.split(/(\s+)/).filter(Boolean);
-      const textOf = async (v) => {
-        if (!texts.has(v.n)) texts.set(v.n, (await api(`/api/text/${encodeURIComponent(PAPER.id)}/${v.n}`)).text);
-        return texts.get(v.n);
+      const shown = (x) => esc(x).replace(/\n+/g, (n) => `¶${n}`);   // (a paragraph's end, taken out or put in)
+      const show = () => {
+        places = original === null ? [] : placesOf(original, text);
+        count.textContent = places.length ? T.ed_diffs.replace('{n}', places.length) : '';
+        all.disabled = !places.length;
+        const heads = [...text.matchAll(/^#{1,6}\s+(.+)$/gm)];
+        box.innerHTML = places.length ? places.map((p, i) => {
+          const end = p.at + p.now.length, head = heads.filter((m) => m.index < p.at).pop();
+          // the words around it, in its paragraph
+          let before = text.slice(Math.max(0, p.at - 90), p.at), after = text.slice(end, end + 90);
+          before = /\n\n/.test(before) ? before.split(/\n{2,}/).pop() : p.at > 90 ? `…${before.replace(/^\S*\s/, '')}` : before;
+          after = /\n\n/.test(after) ? after.split(/\n{2,}/)[0] : end + 90 < text.length ? `${after.replace(/\s\S*$/, '')}…` : after;
+          return `<section data-i="${i}">${head ? `<h4>${esc(head[1])}</h4>` : ''}` +
+            `<pre>${esc(before)}${p.was ? `<del>${shown(p.was)}</del>` : ''}${p.now ? `<ins>${shown(p.now)}</ins>` : ''}${esc(after)}</pre>` +
+            `<div class="ed-acts"><button type="button" class="st-btn ed-edit">${esc(T.ed_edit)}</button><button type="button" class="st-btn ed-undo">${esc(T.ed_undo)}</button></div></section>`;
+        }).join('') : `<p class="ed-first">${esc(T.ed_same)}</p>`;
       };
-      const marked = (ops, kind, tag) => ops.map(([k, x]) => (k === '=' ? esc(x) : k === kind ? `<${tag}>${esc(x)}</${tag}>` : '')).join('');
-      const compare = async () => {
-        const i = +ver.value;
-        let was, put;
-        try { [was, put] = await Promise.all([i ? textOf(versions[i - 1]) : null, textOf(versions[i])]); }
-        catch (x) { box.textContent = errText(x.message); use.disabled = true; return; }
-        if (+ver.value !== i) return;   // (another chosen meanwhile)
-        use.disabled = versions[i].n === 'now';
-        box.scrollTop = 0;
-        if (was === null) { count.textContent = ''; box.innerHTML = `<p class="ed-first">${esc(T.ed_first)}</p>`; return; }
-        const changes = changesOf(was, put);
-        count.textContent = changes.length ? T.ed_diffs.replace('{n}', changes.length) : T.ed_same;
-        box.innerHTML = changes.map((c) => {
-          const ops = diffOf(split(c.was), split(c.now));
-          return `<section>${c.heading ? `<h4>${esc(c.heading)}</h4>` : ''}` +
-            (c.was ? `<div class="ed-was"><b>${esc(T.ed_was)}</b><pre>${marked(ops, '-', 'del')}</pre></div>` : '') +
-            (c.now ? `<div class="ed-now"><b>${esc(T.ed_now)}</b><pre>${marked(ops, '+', 'ins')}</pre></div>` : '') + '</section>';
-        }).join('');
-      };
-      ver.onchange = compare;
-      use.onclick = async () => {
+      const save = async (next) => {
+        if (saving) return;
         if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
-        use.disabled = true;
-        try { await api('/api/import', { id: PAPER.id, text: texts.get(versions[+ver.value].n) }); }
-        catch (x) { use.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
-        dlg.close();
-        reopen((window.__reader && window.__reader.lang) || 'en');
+        saving = true;
+        try { await api('/api/import', { id: PAPER.id, text: next }); }
+        catch (x) { alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+        finally { saving = false; }
+        text = next; saved = true;
+        if (text === original) dlg.close(); else show();
       };
-      compare();
+      const withPlace = (p, words) => text.slice(0, p.at) + words + text.slice(p.at + p.now.length);
+      box.onclick = (e) => {
+        const b = e.target.closest('button'), sec = b && b.closest('section[data-i]');
+        if (!sec) return;
+        const p = places[+sec.dataset.i];
+        if (b.classList.contains('ed-undo')) save(withPlace(p, p.was));
+        else if (b.classList.contains('ed-edit')) {   // its words put in, to be written anew
+          const acts = sec.querySelector('.ed-acts');
+          acts.innerHTML = `<textarea class="ed-text ed-put" spellcheck="false"></textarea><button type="button" class="st-btn ed-back">${esc(T.cancel)}</button><button type="button" class="st-btn ed-ok">${esc(T.save)}</button>`;
+          const ta = acts.querySelector('textarea');
+          ta.value = p.now;
+          ta.focus();
+          acts.querySelector('.ed-back').onclick = show;
+          acts.querySelector('.ed-ok').onclick = () => (ta.value === p.now ? show() : save(withPlace(p, ta.value)));
+        }
+      };
+      all.onclick = () => { if (confirm(T.ed_undo_all_ask)) save(original); };
+      show();
+      dlg.showModal();
     }
     // A translation stored with paragraphs it has none for (PAPER.gaps: a call that failed, a paragraph the model left
     // out; or made before TextFold asked for them again): they are asked for as it is opened, with the model in use, the

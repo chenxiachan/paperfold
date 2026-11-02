@@ -151,8 +151,8 @@ def import_text(text, name="document.md", base=None):
     return store_doc(pid, html, {"id": pid, **meta}, "source.md", text, lambda folder: Images(folder, base).resolve, sizes=True)
 
 
-# what a replaced text takes with it: the text (kept in its history: keep_text), what was read from it, its pictures
-# (kept there too), and the levels made from it
+# what a replaced text takes with it: the text (the one last generated kept in its history: keep_text), what was read
+# from it, its pictures (kept there too), and the levels made from it
 REPLACED = ("source.md", "source.html", "meta.json", "img", "layers")
 HISTORY = store.HISTORY
 _REPLACING = threading.Lock()   # one replace at a time (the server answers on several threads; a note saved twice)
@@ -168,64 +168,26 @@ def text_of(pid):
     return None
 
 
-def history(pid):
-    """The texts a document had since it was last generated (keep_text), oldest first: [{n, at, read}] (at: when it was
-    saved, or the day it was read in; read: the text read from its file, not one put right by the reader). Each is had
-    by history_text."""
-    f = store.pdir(pid) / HISTORY / "index.json"
-    return json.loads(store.read_text(f)) if store.valid_id(pid) and f.exists() else []
-
-
-def current(pid):
-    """The text a document has now, as history lists the ones before it: {at, read}."""
-    return _made(json.loads(store.read_text(store.pdir(pid) / "meta.json")))
-
-
-def _made(meta):
-    """When a document's text came to be (the edit that saved it, or the day it was read in) and whether it is the one
-    read from its file."""
-    return {"at": meta.get("replaced") or meta.get("snapshot") or "", "read": not meta.get("replaced")}
-
-
-def history_text(pid, n):
-    """One of the texts a document had before (history), or None."""
-    f = store.pdir(pid) / HISTORY / f"{int(n):04d}.md"
+def original(pid):
+    """The text a document had when it was last generated (or read in), before the edits since (keep_text), or None:
+    the page's edit history shows what they changed in it, and puts any of it back (app.js, showHistory)."""
+    f = store.pdir(pid) / HISTORY / "source.md"
     return store.read_text(f) if store.valid_id(pid) and f.exists() else None
 
 
 def keep_text(d):
-    """The text a stored document (its folder, d) has now, kept in its history before an edit takes its place
-    (replace_text), so that it can be put back, by being saved again (the page's edit history: app.js, showHistory),
-    until the document is generated again (settle). As history/NNNN.md, listed in history/index.json; its pictures in
-    history/img, the last of each name, where a text put back finds them (Images: a converted PDF's were read from the
-    engine's folder, which is gone). The text an earlier TextFold kept in previous/ goes in first."""
+    """The text a stored document (its folder, d) has now, kept as an edit takes its place (replace_text) if it is the
+    first since the document was last generated, until it is generated again (settle): the page's edit history shows
+    each change the edits made to it, and puts any of them back (app.js, showHistory). As history/source.md, its
+    pictures in history/img, where a text put back finds them (Images: a converted PDF's were read from the engine's
+    folder, which is gone)."""
     hist = d / HISTORY
-    index = json.loads(store.read_text(hist / "index.json")) if (hist / "index.json").exists() else []
-    for src in ([d / "previous"] if not index else []) + [d]:
-        if not (src / "source.md").exists():
-            continue
-        try:
-            was = json.loads(store.read_text(src / "meta.json"))
-        except (OSError, ValueError):
-            was = {}
-        n = len(index) + 1
-        (hist / "img").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src / "source.md", hist / f"{n:04d}.md")
-        index.append({"n": n, **_made(was)})
-        pool = {f.name.split("-", 1)[-1]: f for f in sorted((hist / "img").iterdir())}
-        for f in sorted((src / "img").iterdir()) if (src / "img").is_dir() else []:
-            name = f.name.split("-", 1)[-1]
-            had = pool.get(name)
-            if had is not None and had.stat().st_size == f.stat().st_size:
-                continue
-            if had is not None:
-                had.unlink()
-            shutil.copy2(f, hist / "img" / f.name)
-            pool[name] = hist / "img" / f.name
-    if index:
-        tmp = hist / "index.json.tmp"
-        tmp.write_text(json.dumps(index, indent=1), encoding="utf-8")
-        os.replace(tmp, hist / "index.json")
+    if (hist / "source.md").exists():
+        return
+    hist.mkdir(exist_ok=True)
+    if (d / "img").is_dir():
+        shutil.copytree(d / "img", hist / "img", dirs_exist_ok=True)
+    shutil.copy2(d / "source.md", hist / "source.md")   # (last: a history with its text has its pictures)
 
 
 def settle(pid):
@@ -248,14 +210,14 @@ def replace_text(pid, text, name=None, base=None):
     """A stored document's text replaced by an edited one, under the same id: a Markdown file's, or a converted file's
     (a PDF's Markdown, its OCR put right by the reader; its title, authors and source stay the file's, and the file
     stays beside it). Its notes, its folder and the model's replies (llm-cache) stay; its notes are found again in the
-    new text (notes.reanchor), its pictures among the ones kept for the old (Images). The old text goes to its history
-    (keep_text), from which it can be put back until it is generated again. Its levels belonged to the old text: they
-    go, and the next generation
-    makes them again from the replies kept, so the model is asked only for the sections whose text changed
-    (pipeline.py); none at all for a text put back. The languages they were in are kept in its meta ("pending", with those of an edit before not made
-    again yet): the page says they are to be generated again, and does it for all of them at once (app.js), so a text
-    can be put right in several places first and the model asked once. Returns the new title. LookupError: no such
-    document, or none with a text to edit (text_of)."""
+    new text (notes.reanchor), its pictures among the ones kept for the old (Images). The text it was last generated
+    from is kept at its first edit (keep_text): each change the edits made to it can be put back until it is generated
+    again; put back whole, nothing is kept. Its levels belonged to the old text: they go, and the next generation makes
+    them again from the replies kept, so the model is asked only for the sections whose text changed (pipeline.py);
+    none at all for a text put back. The languages they were in are kept in its meta ("pending", with those of an edit
+    before not made again yet): the page says they are to be generated again, and does it for all of them at once
+    (app.js), so a text can be put right in several places first and the model asked once. Returns the new title.
+    LookupError: no such document, or none with a text to edit (text_of)."""
     with _REPLACING:
         return _replace(pid, text, name, base)
 
@@ -290,7 +252,9 @@ def _replace(pid, text, name, base):
                 (d / f).rename(gone / f)
             if (tmp / f).exists():
                 (tmp / f).rename(d / f)
-        shutil.rmtree(d / "previous", ignore_errors=True)   # (an earlier TextFold's: in the history now)
+        shutil.rmtree(d / "previous", ignore_errors=True)   # (an earlier TextFold's, the text before the last edit)
+        if original(pid) == text:   # every edit put back: none to show
+            shutil.rmtree(d / HISTORY, ignore_errors=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         shutil.rmtree(gone, ignore_errors=True)

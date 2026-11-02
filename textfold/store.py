@@ -376,7 +376,7 @@ def assemble(pid, only=None):
         for u in doc["units"].values():
             u["lad"] = ladder.local(u, doc["atoms"], cjk)
     meta["pending"] = pending(pid, meta, en)
-    meta["history"] = (pdir(pid) / HISTORY / "index.json").exists()   # (its edit history: in the top bar)
+    meta["history"] = (pdir(pid) / HISTORY / "source.md").exists()   # (its edit history: in the top bar)
     for lang in languages(pid):
         if only is not None and lang not in only:
             continue
@@ -398,7 +398,7 @@ def assemble(pid, only=None):
     return doc
 
 
-HISTORY = "history"   # the texts a document had since it was last generated (local.keep_text)
+HISTORY = "history"   # the text a document was last generated from, kept as it is edited (local.keep_text)
 
 
 def pending(pid, meta, en):

@@ -142,8 +142,7 @@ class Replace(Base):
         self.assertEqual(notes.read(pid)["paper"]["title"], title)
         self.assertTrue((d / "llm-cache" / "abc.json").exists())   # the model's replies stay
         self.assertFalse((d / "layers").exists())                  # the levels went with the old text
-        self.assertEqual([(v["n"], v["read"]) for v in local.history(pid)], [(1, True)])   # which is kept in its history
-        self.assertEqual(local.history_text(pid, 1), TEXT)
+        self.assertEqual(local.original(pid), TEXT)                # which is kept in its history
         self.assertFalse((d / "previous").exists())
         self.assertEqual(store.papers()[0]["id"], pid)
 
@@ -177,42 +176,39 @@ class Replace(Base):
         self.assertEqual((d / "img" / "01-plot.png").read_bytes(), (d / local.HISTORY / "img" / "01-plot.png").read_bytes())
         self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
 
-    def test_every_text_it_had_is_kept_and_one_is_put_back_with_its_pictures(self):
-        """The editor's History: each text replaced is kept (local.keep_text), the one read from the file first; put
-        back by being saved again, a picture an edit left out comes back from the history, its file being gone."""
+    def test_the_text_before_the_edits_is_kept_and_put_back_with_its_pictures(self):
+        """The edit history: the text it had before its first edit is kept (local.keep_text), the one every edit after
+        is told against; a change put back (the text saved with it undone: app.js, showHistory), a picture an edit left
+        out comes back from the history, its file being gone; every change put back, nothing is kept."""
         from PIL import Image
-        text = TEXT.replace("Nobody felt the change.", "Nobody felt the change.\n\n![A plot](figs/plot.png)")
+        plot = "Nobody felt the change.\n\n![A plot](figs/plot.png)"
+        text = TEXT.replace("Nobody felt the change.", plot)
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "figs").mkdir()
             Image.new("RGB", (40, 30), "red").save(Path(tmp) / "figs" / "plot.png")
             pid = local.import_text(text, "diary.md", base=Path(tmp))
         d = store.pdir(pid)
-        first = text.replace("\n\n![A plot](figs/plot.png)", "").replace("emptied by noon", "emptied at noon")
+        first = text.replace(plot, "Nobody felt the change.").replace("emptied by noon", "emptied at noon")
         local.replace_text(pid, first)
-        saved = json.loads((d / "meta.json").read_text(encoding="utf-8"))["replaced"]
         self.assertFalse((d / "img").exists())   # the picture left out
-        local.replace_text(pid, first.replace("how loud it was", "how loud it was at night"))
-        local.replace_text(pid, first.replace("how loud it was", "how loud it was at night"))   # saved again unchanged
-        got = local.history(pid)
-        self.assertEqual([(v["n"], v["read"]) for v in got], [(1, True), (2, False)])
-        self.assertEqual(got[1]["at"], saved)   # when that edit was saved
-        self.assertEqual((local.history_text(pid, 1), local.history_text(pid, 2)), (text, first))
-        self.assertIsNone(local.history_text(pid, 3))
-        local.replace_text(pid, local.history_text(pid, 1))   # the text read from the file, put back
-        self.assertEqual(local.text_of(pid), text)
-        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])
+        second = first.replace("how loud it was", "how loud it was at night")
+        local.replace_text(pid, second)
+        self.assertEqual(local.original(pid), text)   # the text before the first edit, still
+        local.replace_text(pid, second.replace("Nobody felt the change.", plot).replace("emptied at noon", "emptied by noon"))
+        self.assertEqual(sorted(f.name for f in (d / "img").iterdir()), ["01-plot.png"])   # (the first edit undone)
         self.assertIn('src="img/01-plot.png"', (d / "source.html").read_text(encoding="utf-8"))
-        self.assertEqual(len(local.history(pid)), 3)   # the text it replaced, kept too: putting back can be undone
+        self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (text, True))
+        local.replace_text(pid, text)   # the second undone too
+        self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (None, False))
+        self.assertFalse((d / local.HISTORY).exists())
 
-    def test_the_text_an_earlier_textfold_kept_goes_first(self):
+    def test_the_text_an_earlier_textfold_kept_goes(self):
         pid = local.import_text(TEXT, "diary.md")
         d = store.pdir(pid)
         (d / "previous").mkdir()   # as an earlier TextFold kept the text an edit replaced, the last one only
         (d / "previous" / "source.md").write_text("# Older\n\nThe text before.\n", encoding="utf-8")
-        (d / "previous" / "meta.json").write_text(json.dumps({"replaced": "2026-10-01T09:00:00"}), encoding="utf-8")
         local.replace_text(pid, TEXT.replace("how loud", "how quiet"))
-        self.assertEqual([(v["n"], v["at"], v["read"]) for v in local.history(pid)][0], (1, "2026-10-01T09:00:00", False))
-        self.assertEqual((local.history_text(pid, 1), local.history_text(pid, 2)), ("# Older\n\nThe text before.\n", TEXT))
+        self.assertEqual(local.original(pid), TEXT)   # (that edit's was generated since: the text before this one is)
         self.assertFalse((d / "previous").exists())
 
 
@@ -374,17 +370,17 @@ class Refold(Base):
             local.replace_text(pid, once.replace("Nobody felt the change.", "Nobody felt the change at all."))
             self.assertEqual(store.assemble(pid)["meta"]["pending"], ["en", "zh"])
             self.assertTrue(store.papers()[0]["pending"])   # (listed as a document to open, not one to go on generating)
-            self.assertEqual((len(local.history(pid)), store.assemble(pid)["meta"]["history"]), (2, True))   # its edit history
+            self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (TEXT, True))   # its edit history
             asked.clear()
             pipeline.generate(pid, "en", self.SPEC)
             self.assertEqual(len(asked), 3)   # Monday, Tuesday and the links over the whole text
             self.assertEqual(store.assemble(pid)["meta"]["pending"], ["zh"])
-            self.assertEqual(len(local.history(pid)), 2)   # (still to be generated in Chinese)
+            self.assertEqual(local.original(pid), TEXT)   # (still to be generated in Chinese)
             translated()
             local.settle(pid)   # (as the generation that translates it does at its end)
         self.assertEqual(store.assemble(pid)["meta"]["pending"], [])
         self.assertNotIn("pending", store.papers()[0])
-        self.assertEqual((local.history(pid), store.assemble(pid)["meta"]["history"]), ([], False))   # gone, as the page said
+        self.assertEqual((local.original(pid), store.assemble(pid)["meta"]["history"]), (None, False))   # gone, as the page said
         self.assertNotIn("pending", json.loads((store.pdir(pid) / "meta.json").read_text(encoding="utf-8")))
 
     def test_generated_after_an_edit_its_edit_history_goes(self):
@@ -392,9 +388,9 @@ class Refold(Base):
         with mock.patch.object(llm, "_once", fake_model([])), mock.patch.dict(os.environ):
             os.environ.pop("TEXTFOLD_NO_MODELS", None)   # (the build runs the tests with it: the model here is a stand-in)
             local.replace_text(pid, TEXT.replace("how loud", "how quiet"))   # (never generated: nothing pending)
-            self.assertEqual(len(local.history(pid)), 1)
+            self.assertEqual(local.original(pid), TEXT)
             pipeline.generate(pid, "en", self.SPEC)
-        self.assertEqual(local.history(pid), [])
+        self.assertIsNone(local.original(pid))
 
 
 class FakeJobs:
@@ -442,17 +438,12 @@ class Server(Base):
         pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
         url = f"http://127.0.0.1:{self.httpd.server_port}/api/text/"
         with urllib.request.urlopen(url + pid, timeout=30) as r:
-            got = json.loads(r.read())
-        self.assertEqual((got["text"], got["history"], got["now"]["read"]), (TEXT, [], True))
-        self.post("/api/import", {"text": TEXT.replace("# Heat pump diary", "# Diary"), "id": pid})
+            self.assertEqual(json.loads(r.read()), {"text": TEXT, "original": None})
+        edited = TEXT.replace("# Heat pump diary", "# Diary")
+        self.post("/api/import", {"text": edited, "id": pid})
         with urllib.request.urlopen(url + pid, timeout=30) as r:
-            got = json.loads(r.read())
-        self.assertEqual([(v["n"], v["read"]) for v in got["history"]], [(1, True)])   # the texts it had before
-        meta = json.loads((store.pdir(pid) / "meta.json").read_text(encoding="utf-8"))
-        self.assertEqual(got["now"], {"at": meta["replaced"], "read": False})   # and the one it has: an edit
-        with urllib.request.urlopen(f"{url}{pid}/1", timeout=30) as r:
-            self.assertEqual(json.loads(r.read()), {"text": TEXT})
-        for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers", f"{pid}/2", "2512.23916/1"):
+            self.assertEqual(json.loads(r.read()), {"text": edited, "original": TEXT})   # and the text before the edit
+        for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers", f"{pid}/1"):
             with self.assertRaises(urllib.error.HTTPError) as e:
                 urllib.request.urlopen(url + gone, timeout=30)
             self.assertEqual(e.exception.code, 404)
