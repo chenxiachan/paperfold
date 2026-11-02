@@ -412,11 +412,11 @@ window.DR_I18N = (() => {
     zh: upd(['TextFold {v} 已发布。', '下载', '正在下载更新… {p}%', 'TextFold {v} 已下载好。', '重启并更新',
       '更新没能下载下来。', '重试', '检查更新', '已经是最新版本。', '没能检查更新。',
       '软件启动时会到 GitHub 查有没有新版本，不发送你的任何内容。',
-      'TextFold {v} 已经装好。', '这一版的新内容', '在 GitHub 上点星']),
+      'TextFold {v} 已经装好。', '更新内容', '在 GitHub 上点星']),
     'zh-Hant': upd(['TextFold {v} 已發布。', '下載', '正在下載更新… {p}%', 'TextFold {v} 已下載完成。', '重新啟動並更新',
       '更新沒能下載下來。', '重試', '檢查更新', '已經是最新版本。', '沒能檢查更新。',
       '軟體啟動時會到 GitHub 查有沒有新版本，不傳送你的任何內容。',
-      'TextFold {v} 已經裝好。', '這一版的新內容', '在 GitHub 上加星']),
+      'TextFold {v} 已經裝好。', '更新內容', '在 GitHub 上加星']),
     ja: upd(['TextFold {v} が公開されました。', 'ダウンロード', 'アップデートをダウンロード中… {p}%', 'TextFold {v} の準備ができました。', '再起動してアップデート',
       'アップデートをダウンロードできませんでした。', 'もう一度', 'アップデートを確認', '最新のバージョンです。', 'アップデートを確認できませんでした。',
       '起動時に、新しいバージョンがあるか GitHub に確認します。あなたの内容は送信しません。',
@@ -455,6 +455,23 @@ window.DR_I18N = (() => {
       'TextFold {v} इंस्टॉल हो गया है।', 'नया क्या है', 'GitHub पर स्टार दें']),
   };
   for (const [code, words] of Object.entries(U)) Object.assign(S[code], words);
+  // what is new after an update (app.js, showNews: the release's own words are news.py's, in English and Chinese)
+  const wn = (w) => ({ wn_title: w[0], wn_more: w[1], wn_star: w[2], wn_ok: w[3] });
+  const WN = {
+    en: wn(['What’s new in TextFold {v}', 'Full release notes', 'Like TextFold? Star it on GitHub', 'Got it']),
+    zh: wn(['TextFold {v} 更新内容', '完整更新说明', '喜欢 TextFold 的话，欢迎在 GitHub 上点个星', '知道了']),
+    'zh-Hant': wn(['TextFold {v} 更新內容', '完整更新說明', '喜歡 TextFold 的話，歡迎在 GitHub 上加顆星', '知道了']),
+    ja: wn(['TextFold {v} の新機能', 'リリースノート全文', 'TextFold を気に入ったら GitHub でスターを', 'OK']),
+    ko: wn(['TextFold {v}의 새로운 점', '전체 릴리스 노트', 'TextFold가 마음에 드신다면 GitHub에서 별을 눌러 주세요', '확인']),
+    es: wn(['Novedades de TextFold {v}', 'Notas de la versión completas', '¿Te gusta TextFold? Dale una estrella en GitHub', 'Entendido']),
+    fr: wn(['Nouveautés de TextFold {v}', 'Notes de version complètes', 'Vous aimez TextFold ? Mettez-lui une étoile sur GitHub', 'Compris']),
+    de: wn(['Neu in TextFold {v}', 'Alle Versionshinweise', 'Gefällt dir TextFold? Gib ihm einen Stern auf GitHub', 'Verstanden']),
+    pt: wn(['Novidades do TextFold {v}', 'Notas da versão completas', 'Gosta do TextFold? Dê uma estrela no GitHub', 'Entendi']),
+    it: wn(['Novità di TextFold {v}', 'Note di rilascio complete', 'Ti piace TextFold? Lasciagli una stella su GitHub', 'Ho capito']),
+    ru: wn(['Что нового в TextFold {v}', 'Полные заметки о выпуске', 'Нравится TextFold? Поставьте звезду на GitHub', 'Понятно']),
+    hi: wn(['TextFold {v} में नया क्या है', 'पूरे रिलीज़ नोट्स', 'TextFold पसंद है? GitHub पर स्टार दें', 'ठीक है']),
+  };
+  for (const [code, words] of Object.entries(WN)) Object.assign(S[code], words);
   // the library in the sidebar: its search, the reader's folders (folders.py), its order by date
   const lib = (w) => ({ sb_search: w[0], sb_nomatch: w[1], f_new: w[2], f_name: w[3], f_rename: w[4], f_delete: w[5], f_del_confirm: w[6],
     f_empty: w[7], f_actions: w[8], f_out: w[9], sort_label: w[10][0], sort_kind: w[10][1], sort_added: w[10][2], sort_opened: w[10][3],

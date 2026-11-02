@@ -962,13 +962,11 @@
       last = s;
       clearTimeout(fade);
       const T = t(), v = (x) => esc(x.replace('{v}', (s && s.version) || ''));
-      box.hidden = !s || s.dismissed || !['updated', 'available', 'downloading', 'ready', 'failed', ...Object.keys(SAID)].includes(s.kind);
+      box.hidden = !s || s.dismissed || !['available', 'downloading', 'ready', 'failed', ...Object.keys(SAID)].includes(s.kind);
       if (box.hidden) return;
       const x = shut(T.close);
       const go = (label, primary) => `<span class="g-acts"><button type="button" class="g-go${primary ? ' primary' : ''}">${esc(label)}</button></span>`;
-      const link = (href, label) => `<span class="g-acts"><a class="g-go" href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}${svg('out')}</a></span>`;
       box.innerHTML = SAID[s.kind] ? `${sign(s.kind === 'latest' ? 'done' : 'warn', s.kind === 'latest' ? 'ok' : 'warn')}<b>${esc(T[SAID[s.kind]])}</b>${x}`
-        : s.kind === 'updated' ? `${sign('done', 'ok')}<b>${v(T.up_done)}</b>${x}${link(s.notes, T.up_whatsnew)}`
         : s.kind === 'available' ? `${sign('down')}<b>${v(T.up_new)}</b>${x}${go(T.up_get, true)}`
         : s.kind === 'downloading' ? `${sign('down')}<b>${esc(T.up_getting.replace('{p}', s.percent || 0))}</b><span class="sb-prog"><i style="width:${Math.max(3, s.percent || 0)}%"></i></span>`
         : s.kind === 'ready' ? `${sign('restart')}<b>${v(T.up_ready)}</b>${x}${go(T.up_restart, true)}`
@@ -983,6 +981,35 @@
     D.updateState().then(show).catch(() => {});
     document.addEventListener('tf-lang', () => show(last));
   }
+
+  // ── what is new (news.py): the first time TextFold opens after an update, the words of the releases since the one
+  //    the reader was last told of, in a dialog (theirs, in Chinese or else in English); a quiet release only says it is
+  //    installed. Settings opens the newest release's words again ──
+  const REPO = 'https://github.com/chenxiachan/textfold';
+  function showNews(list) {
+    const T = t(), v = list[0].version, words = (e) => e[uiLang] || (uiLang === 'zh-Hant' && e.zh) || e.en || [];
+    const dlg = h('dialog', 'settings prefs news'); document.body.append(dlg);
+    dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.wn_title.replace('{v}', v))}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}">${svg('x')}</button></header>
+      <div class="stp-body">${list.map((e) => (list.length > 1 ? `<h3 class="wn-v">TextFold ${esc(e.version)}</h3>` : '') +
+        words(e).map(([title, text]) => `<div class="wn-item"><b>${esc(title)}</b><p>${esc(text)}</p></div>`).join('')).join('')}</div>
+      <footer class="stp-foot"><p><a href="${REPO}" target="_blank" rel="noopener">★ ${esc(T.wn_star)}</a></p>
+        <a class="st-btn wn-more" href="${REPO}/releases/tag/v${encodeURIComponent(v)}" target="_blank" rel="noopener">${esc(T.wn_more)}${svg('out')}</a>
+        <button type="button" class="primary wn-ok">${esc(T.wn_ok)}</button></footer></div>`;
+    dlg.addEventListener('close', () => dlg.remove());
+    dlg.querySelector('.stp-x').onclick = dlg.querySelector('.wn-ok').onclick = () => dlg.close();
+    dlg.showModal();
+  }
+  api('/api/whatsnew').then((w) => {
+    if (!w.updated) return;
+    if (w.news.length) showNews(w.news);
+    else {   // (a quiet release: that it is installed, for a moment)
+      const box = h('div', 'gen-toast'); toasts.append(box);
+      box.innerHTML = `${sign('done', 'ok')}<b>${esc(t().up_done.replace('{v}', w.version))}</b>${shut(t().close)}`;
+      box.querySelector('.g-x').onclick = () => box.remove();
+      setTimeout(() => box.remove(), 8000);
+    }
+    api('/api/whatsnew', { seen: w.version }).catch(() => {});
+  }).catch(() => {});
 
   // ── on a reader page: generate a language, or regenerate the current one ──
   if (PAPER) {
@@ -1718,6 +1745,7 @@
     let data = modelData || { models: [], agents: [], providers: [], presets: [], bridge: {}, engine: {} };
     let loaded = !!modelData, refreshing = true, refreshError = '';
     let app = null;   // in the app: its version, loaded after the dialog is visible
+    let news = null;  // TextFold's version, and its newest release's words (news.py), loaded after it too
     let form = null;          // the provider being added or edited: {key?, preset, name, base, api_key, found, picked}
     let agentForm = null;     // the custom agent being added or edited (#15): {key?, command, protocol, name, found, picked, manual, version, err, busy}
     const tests = {};         // the last connection test of each model: the levels' (gen), the questions' (ask)
@@ -1895,7 +1923,7 @@
         <div class="stp-body">
         <section><div class="st-list">
           <div class="st-item"><label class="st-main" for="st-ui"><b>${esc(t.language)}</b></label><select class="st-ui" id="st-ui">${I18N.CODES.map((c) => `<option value="${c}"${c === uiLang ? ' selected' : ''}>${esc(I18N.NATIVE[c])}</option>`).join('')}</select></div>
-          ${app ? `<div class="st-item st-app"><div class="st-main"><b>TextFold ${esc(app)}</b><span class="st-meta">${esc(t.up_note)} <a href="https://github.com/chenxiachan/textfold" target="_blank" rel="noopener">★ ${esc(t.up_star)}</a></span><span class="st-upd-msg" aria-live="polite"></span></div><button type="button" class="st-btn st-upd">${esc(t.up_check)}</button></div>` : ''}
+          ${app || news ? `<div class="st-item st-app"><div class="st-main"><b>TextFold ${esc(app || news.version)}</b><span class="st-meta">${app ? `${esc(t.up_note)} ` : ''}<a href="${REPO}" target="_blank" rel="noopener">★ ${esc(t.up_star)}</a></span><span class="st-upd-msg" aria-live="polite"></span></div>${news && news.last ? `<button type="button" class="st-btn st-news">${esc(t.up_whatsnew)}</button>` : ''}${app ? `<button type="button" class="st-btn st-upd">${esc(t.up_check)}</button>` : ''}</div>` : ''}
         </div></section>
         <section><h3>${esc(t.st_models_h)}</h3><div class="st-model-area">${modelSection()}${discoveryState()}</div></section>
         <section><h3>${esc(t.st_agents)}</h3><div class="st-agent-area">${loaded ? agentSection() : ''}</div></section>
@@ -2012,6 +2040,8 @@
       const retry = q('.st-retry');
       if (retry) retry.onclick = discover;
       dlg.querySelectorAll('.st-close').forEach((b) => { b.onclick = () => dlg.close(); });
+      const nb = q('.st-news');
+      if (nb) nb.onclick = () => showNews([news.last]);
       const up = q('.st-upd');
       if (up) up.onclick = async () => {   // an answer either way; one found shows as the corner's toast too
         const msg = q('.st-upd-msg'), t = T();
@@ -2144,6 +2174,10 @@
     dlg.showModal();
     if (window.desktop && window.desktop.checkForUpdates) window.desktop.version().then((v) => {
       app = v;
+      if (dlg.isConnected && !form) render();
+    }).catch(() => {});
+    api('/api/whatsnew').then((w) => {
+      news = w;
       if (dlg.isConnected && !form) render();
     }).catch(() => {});
     try {

@@ -516,6 +516,18 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-text { display: block; width: 100%; height: min(62vh, 640px); box-sizing: border-box; margin-top: 10px; resize: vertical; padding: 12px 14px;
   font: 13px/1.6 var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; outline: none; }
 .ed-text:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+/* what is new after an update (app.js, showNews): each change a title and a few lines; the release notes and a star */
+dialog.settings.news { width: min(560px, calc(100vw - 32px)); }
+.news .stp-body { padding-top: 6px; }
+.news .wn-v { margin: 18px 0 2px; font: 600 12px var(--sans); color: var(--muted); letter-spacing: .02em; }
+.news .wn-item { padding: 12px 0; border-bottom: 1px solid var(--line-2); }
+.news .wn-item:last-child { border-bottom: 0; }
+.news .wn-item b { display: block; font: 600 14.5px var(--sans); color: var(--ink); }
+.news .wn-item p { margin: 5px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+.news .stp-foot a:not(.st-btn) { color: var(--muted); text-decoration: none; }
+.news .stp-foot a:not(.st-btn):hover { color: var(--accent); }
+.news .wn-more { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+.news .wn-more svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 /* its edit history on the page (app.js, review; the marks: reader.css, .rv): from one place to the next, undo it, edit
    it, generate the text again */
 .rvbar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 45; display: flex; flex-wrap: wrap; align-items: center;

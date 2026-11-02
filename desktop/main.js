@@ -233,7 +233,7 @@ ipcMain.handle('storage:choose-folder', async (e) => {
 // four hours; nothing of the reader's is sent. What it finds the page shows (app.js, in the reader's language). Nothing
 // downloads until the reader asks, and what was downloaded installs when they restart from the page, or when they next
 // quit. ThoughtDAG's flow. TEXTFOLD_UPDATES points it at another feed (a folder served over http), for a test run.
-let update = null;   // what the page shows: { kind: updated | available | downloading | ready | failed, version, percent }
+let update = null;   // what the page shows: { kind: available | downloading | ready | failed, version, percent }
 function tell(s) {
   update = s;
   if (win && !win.isDestroyed()) win.webContents.send('update', s);
@@ -243,8 +243,8 @@ function answer(s) {
   if (win && !win.isDestroyed()) win.webContents.send('update', { ...s, transient: true });
 }
 const REPO = 'https://github.com/chenxiachan/textfold';
-// The first launch after an update says so, with a link to what is new. A first install says nothing: the version it
-// records is the next one's "was".
+// The first launch after an update: what the update left is cleared (the page says what is new: news.py). A first
+// install has nothing to clear: the version it records is the next one's "was".
 function updatedFrom() {
   const f = path.join(app.getPath('userData'), 'version');
   let was = null;
@@ -286,7 +286,6 @@ function setupUpdates() {
   }
   const was = updatedFrom();
   if (was) {
-    update = { kind: 'updated', version: app.getVersion(), from: was, notes: `${REPO}/releases/tag/v${app.getVersion()}` };
     dropDownloaded();
     // and the window's HTTP cache, which an earlier version let grow (above); what a new version loads is new anyway
     session.defaultSession.clearCache().catch(() => null);

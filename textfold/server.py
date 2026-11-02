@@ -23,6 +23,8 @@
                               local.places), the edit history's changes marked on it
   GET  /api/models            saved configuration and the last model discovery results (no service probes); its "lang", the
                               reader's language as the page last told it (null until it has), for other programs
+  GET  /api/whatsnew          what the page says as it opens after an update: {version, updated, news, last} (news.py)
+                              ·  POST {seen}: the reader told of that release
   GET  /api/langs             the languages a text can be read in: [{code, name}], each by its own name (langs.py)
   POST /api/models/refresh    refresh local model services in the background; GET /api/models reports progress/errors
   POST /api/models/select     {model, effort}: the model generations use; {task: "ask", model, effort}: the one questions
@@ -92,7 +94,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, zotero
+from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, zotero
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript"}
@@ -671,6 +673,8 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
+                if u.path == "/api/whatsnew":
+                    return self.json(news.state())
                 m = re.fullmatch(r"/api/text/([\w.-]+)", u.path)
                 if m:
                     pid = m.group(1)
@@ -795,6 +799,9 @@ def make_handler(jobs):
                 if u.path == "/api/jobs/stop":
                     job = jobs.stop(body.get("id", ""))
                     return self.json(job) if job else self.json({"error": "no such job"}, 404)
+                if u.path == "/api/whatsnew":   # the page told the reader of a release
+                    news.told(str(body.get("seen") or __version__)[:40])
+                    return self.json({"ok": True})
                 if u.path == "/api/places":   # the edit history's places, shown on the page (app.js, review)
                     pid, spans = str(body.get("id") or ""), body.get("spans")
                     if not (isinstance(spans, list) and all(isinstance(x, list) and len(x) == 2 and all(isinstance(n, int) for n in x) for x in spans)):

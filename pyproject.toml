@@ -54,4 +54,4 @@ packages = ["textfold"]
 version = { attr = "textfold.__version__" }
 
 [tool.setuptools.package-data]
-textfold = ["web/*", "web/**/*", "skills/*/*"]
+textfold = ["web/*", "web/**/*", "skills/*/*", "whatsnew.json"]
