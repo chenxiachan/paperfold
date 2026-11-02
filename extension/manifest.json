@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "TextFold",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApZAtAoJeesNCCgonLekRTivGhCvvDX8kXItItWf+6V7yUszp51epb1zwnQldsvRF0ZdKL3dfeKOGyvrfdGevXggJYOTIA8MO/NQ8BlBiWVv2IHxVh06gfiMSwvrJJOWfJfJiQNxSa/wFWoZQBGQ+se2dUhtCXnA6UBsuj9v8cbtZmHDZVmrf+cSaEPFsMlL3udOTtdjTzgUi9Xua8e5PjB2kkaXmJ/7zybS6mzLj/SnV1EcycTFBHTOgL9cxZOz/V/4VLoxAlMTpopr9mXOz4q4btvGf8LPRnktYYsTcuv7q9fVLRUOpLLq+FbwMqDHLqzyTA/h9s94qPVlEPdqcwQIDAQAB",
+  "description": "__MSG_description__",
+  "default_locale": "en",
+  "homepage_url": "https://chenxiachan.github.io/textfold/",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "nativeMessaging"],
+  "background": {"service_worker": "background.js"},
+  "action": {
+    "default_title": "__MSG_action_title__",
+    "default_icon": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"}
+  },
+  "options_ui": {"page": "setup.html", "open_in_tab": true},
+  "icons": {"16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"}
+}

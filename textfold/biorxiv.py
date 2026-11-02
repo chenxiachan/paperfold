@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 
 from . import epmc, jats, local, store
-from .fetch import UA
+from .fetch import AGAIN, UA, urlread
 
 API = "https://api.biorxiv.org/details/{server}/{doi}"
 SERVERS = ("biorxiv", "medrxiv")
@@ -47,12 +47,14 @@ def pid_of(server, doi):
 
 
 def _get(url, timeout=60):
-    if re.match(r"https?://(www\.)?(biorxiv|medrxiv)\.org/", url):
+    paced = re.match(r"https?://(www\.)?(biorxiv|medrxiv)\.org/", url)
+    if paced:
         with _pace["lock"]:
             time.sleep(max(0.0, _pace["last"] + DELAY - time.time()))
             _pace["last"] = time.time()
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout) as r:
-        return r.read(), r.geturl()
+    again = tuple(max(w, DELAY) for w in AGAIN) if paced else AGAIN   # (a try again keeps to their pace too)
+    data, final, _ = urlread(urllib.request.Request(url, headers=UA), timeout, again=again)
+    return data, final
 
 
 def versions(server, doi):

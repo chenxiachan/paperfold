@@ -62,6 +62,10 @@ more than one way, so it can be found again when the text around it changes.
     as `{ "words": [first, last], "exact": "…" }`, where `words` count the words of the unit's Key line in `lang`
     (Takeaway is its first sentence, so a word keeps its place in both) and `exact` is those words as the line read
     then. `exact` tells whether the line still reads so: a refold writes the line again.
+  - `eq`, only on a note made on an equation set apart from the text: the equation's id. The note is on the paragraph
+    that brings the equation in (`unit`; the one after it, when the equation opens its section), with `tokens` and
+    `sents` null, and its `quote` is the equation in LaTeX, `$…$`. The reader lights the equation whole, at Full and
+    Brief, in every language.
   - `lost`, only on a note whose passage was not found again after the text changed: where it was, `{ "unit",
     "section", "tokens", "sents", "since" }` (and, for a note made in a translation, `quote`: its sentences in the
     text's own words, to look for). The note is kept where the reader still lists and shows it: on the paragraph it was

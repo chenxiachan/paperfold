@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TextFold</title>
+<style>
+  :root {
+    --surface: #FAF9F7; --card: #FFFFFF; --ink: #1A1A1A; --ink-2: #4A4540; --muted: #6B6560; --line: #DCD8D1;
+    --accent: #6B5CE7; --accent-soft: #EDE9FF; --ok: #3f7d52; --warn: #b3412e; --btn: #6B5CE7; --btn-hover: #5A4AD9; --on-btn: #fff;
+    --sans: 'Inter', -apple-system, 'PingFang SC', 'Hiragino Sans', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --surface: #1B1915; --card: #24211C; --ink: #EDE9E3; --ink-2: #C9C3BA; --muted: #9C958B; --line: #3A362F;
+            --accent: #A79FF4; --accent-soft: #2D2850; --ok: #8FD27A; --warn: #F2958A; --btn-hover: #7B6DF0; color-scheme: dark; }
+  }
+  body { margin: 0; background: var(--surface); color: var(--ink); font: 15px/1.6 var(--sans); }
+  main { max-width: 600px; margin: 0 auto; padding: 56px 20px 64px; display: grid; gap: 22px; }
+  header { display: flex; align-items: center; gap: 12px; }
+  header svg { width: 32px; height: 32px; flex: none; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; display: grid; gap: 12px; }
+  .card h2 { font-size: 17px; font-weight: 600; margin: 0; text-wrap: balance; }
+  .card[data-state="ok"] h2 { color: var(--ok); }
+  .card:not([data-state="ok"]):not([data-state="checking"]) h2 { color: var(--warn); }
+  .card p { margin: 0; color: var(--ink-2); }
+  ol { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+  ol:empty { display: none; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .btn { font: 500 14px/1 var(--sans); border-radius: 8px; padding: 10px 16px; cursor: pointer; text-decoration: none; border: 1px solid var(--line);
+         background: var(--card); color: var(--ink); }
+  .btn.primary { background: var(--btn); border-color: var(--btn); color: var(--on-btn); }
+  .btn.primary:hover { background: var(--btn-hover); }
+  .btn[hidden] { display: none; }
+  details { color: var(--ink-2); }
+  summary { cursor: pointer; color: var(--muted); }
+  pre { background: var(--accent-soft); color: var(--ink); border-radius: 8px; padding: 10px 12px; margin: 8px 0 0; overflow-x: auto;
+        font: 13px/1.6 var(--mono); }
+  .note { font-size: 13px; color: var(--muted); margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="2.4" rx="1.2" fill="#6B5CE7"/>
+      <rect x="2" y="8.8" width="11" height="2.4" rx="1.2" fill="#6B5CE7" fill-opacity=".4"/><rect x="2" y="14.6" width="5" height="2.4" rx="1.2" fill="#E08A3C"/></svg>
+    <h1 data-i18n="setup_title"></h1>
+  </header>
+  <section class="card" id="state" data-state="checking" aria-live="polite">
+    <h2 id="title" data-i18n="checking"></h2>
+    <p id="text"></p>
+    <ol id="steps"></ol>
+    <div class="actions">
+      <a class="btn primary" id="download" href="https://chenxiachan.github.io/textfold/" target="_blank" rel="noopener" data-i18n="download" hidden></a>
+      <button class="btn" id="check" type="button" data-i18n="check"></button>
+    </div>
+  </section>
+  <details>
+    <summary data-i18n="pip_title"></summary>
+    <p data-i18n="pip_text"></p>
+    <pre><code>pip install -U textfold
+python3 -m textfold capture install</code></pre>
+  </details>
+  <p class="note" data-i18n="privacy_note"></p>
+</main>
+<script src="connect.js"></script>
+<script src="setup.js"></script>
+</body>
+</html>

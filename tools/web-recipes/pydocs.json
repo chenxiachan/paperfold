@@ -1,0 +1,14 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "docs.python.org",
+ "pages": "/3/*",
+ "article": "div.body[role='main']",
+ "drop": [
+  "a.headerlink"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "Sphinx: the page is div.body with role main; the pilcrow after each heading (a.headerlink) is a link, not text. Code blocks are pre inside div.highlight and stay as code."
+}

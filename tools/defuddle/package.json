@@ -1,0 +1,11 @@
+{
+  "name": "textfold-extension-readers",
+  "private": true,
+  "description": "What extension/vendor is built from (build.mjs): Defuddle with TextFold's changes, and Readability",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@mozilla/readability": "0.6.0",
+    "defuddle": "0.19.5",
+    "esbuild": "0.24.2"
+  }
+}

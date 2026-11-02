@@ -1,0 +1,9 @@
+Latin Modern Math, version 1.959 (latinmodern-math.otf from TeX Live, converted to WOFF2 and otherwise unchanged)
+
+Copyright 2012--2014 for Latin Modern Math OTF by B. Jackowski, P. Strzelczyk and P. Pianowski (on behalf of TeX
+users groups). This work is released under the GUST Font License, see
+http://tug.org/fonts/licenses/GUST-FONT-LICENSE.txt for details.
+
+The GUST Font License is the LaTeX Project Public License, version 1.3c or later
+(https://www.latex-project.org/lppl/), with the request, not a legal requirement, that derived works be
+distributed only after the names of the fonts and of their files are changed.

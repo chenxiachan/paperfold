@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "把正在读的网页按你看到的样子发给本机的 TextFold，折成五层来读。"
+  },
+  "action_title": {
+    "message": "发送到 TextFold"
+  },
+  "sending": {
+    "message": "正在发送到 TextFold…"
+  },
+  "saved": {
+    "message": "已存入 TextFold 文献库。"
+  },
+  "already": {
+    "message": "这一页已经在 TextFold 文献库里了。"
+  },
+  "saved_closed": {
+    "message": "已存入 TextFold 文献库。打开 TextFold 就能读。"
+  },
+  "err_notext": {
+    "message": "这一页可读的文字太少，TextFold 没有存。"
+  },
+  "err_notweb": {
+    "message": "TextFold 只读网页（http 和 https）。"
+  },
+  "err_nopage": {
+    "message": "这一页读不出来。"
+  },
+  "err_update": {
+    "message": "TextFold 需要更新，请看刚打开的标签页。"
+  },
+  "err_setup": {
+    "message": "还没有连上 TextFold，请看刚打开的标签页。"
+  },
+  "err_other": {
+    "message": "这一页没有存下（$CODE$）。",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "连接 TextFold"
+  },
+  "ok_title": {
+    "message": "已连上 TextFold"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ 已应答。在任何网页上点 TextFold 按钮，就能把它发过去。",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "浏览器找不到 TextFold"
+  },
+  "missing_text": {
+    "message": "这个按钮把网页交给 TextFold，它是本机上的一个免费软件。只需设置一次："
+  },
+  "forbidden_title": {
+    "message": "TextFold 还不认识这个扩展"
+  },
+  "forbidden_text": {
+    "message": "本机的 TextFold 比这个扩展旧，请先更新："
+  },
+  "exited_title": {
+    "message": "TextFold 没有启动"
+  },
+  "exited_text": {
+    "message": "它可能在上次打开之后被移动或删除了。请这样做："
+  },
+  "update_title": {
+    "message": "TextFold 需要更新"
+  },
+  "update_text": {
+    "message": "这个扩展比本机的 TextFold 新，请先更新："
+  },
+  "step_download": {
+    "message": "下载 macOS 或 Windows 版 TextFold 并安装。"
+  },
+  "step_update": {
+    "message": "下载最新的 TextFold，覆盖安装旧版。"
+  },
+  "step_open": {
+    "message": "打开一次 TextFold，它会自动连上这个浏览器。"
+  },
+  "step_again": {
+    "message": "回到网页，再点一次 TextFold 按钮。"
+  },
+  "download": {
+    "message": "下载 TextFold"
+  },
+  "check": {
+    "message": "重新检查"
+  },
+  "checking": {
+    "message": "正在检查…"
+  },
+  "pip_title": {
+    "message": "用的是 Python 版 TextFold？"
+  },
+  "pip_text": {
+    "message": "安装或更新它，再运行一次下面的命令，让浏览器能找到它："
+  },
+  "privacy_note": {
+    "message": "扩展只把网页交给本机的 TextFold，不交给任何别处。TextFold 用你在设置里选的模型写出各层。"
+  }
+}

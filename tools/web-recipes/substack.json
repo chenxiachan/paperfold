@@ -1,0 +1,17 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "oneusefulthing.org",
+ "pages": "/p/*",
+ "article": "article.newsletter-post",
+ "drop": [
+  ".subscribe-widget",
+  "p.button-wrapper",
+  ".post-footer",
+  "[aria-label=\"Post UFI\"]"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "Substack: the post is article.newsletter-post; the subscribe box, the share button, the likes bar and the footer are furniture."
+}

@@ -328,6 +328,11 @@ li.u[data-l="2"] { padding-left: 34px; }
 li.u[data-l="2"] .dot { left: 14px; }
 li.u[data-l="1"] { padding-left: 38px; }
 li.u[data-l="2"] .mk, li.u[data-l="1"] .mk, li.u[data-l="0"] .mk { display: none; }
+/* Numbered and named list entries keep their labels when their text folds. Unlabeled bullets still give way to dots. */
+li.u[data-l="2"] .mk.mk-labeled, li.u[data-l="1"] .mk.mk-labeled, li.u[data-l="0"] .mk.mk-labeled {
+  display: inline; position: static; margin-right: .3em; font-variant-numeric: tabular-nums;
+}
+li.u.numbered[data-l="2"] .tx, li.u.numbered[data-l="1"] .tx, li.u.numbered[data-l="0"] .tx { display: inline; }
 
 /* ── figures, tables, equations ─────────────────────────── */
 figure.fig { margin: 26px 0; }
@@ -384,7 +389,13 @@ figure.fig[data-l="1"] figcaption.u { padding: 0; }
 figure.fig[data-l="2"]:has(.ltx_flex_cell + .ltx_flex_cell) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 figure.fig[data-l="2"] .ltx_flex_cell, figure.fig[data-l="1"] .ltx_flex_cell { min-width: 0; }
 figure.fig[data-l="2"] .fbody :is(.ltx_minipage, .ltx_parbox), figure.fig[data-l="1"] .fbody :is(.ltx_minipage, .ltx_parbox) { max-width: 100%; }
-figure.fig[data-l="1"] .ltx_flex_figure { flex-wrap: nowrap; gap: 6px; }
+figure.fig[data-l="1"] /* a table from Markdown, a web page or a document (semantic.py: pf-grid), as Typora draws one: as wide as the text,
+   in its type, every cell ruled, the header and every other row shaded. A paper's keeps its booktabs rules */
+.ltx_tabular.pf-grid { display: table; width: 100%; font-family: var(--text); font-size: calc(15px * var(--fs)); line-height: 1.5; }
+.pf-grid .ltx_td { padding: 6px 13px; border: 1px solid var(--line); }
+.pf-grid .ltx_th { font-weight: 650; }
+.pf-grid thead tr, .pf-grid tbody tr:nth-child(2n) { background: color-mix(in srgb, var(--ink) 4%, var(--surface)); }
+.ltx_flex_figure { flex-wrap: nowrap; gap: 6px; }
 figure.fig[data-l="1"] .ltx_flex_break { display: none; }
 figure.fig[data-l="2"] .ltx_flex_cell .ltx_caption > :not(.ltx_tag) { display: none; }
 figure.fig[data-l="1"] .ltx_flex_cell .ltx_caption, figure.fig[data-l="1"] .ltx_flex_cell:not(:has(img, svg)) { display: none; }
@@ -433,7 +444,12 @@ figure.fig[data-l="0"] .flabel { font-weight: 600; color: var(--muted); }
 .ltx_font_typewriter { font-family: var(--mono); font-size: .88em; }
 .ltx_font_smallcaps { font-variant: small-caps; }
 .ltx_font_upright { font-style: normal; }
-math { font-size: 1.04em; }
+/* formulas in TeX's own type, as LaTeX and Typora set them: MathML in Latin Modern Math (vendor/fonts), a formula
+   written in LaTeX drawn by KaTeX (reader.js drawTex), each a little larger than the words around it, so that its
+   letters stand as high as theirs (Computer Modern's x-height is lower than Source Serif's) */
+math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em; }
+.katex { font-size: 1.1em; }
+.eq .katex-display { margin: 0; }
 .ltx_tabular { border-collapse: collapse; display: inline-table; font-family: var(--sans); font-size: calc(13px * var(--fs)); line-height: 1.4; }
 .ltx_tabular.ltx_centering { display: table; margin-inline: auto; }
 .ltx_thead, .ltx_tbody, .ltx_tfoot { display: table-row-group; }
@@ -448,7 +464,14 @@ math { font-size: 1.04em; }
 .ltx_eqn_cell { padding: .25rem .2rem; }
 .ltx_eqn_center_padleft, .ltx_eqn_center_padright { width: 50%; }
 .ltx_eqn_left_padright, .ltx_eqn_right_padleft { width: 100%; }
-.ltx_eqn_eqno { white-space: nowrap; width: 3em; text-align: right; color: var(--muted); font-size: .85em; font-family: var(--sans); }
+/* an equation's number, (1), on the right in the type of the formula, as Typora and LaTeX set it */
+.ltx_eqn_eqno { white-space: nowrap; width: 3em; text-align: right; color: var(--ink-2); font-family: KaTeX_Main, 'Latin Modern Math', var(--serif); font-size: 1.1em; }
+/* a table from Markdown, a web page or a document (semantic.py: pf-grid), as Typora draws one: as wide as the text,
+   in its type, every cell ruled, the header and every other row shaded. A paper's keeps its booktabs rules */
+.ltx_tabular.pf-grid { display: table; width: 100%; font-family: var(--text); font-size: calc(15px * var(--fs)); line-height: 1.5; }
+.pf-grid .ltx_td { padding: 6px 13px; border: 1px solid var(--line); }
+.pf-grid .ltx_th { font-weight: 650; }
+.pf-grid thead tr, .pf-grid tbody tr:nth-child(2n) { background: color-mix(in srgb, var(--ink) 4%, var(--surface)); }
 .ltx_flex_figure { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: .5rem; }
 .ltx_flex_cell { flex: 1 1 0; } .ltx_flex_break { flex-basis: 100%; height: 0; }
 .ltx_rule { display: none; }
@@ -532,6 +555,18 @@ li.u > .side { left: calc(100% + 34px); }
 .tk.fd, .tr.fd, .fdsp { background-color: color-mix(in srgb, var(--warm) 28%, transparent); border-radius: 2px; }
 .tk.fdc, .tr.fdc, .fdsp.fdc { background-color: color-mix(in srgb, var(--warm) 62%, transparent); }
 @media print { .findbar { display: none; } .tk.fd, .tr.fd, .fdsp { background: none; } }
+/* an edit's places (reader.js, setReview): the words put in, lit and underlined; the words taken out, struck through
+   before the word they were before (the mark's content, not the text's); a heading changed, lit; the place the reader
+   is at, stronger */
+.tk.rv, .tr.rv, .rvsp, .rvh { background-color: color-mix(in srgb, var(--r-result) 16%, transparent); text-decoration: underline 1.5px;
+  text-decoration-color: color-mix(in srgb, var(--r-result) 70%, transparent); text-underline-offset: 3px; border-radius: 2px; }
+.tk.rvc, .tr.rvc, .rvsp.rvc, .rvh.rvc { background-color: color-mix(in srgb, var(--r-result) 34%, transparent); }
+.tk.rvb::before, .tk.rva::after, .rvdel::before { font-size: .92em; color: var(--r-limitation); text-decoration: line-through 1.5px; border-radius: 2px;
+  background: color-mix(in srgb, var(--r-limitation) 10%, transparent); padding: 0 .12em; }
+.tk.rvb::before, .rvdel::before { content: attr(data-was); margin-right: .25em; }
+.tk.rva::after { content: attr(data-was-after); margin-left: .25em; }
+.tk.rvbc::before, .tk.rvac::after, .rvdel.rvc::before { background: color-mix(in srgb, var(--r-limitation) 22%, transparent); }
+@media print { .tk.rv, .tr.rv, .rvsp, .rvh { background: none; text-decoration: none; } .tk.rvb::before, .tk.rva::after, .rvdel::before { content: none; } }
 .peek img { display: block; max-width: 100%; max-height: 220px; margin: 6px auto; border-radius: 4px; }
 .peek .pk-where { font-size: 12px; display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .peek .pk-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
@@ -591,6 +626,7 @@ html[lang="zh-TW"] .u[data-l="4"], html[lang="zh-TW"] .u[data-l="3"] { line-heig
 /* ── the reader's notes (docs/notes-format.md) ──────────────── */
 .tk.hl, .tr.hl, .hlsp { background-color: color-mix(in srgb, var(--hl) 78%, transparent); border-radius: 2px; cursor: pointer; }
 .tk.hls, .tr.hls, .hlsp.hls { background-color: color-mix(in srgb, var(--hl) 36%, transparent); }
+.eq.hl { background-color: color-mix(in srgb, var(--hl) 55%, transparent); border-radius: 6px; cursor: pointer; }   /* an equation marked whole */
 .tk.hlk, .tr.hlk, .hlsp.hlk { background-color: color-mix(in srgb, var(--hl-key) 85%, transparent); }
 .tk.hlt, .tr.hlt, .hlsp.hlt { background-color: color-mix(in srgb, var(--hl-take) 90%, transparent); }
 /* a highlight's shade (note.shade: 1 light, 3 deep; the usual 2 is none): its level's colour nearer the page, or
@@ -1096,12 +1132,10 @@ html.compare .chunk > .side, html.compare .chunk > .lside { position: static; }
 }
 @media print { .tview, .mmap { display: none !important; } }
 
-/* ── a word over the page: where it was opened, focus begun ── */
+/* ── a word over the page: focus begun ── */
 .rpill { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 46; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
-  padding: 6px 7px 6px 14px; border-radius: 999px; background: var(--ink); color: var(--surface); font: 500 13px var(--sans); box-shadow: var(--pop); }
+  padding: 6px 14px; border-radius: 999px; background: var(--ink); color: var(--surface); font: 500 13px var(--sans); box-shadow: var(--pop); }
 html.focus .rpill { top: 14px; }   /* (no top bar over it) */
-.rpill button { flex: none; border: 0; border-radius: 999px; padding: 3px 11px; font: 600 12.5px var(--sans); cursor: pointer;
-  color: var(--ink); background: var(--surface); }
 /* focus (reader.js, F): the top bar, the zoom bar and the chat off the page, back while the pointer is at their edge;
    moved and faded, not removed, so nothing in the column moves */
 html.focus .topbar, html.focus footer.zoom, html.focus .chatbtn { transition: transform .25s var(--ease), opacity .2s; }

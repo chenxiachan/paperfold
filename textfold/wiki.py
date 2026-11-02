@@ -22,7 +22,7 @@ import urllib.request
 from bs4 import BeautifulSoup
 
 from . import local, store
-from .fetch import UA
+from .fetch import UA, urlread
 
 URL = re.compile(r"https?://([a-z][a-z-]{1,15})\.(?:m\.)?wikipedia\.org/(?:wiki|zh-[a-z]+|zh)/([^?#\s]+)", re.I)
 URL_Q = re.compile(r"https?://([a-z][a-z-]{1,15})\.(?:m\.)?wikipedia\.org/w/index\.php\?(?:[^#\s]*&)?title=([^&#\s]+)", re.I)
@@ -56,8 +56,7 @@ def _get(url, timeout=60, variant=None):
     """variant: the script a Chinese article is converted to (zh-cn). Its source mixes simplified and traditional and
     marks words that must not be converted, which Parsoid's HTML leaves empty until the article is converted."""
     headers = {**UA, **({"Accept-Language": variant} if variant else {})}
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
-        return r.read()
+    return urlread(urllib.request.Request(url, headers=headers), timeout)[0]
 
 
 def lookup(lang, title=None, pageid=None):

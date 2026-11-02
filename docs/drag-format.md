@@ -12,9 +12,10 @@ version 2.
 | a paragraph, by the handle beside it on hover (its text stays selectable) | `paragraph` | `u=<id>&level=<level>` | the paragraph at its level |
 | a section's heading, by its handle: the whole section, its subsections with it | `section` | `s=<id>&level=<level>` | the section as it reads at that level: at Key and Takeaway its summary, then a `- ` bullet per paragraph; at Brief and Full a paragraph each, blank lines between (Brief keeps its `…`); each subsection after its own heading (and summary) |
 | a section's one-line summary (Key, Takeaway), by its handle | `summary` | `s=<id>&level=<level>` | the summary |
+| an equation set apart (Full, Brief), by its handle | `equation` | `u=<the paragraph it goes with>&eq=<id>&level=<level>` (`s=` with `eq=` when its section has no paragraph) | the equation in LaTeX as `$$…$$`, its number as `\tag{…}` (`\tag*{…}` for one without brackets), several rows in `\begin{gathered}` |
 | a section's card on the Topic map, grabbed anywhere (no handles there) | `section` | `s=<id>&level=topic` | as the card reads: its summary (the line under its title, which goes in `heading`), then on a line of its own its paragraphs' topics (its chips), joined by ` · ` |
 | a selection in one paragraph | `selection` | `u=<that paragraph>&level=<level>` (`s=` when it is on a heading or summary alone) | the selected words |
-| a selection over several paragraphs | `selection` | `u=<the first>&to=<the last>&level=<level>` | the selected words, a paragraph each (a heading or summary it crosses too), blank lines between |
+| a selection over several paragraphs | `selection` | `u=<the first>&to=<the last>&level=<level>` | the selected words, a paragraph each (a heading or summary it crosses too), blank lines between; an equation it crosses whole, as `$$…$$` (on equations alone, the link is the first one's) |
 | a highlight's or a note's card, in the margin or the notes list | `note` | `n=<note id>` | the note's text, else its quote |
 | a conversation's card (Ask), in the margin or the notes list | `ask` | `n=<note id>` | the answer in one sentence |
 | one message of a conversation, in the chat (the whole paper) or a note's window, by its handle; or words selected in it | `ask` | `n=<note id>&t=<turn>` | the question, or the answer: its Markdown, a citation as its label, `(§3 ¶2)` |
@@ -22,7 +23,8 @@ version 2.
 Every link is `textfold://open?paper=<id>&…&lang=<code>`, the language the text was read in, values URL-encoded.
 `t=<turn>` is the place of a turn in its conversation, from 0: the chat, or the note's window, opens scrolled to it.
 `to=<paragraph>` goes with `u=`: the reader flashes every paragraph from `u` to `to` together. `s=` flashes the whole
-section, its subsections with it.
+section, its subsections with it. `eq=<equation>` goes with `u=` (or `s=`): the reader opens at the equation where the
+level shows it (Full, Brief), else at that paragraph, as a reader from before `eq=` does.
 (`chip`, a kind of the first drafts of this format, is not made: a chip goes with its card.)
 
 ## The four types
@@ -66,6 +68,8 @@ section, its subsections with it.
 - **section**: the section it is in, `null` outside any (a document's opening text, the whole paper).
 - **heading**: for a section (its heading's handle, or its card on the Topic map), its heading as the reader shows it,
   number and title. Left out otherwise.
+- **equation**: for an equation, its id (`S2.E1` in an arXiv paper, `eq-heat` for one a Markdown file labels
+  `\label{eq:heat}`). Left out otherwise.
 - **level**: the level shown when it was dragged: `topic`, `takeaway`, `key`, `brief` or `full`.
 - **lang**: the language it was read in.
 - **text**: what was dragged, as it reads at that level, in plain text: a formula as `$LaTeX$`, a gap as `…`.

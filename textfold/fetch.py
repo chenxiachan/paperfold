@@ -1,6 +1,12 @@
-"""Download a paper's arXiv HTML (LaTeXML) and its metadata, once."""
+"""Download a paper's arXiv HTML (LaTeXML) and its metadata, once; and every download of TextFold's (urlread): a
+network that drops a connection now and then is asked again, rather than ending the import."""
+import email.utils
+import http.client
 import json
 import re
+import ssl
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -20,9 +26,62 @@ def paper_id(ref):
     return m.group(1)
 
 
+AGAIN = (1, 2, 5, 10)              # seconds before each new try: five in all, 18 s of waiting at most
+BUSY = {429, 500, 502, 503, 504}   # a server busy or briefly down: a later try is answered
+
+
+class Unreachable(urllib.error.URLError):
+    """Every try failed on the way. It reads as the code the app has a sentence for, with the host: net-down:arxiv.org
+    (a URLError still, for those who try another address on one)."""
+    def __init__(self, host, last):
+        super().__init__(last)
+        self.host = host
+
+    def __str__(self):
+        return f"net-down:{self.host}"
+
+
+def _later(e, wait):
+    """The wait before the next try: what a busy server asks (Retry-After, in seconds or as a date; a minute at most),
+    else `wait`."""
+    v = (e.headers.get("Retry-After") or "").strip() if e.headers else ""
+    if v.isdigit():
+        return min(int(v), 60)
+    try:
+        return min(max(0.0, email.utils.parsedate_to_datetime(v).timestamp() - time.time()), 60)
+    except (TypeError, ValueError, IndexError):
+        return wait
+
+
+def urlread(req, timeout=60, limit=None, check=None, busy=BUSY, again=AGAIN):
+    """A request's body, its address after redirects, and its headers. A failure on the way (a connection dropped or
+    reset, a TLS stream cut short, a timeout, no network) is tried again after `again`'s waits, and so is a busy
+    server's answer (`busy`). An answer that will not change (404, 403, a certificate refused) is raised at once, as is
+    what `check` raises on the response, before its body is read. Every try failed on the way: Unreachable."""
+    if isinstance(req, str):
+        req = urllib.request.Request(req, headers=UA)
+    for i in range(len(again) + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                if check:
+                    check(r)
+                return (r.read() if limit is None else r.read(limit)), r.geturl(), r.headers
+        except urllib.error.HTTPError as e:
+            if e.code not in busy or i == len(again):
+                raise
+            wait = _later(e, again[i])
+        except (OSError, http.client.HTTPException) as e:   # (URLError is an OSError)
+            if isinstance(e, ssl.SSLCertVerificationError) or isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
+                raise
+            if i == len(again):
+                raise Unreachable(urllib.parse.urlsplit(req.full_url).hostname or "", e) from e
+            wait = again[i]
+        time.sleep(wait)
+
+
 def get(url):
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
-        return r.read(), r.geturl()
+    data, final, _ = urlread(url)
+    return data, final
 
 
 def fetch(pid, root: Path, force=False):
@@ -35,8 +94,15 @@ def fetch(pid, root: Path, force=False):
             return folder
     with repo.edit(pid, create=True) as document:
         if document.source.html is not None and document.meta is not None and not force:
-            return document
-        html, final = get(f"https://arxiv.org/html/{pid}")
+            return folder if isinstance(repo.backend, LocalDirectoryBackend) else document
+        if document.source.html is not None and not force:
+            html, final = document.source.html.encode("utf-8"), ""
+        else:
+            html, final = get(f"https://arxiv.org/html/{pid}")
+            document.source.html = html.decode("utf-8", "replace")
+    # Keep completed HTML if metadata fails; a generation lease still defers cloud publication.
+    repo.checkpoint(pid)
+    with repo.edit(pid, create=True) as document:
         abs_html = get(f"https://arxiv.org/abs/{pid}")[0].decode("utf-8", "replace")
         metas = re.findall(r'<meta name="citation_(\w+)" content="([^"]*)"', abs_html)
         lic = re.search(r'href="(https?://(?:arxiv\.org/licenses|creativecommons\.org)[^"]+)"', abs_html)
@@ -48,12 +114,12 @@ def fetch(pid, root: Path, force=False):
             "authors": [unescape(v) for k, v in metas if k == "author"],
             "date": next((v for k, v in metas if k == "date"), ""),
             "abs_url": f"https://arxiv.org/abs/{pid}",
-            "html_url": final,
+            "html_url": final or f"https://arxiv.org/html/{pid}{version.group(1) if version else ''}",
             "license": lic.group(1) if lic else "",
         }
         document.meta = meta
         document.source.html = html.decode("utf-8", "replace")
-        return document
+        return folder if isinstance(repo.backend, LocalDirectoryBackend) else document
 
 
 def fetch_images(srcs, base_url, out_dir: Path):

@@ -535,6 +535,51 @@ label.st-main { cursor: default; }
 .zlib-open svg { width: 20px; height: 20px; flex: none; }
 .zlib-open:hover, .zlib-open:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
 dialog.settings.zlib { width: min(980px, calc(100vw - 32px)); }
+/* the Markdown a document was read from, put right by the reader (app.js, editText) */
+dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
+.edtext .stp-body { overflow: hidden; padding-bottom: 14px; }
+.ed-text { display: block; width: 100%; height: min(62vh, 640px); box-sizing: border-box; margin-top: 10px; resize: vertical; padding: 12px 14px;
+  font: 13px/1.6 var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; outline: none; }
+.ed-text:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+/* what is new after an update (app.js, showNews): each change a title and a few lines; the release notes and a star */
+dialog.settings.news { width: min(560px, calc(100vw - 32px)); }
+.news .stp-body { padding-top: 6px; }
+.news .wn-v { margin: 18px 0 2px; font: 600 12px var(--sans); color: var(--muted); letter-spacing: .02em; }
+.news .wn-item { padding: 12px 0; border-bottom: 1px solid var(--line-2); }
+.news .wn-item:last-child { border-bottom: 0; }
+.news .wn-item b { display: block; font: 600 14.5px var(--sans); color: var(--ink); }
+.news .wn-item p { margin: 5px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+.news .stp-foot a:not(.st-btn) { color: var(--muted); text-decoration: none; }
+.news .stp-foot a:not(.st-btn):hover { color: var(--accent); }
+.news .wn-more { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+.news .wn-more svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+/* its edit history on the page (app.js, review; the marks: reader.css, .rv): from one place to the next, undo it, edit
+   it, generate the text again */
+.rvbar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 45; display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: center; gap: 6px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 6px 8px; border-radius: 12px;
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--pop); font: 500 13px var(--sans); color: var(--ink); }
+.rvbar button { height: 30px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink);
+  font: 500 12.5px var(--sans); cursor: pointer; }
+.rvbar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.rvbar button:disabled { opacity: .4; cursor: default; }
+.rvbar .rv-prev, .rvbar .rv-next { width: 30px; padding: 0; font-size: 18px; line-height: 1; }
+.rvbar .rv-n { min-width: 58px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rvbar .rv-sep { width: 1px; height: 18px; margin: 0 3px; background: var(--line); }
+.rvbar .rv-regen { border: 0; color: var(--on-btn); background: var(--btn); font-weight: 600; }
+.rvbar .rv-regen:hover:not(:disabled) { color: var(--on-btn); background: var(--btn-hover); }
+.rvbar .rv-x { display: grid; place-items: center; width: 30px; padding: 0; border: 0; background: none; color: var(--muted); }
+.rvbar .rv-x svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.6; fill: none; }
+.rvbar .rv-gone { flex: 1 1 100%; margin: 2px 6px 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.rvbar del { color: var(--r-limitation); text-decoration: line-through; }
+.rvbar ins { color: var(--r-result); text-decoration: none; }
+@media print { .rvbar { display: none; } }
+/* its text edited and saved, its levels not made again yet (app.js, PAPER.pending): in the top bar, the button that does it;
+   its edit history (PAPER.history) beside it */
+.edbtn { order: 3; flex: none; display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px var(--sans); color: var(--ink-2); background: none;
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.edbtn i { width: 7px; height: 7px; border-radius: 50%; background: var(--r-limitation); }
+.edbtn:hover { border-color: var(--accent); color: var(--accent); }
+.edbtn:disabled { opacity: .5; cursor: default; }
 .zl-head { display: flex; align-items: center; gap: 12px; }
 .zl-head h2 { margin: 0 !important; flex: 1; }
 .st .zl-lib { font-size: 14px; padding: 6px 10px; max-width: 45%; }
@@ -544,10 +589,13 @@ dialog.settings.zlib { width: min(980px, calc(100vw - 32px)); }
 .zl-body { display: grid; grid-template-columns: minmax(200px, 280px) 1fr; gap: 14px; height: min(62vh, 640px); }
 .zl-tree, .zl-items { overflow: auto; border: 1px solid var(--line-2); border-radius: 10px; padding: 6px; }
 .zl-tree ul { list-style: none; margin: 0; padding: 0 0 0 12px; } .zl-tree > ul { padding-left: 0; }
-.zl-col { display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 7px; font-size: 13.5px; cursor: pointer; color: var(--ink-2); }
+.zl-col { display: flex; align-items: center; gap: 2px; padding: 4px 6px; border-radius: 7px; font-size: 13.5px; cursor: pointer; color: var(--ink-2); user-select: none; }
 .zl-col span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .zl-col:hover { background: var(--surface); } .zl-col.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.st.zlb button.zl-tw:not(.primary) { width: 18px; height: 18px; flex: none; border: 0; background: none; box-shadow: none; appearance: none; color: var(--faint); cursor: pointer; font-size: 11px; padding: 0; }
+.st.zlb button.zl-tw:not(.primary) { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; box-shadow: none; appearance: none; color: var(--muted); cursor: pointer; padding: 0; }
+.st.zlb button.zl-tw:not(.primary):not(:disabled):hover { background: var(--line-2); color: var(--ink); }
+.zl-tw .sb-chev { width: 20px; height: 20px; stroke-width: 2.2; transition: transform .15s var(--ease); }
+.zl-tw.open .sb-chev { transform: rotate(90deg); }
 .zl-item { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-bottom: 1px dashed var(--line-2); }
 .zl-tx { flex: 1; min-width: 0; }
 .zl-t { font: 550 14px/1.35 var(--serif); color: var(--ink); overflow-wrap: anywhere; }
@@ -574,3 +622,4 @@ dialog.settings.zlib { width: min(980px, calc(100vw - 32px)); }
 .storage-sync-badge.warn { color: var(--accent); }
 .storage-sync-badge[hidden] { display: none; }
 @media (max-width: 600px) { .st-conflict-variants { grid-template-columns: 1fr; } }
+.ca-form .st-meta.ok { color: var(--r-result); }

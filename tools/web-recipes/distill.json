@@ -1,0 +1,17 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "distill.pub",
+ "pages": "*",
+ "article": "d-article",
+ "drop": [
+  "#thread-nav",
+  "d-contents"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [
+  "d-article figure:has(svg):not(:has(img))"
+ ],
+ "why": "Distill writes the article in d-article, footnotes as d-footnote. The thread navigation and the contents are furniture. Figures drawn as SVG become their captions with a link; the claim and argument boxes are HTML text and stay."
+}

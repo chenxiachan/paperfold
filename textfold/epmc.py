@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 
 from . import jats, local, store
-from .fetch import UA
+from .fetch import UA, urlread
 
 API = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 PMC = re.compile(r"\b(PMC\d{4,9})\b", re.I)
@@ -36,8 +36,7 @@ def ref_of(ref):
 
 
 def _get(url, timeout=60):
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout) as r:
-        return r.read()
+    return urlread(urllib.request.Request(url, headers=UA), timeout)[0]
 
 
 def by_doi(doi):

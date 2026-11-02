@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "把正在讀的網頁按你看到的樣子傳給本機的 TextFold，摺成五層來讀。"
+  },
+  "action_title": {
+    "message": "傳送到 TextFold"
+  },
+  "sending": {
+    "message": "正在傳送到 TextFold…"
+  },
+  "saved": {
+    "message": "已存入 TextFold 文獻庫。"
+  },
+  "already": {
+    "message": "這一頁已經在 TextFold 文獻庫裡了。"
+  },
+  "saved_closed": {
+    "message": "已存入 TextFold 文獻庫。打開 TextFold 就能讀。"
+  },
+  "err_notext": {
+    "message": "這一頁可讀的文字太少，TextFold 沒有存。"
+  },
+  "err_notweb": {
+    "message": "TextFold 只讀網頁（http 和 https）。"
+  },
+  "err_nopage": {
+    "message": "這一頁讀不出來。"
+  },
+  "err_update": {
+    "message": "TextFold 需要更新，請看剛打開的分頁。"
+  },
+  "err_setup": {
+    "message": "還沒有連上 TextFold，請看剛打開的分頁。"
+  },
+  "err_other": {
+    "message": "這一頁沒有存下（$CODE$）。",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "連接 TextFold"
+  },
+  "ok_title": {
+    "message": "已連上 TextFold"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ 已回應。在任何網頁上按 TextFold 按鈕，就能把它傳過去。",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "瀏覽器找不到 TextFold"
+  },
+  "missing_text": {
+    "message": "這個按鈕把網頁交給 TextFold，它是本機上的一個免費軟體。只需設定一次："
+  },
+  "forbidden_title": {
+    "message": "TextFold 還不認識這個擴充功能"
+  },
+  "forbidden_text": {
+    "message": "本機的 TextFold 比這個擴充功能舊，請先更新："
+  },
+  "exited_title": {
+    "message": "TextFold 沒有啟動"
+  },
+  "exited_text": {
+    "message": "它可能在上次打開之後被移動或刪除了。請這樣做："
+  },
+  "update_title": {
+    "message": "TextFold 需要更新"
+  },
+  "update_text": {
+    "message": "這個擴充功能比本機的 TextFold 新，請先更新："
+  },
+  "step_download": {
+    "message": "下載 macOS 或 Windows 版 TextFold 並安裝。"
+  },
+  "step_update": {
+    "message": "下載最新的 TextFold，覆蓋安裝舊版。"
+  },
+  "step_open": {
+    "message": "打開一次 TextFold，它會自動連上這個瀏覽器。"
+  },
+  "step_again": {
+    "message": "回到網頁，再按一次 TextFold 按鈕。"
+  },
+  "download": {
+    "message": "下載 TextFold"
+  },
+  "check": {
+    "message": "重新檢查"
+  },
+  "checking": {
+    "message": "正在檢查…"
+  },
+  "pip_title": {
+    "message": "用的是 Python 版 TextFold？"
+  },
+  "pip_text": {
+    "message": "安裝或更新它，再執行一次下面的指令，讓瀏覽器能找到它："
+  },
+  "privacy_note": {
+    "message": "擴充功能只把網頁交給本機的 TextFold，不交給任何別處。TextFold 用你在設定裡選的模型寫出各層。"
+  }
+}

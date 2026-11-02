@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "읽고 있는 페이지를 보이는 그대로 이 컴퓨터의 TextFold로 보내 다섯 단계로 읽습니다."
+  },
+  "action_title": {
+    "message": "TextFold로 보내기"
+  },
+  "sending": {
+    "message": "TextFold로 보내는 중…"
+  },
+  "saved": {
+    "message": "TextFold 라이브러리에 저장했습니다."
+  },
+  "already": {
+    "message": "이 페이지는 이미 TextFold 라이브러리에 있습니다."
+  },
+  "saved_closed": {
+    "message": "TextFold 라이브러리에 저장했습니다. TextFold를 열면 읽을 수 있습니다."
+  },
+  "err_notext": {
+    "message": "이 페이지에는 읽을 글이 너무 적습니다."
+  },
+  "err_notweb": {
+    "message": "TextFold는 웹 페이지(http, https)만 읽습니다."
+  },
+  "err_nopage": {
+    "message": "이 페이지를 읽지 못했습니다."
+  },
+  "err_update": {
+    "message": "TextFold를 업데이트해야 합니다. 열린 탭을 확인하세요."
+  },
+  "err_setup": {
+    "message": "TextFold에 연결되지 않았습니다. 열린 탭을 확인하세요."
+  },
+  "err_other": {
+    "message": "페이지를 저장하지 못했습니다($CODE$).",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "TextFold 연결"
+  },
+  "ok_title": {
+    "message": "TextFold에 연결되었습니다"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$이(가) 응답합니다. 읽고 있는 페이지에서 TextFold 버튼을 누르면 그 페이지가 전송됩니다.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "이 브라우저에서 TextFold를 찾을 수 없습니다"
+  },
+  "missing_text": {
+    "message": "이 버튼은 페이지를 이 컴퓨터의 무료 앱인 TextFold에 넘겨 줍니다. 한 번만 설정하면 됩니다:"
+  },
+  "forbidden_title": {
+    "message": "TextFold가 아직 이 확장 프로그램을 허용하지 않습니다"
+  },
+  "forbidden_text": {
+    "message": "이 컴퓨터의 TextFold가 이 확장 프로그램보다 오래되었습니다. 업데이트하세요:"
+  },
+  "exited_title": {
+    "message": "TextFold가 시작되지 않았습니다"
+  },
+  "exited_text": {
+    "message": "마지막으로 연 뒤에 옮겨졌거나 삭제되었을 수 있습니다. 다음과 같이 하세요:"
+  },
+  "update_title": {
+    "message": "TextFold를 업데이트해야 합니다"
+  },
+  "update_text": {
+    "message": "이 확장 프로그램이 이 컴퓨터의 TextFold보다 새 버전입니다. 업데이트하세요:"
+  },
+  "step_download": {
+    "message": "macOS 또는 Windows용 TextFold를 내려받아 설치합니다."
+  },
+  "step_update": {
+    "message": "최신 TextFold를 내려받아 기존 버전 위에 설치합니다."
+  },
+  "step_open": {
+    "message": "TextFold를 한 번 엽니다. 이 브라우저에 스스로 연결됩니다."
+  },
+  "step_again": {
+    "message": "페이지로 돌아가 TextFold 버튼을 다시 누릅니다."
+  },
+  "download": {
+    "message": "TextFold 내려받기"
+  },
+  "check": {
+    "message": "다시 확인"
+  },
+  "checking": {
+    "message": "확인하는 중…"
+  },
+  "pip_title": {
+    "message": "Python으로 TextFold를 쓰시나요?"
+  },
+  "pip_text": {
+    "message": "설치하거나 업데이트한 뒤, 아래 명령을 한 번 실행하세요:"
+  },
+  "privacy_note": {
+    "message": "확장 프로그램은 페이지를 이 컴퓨터의 TextFold에만 넘기고 다른 곳으로는 보내지 않습니다. 각 단계는 TextFold 설정에서 고른 모델이 씁니다."
+  }
+}

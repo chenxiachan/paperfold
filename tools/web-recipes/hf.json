@@ -1,0 +1,17 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "huggingface.co",
+ "pages": "/blog/*",
+ "article": "div.blog-content",
+ "drop": [
+  ".not-prose",
+  "div.blog-content > div.SVELTE_HYDRATER",
+  "a[href=\"/blog\"]",
+  "p.col-span-1"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "The post is div.blog-content; the upvote and author cards (.not-prose), the hydrated widgets at its end (more articles, comments) and the back link are furniture."
+}

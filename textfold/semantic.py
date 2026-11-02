@@ -136,7 +136,9 @@ def _keep_classes(el):
 # ── math ──────────────────────────────────────────────────────────────
 def tex_math(latex, display=False):
     """LaTeX as MathML that carries its source (alttext), as LaTeXML writes formulas: the browser draws it with no
-    script, and the model reads the LaTeX. A formula the converter cannot read stays as its source."""
+    script, and the model reads the LaTeX. Marked pf-tex: written in LaTeX, so the reader draws it with KaTeX, as Typora
+    draws it with MathJax (MathML from latex2mathml has no aligned, no \\operatorname, no space after \\log); the MathML
+    is what a page without KaTeX shows. A formula the converter cannot read is its source, for KaTeX to draw."""
     latex = latex.strip()
     texts, plain = _texts(latex)
     try:
@@ -145,13 +147,13 @@ def tex_math(latex, display=False):
     except Exception:
         m = None
     if m is None:
-        span = BeautifulSoup("<code></code>", "lxml").find("code")
-        span.string = f"${latex}$"
-        return span
+        m = BeautifulSoup(f'<math display="{"block" if display else "inline"}"><merror><mtext></mtext></merror></math>', "lxml").find("math")
+        m.mtext.string = latex
     for t in m.find_all("mtext"):
         if t.get_text() in texts:
             t.string = texts[t.get_text()]
     m["alttext"] = latex
+    m["class"] = ["pf-tex"]
     return m
 
 
@@ -196,35 +198,156 @@ def _strip_delims(s):
     return s
 
 
-def _equation(soup, math):
-    t = soup.new_tag("table", attrs={"class": "ltx_equation ltx_eqn_table"})
+def _equation(soup, math, number=None, eid=None):
+    """LaTeXML's equation table; its number (number: "(2)") in the cell on the right, as arXiv's are."""
+    t = soup.new_tag("table", attrs={"class": "ltx_equation ltx_eqn_table", **({"id": eid} if eid else {})})
     tr = soup.new_tag("tr", attrs={"class": "ltx_equation ltx_eqn_row"})
     for cls in ("ltx_eqn_cell ltx_eqn_center_padleft", "ltx_eqn_cell ltx_align_center", "ltx_eqn_cell ltx_eqn_center_padright"):
         tr.append(soup.new_tag("td", attrs={"class": cls}))
     tr.find_all("td")[1].append(math)
+    if number:
+        tr.append(_eqno(soup, number))
     tbody = soup.new_tag("tbody")
     tbody.append(tr)
     t.append(tbody)
     return t
 
 
+# A Markdown file's display formulas are numbered as Typora numbers them (Auto Numbering Math Equations): each in turn,
+# (1), (2), on the right; \tag{A} gives its own, (A), and \tag*{A} it without the brackets, neither counted; \notag,
+# \nonumber and a starred environment (equation*, align*) none. \label{x} names the formula, and \eqref{x} (\ref{x})
+# elsewhere is its number, a link to it. KaTeX numbers equation, align and gather itself, by CSS counters that would
+# count only the formulas on screen: their numbers are given here, and they are drawn as aligned and gathered.
+ENVS = {"equation": None, "align": "aligned", "flalign": "aligned", "alignat": "alignedat", "gather": "gathered",
+        "multline": "gathered"}
+ENV = re.compile(r"^\\begin\{(" + "|".join(ENVS) + r")(\*?)\}(.*)\\end\{\1\2\}$", re.S)
+LABEL = re.compile(r"\\label\s*\{([^{}]*)\}")
+TAG = re.compile(r"\\tag(\*?)\s*\{([^{}]*)\}")
+NOTAG = re.compile(r"\\(?:notag|nonumber)(?![A-Za-z])")
+REF = re.compile(r"\\(eq)?ref\s*\{([^{}]*)\}")
+
+
+def _numbered(latex, auto):
+    """(the formula as drawn, its number or None, its label or None). auto: numbered unless it says otherwise."""
+    label = LABEL.search(latex)
+    tag = TAG.search(latex)
+    rows = len(re.findall(r"\\\\", latex)) + 1
+    off = len(NOTAG.findall(latex)) >= rows   # (\notag on every line of an align: no number)
+    latex = NOTAG.sub("", TAG.sub("", LABEL.sub("", latex))).strip()
+    env = ENV.match(latex)
+    if env:
+        name, star, body = env.groups()
+        off = off or bool(star)
+        inner = ENVS[name]
+        latex = body.strip() if inner is None else f"\\begin{{{inner}}}{body}\\end{{{inner}}}"
+    number = (tag.group(2).strip() if tag.group(1) else f"({tag.group(2).strip()})") if tag else None
+    return latex, number or ("" if off or not auto else None), label.group(1).strip() if label else None
+
+
+def _eqno(soup, number):
+    no = soup.new_tag("td", attrs={"class": "ltx_eqn_cell ltx_eqn_eqno"})
+    tag = soup.new_tag("span", attrs={"class": "ltx_tag ltx_tag_equation"})
+    tag.string = number
+    no.append(tag)
+    return no
+
+
+def _label_id(label):
+    """A labelled formula's id: eq-heat for \\label{eq:heat}, and for \\label{heat}."""
+    name = re.sub(r"[^\w-]+", "-", label).strip("-")
+    return name if name.startswith("eq-") else "eq-" + name
+
+
+def _ref(m, labels):
+    """What \\eqref{x} (m: a REF match) reads: the number of the formula x names, (2); \\ref{x} without the brackets."""
+    number = labels.get(m.group(2).strip(), ("(?)",))[0]
+    return number if m.group(1) else number.strip("()")
+
+
+def _ref_link(soup, m, labels):
+    """$\\eqref{eq:heat}$ alone: "(1)", a link to the formula, as arXiv's "Eq. (1)"."""
+    a = soup.new_tag("a", attrs={"class": "ltx_ref"})
+    if m.group(2).strip() in labels:
+        a["href"] = "#" + labels[m.group(2).strip()][1]
+    a.string = _ref(m, labels)
+    return a
+
+
 def _math(soup, root):
     """markdown-it's and Pandoc's math (span.math.inline, div.math.block, span.math.display) becomes MathML; MathML
-    that came as such keeps its LaTeX annotation as its alttext."""
+    that came as such keeps its LaTeX annotation as its alttext, and MathML that is nothing but its LaTeX is drawn from
+    it. markdown-it's display formulas (a Markdown file's $$) are numbered, and any formula's \\tag; a reference to a
+    label is its number."""
+    found, labels, n = [], {}, 0
     for el in root.find_all(["span", "div"], class_="math"):
         cls = el.get("class", [])
         display = el.name == "div" or "display" in cls or "block" in cls
-        m = tex_math(_strip_delims(el.get_text("")), display)
-        el.replace_with(_equation(soup, m) if display and m.name == "math" else m)
+        latex, number, label = _strip_delims(el.get_text("")), None, None
+        if display:
+            latex, number, label = _numbered(latex, auto=el.name == "div")
+            if number is None:
+                n += 1
+                number = f"({n})"
+            if label:
+                labels[label] = (number, _label_id(label))
+        found.append((el, display, latex, number, label))
+    for el, display, latex, number, label in found:
+        alone = None if display else REF.fullmatch(latex.strip())
+        if alone:
+            el.replace_with(_ref_link(soup, alone, labels))
+            continue
+        m = tex_math(REF.sub(lambda r: r"\text{" + _ref(r, labels) + "}", latex), display)
+        el.replace_with(_equation(soup, m, number, label and labels[label][1]) if display else m)
     for m in root.find_all("math"):
         if not m.get("alttext"):
             ann = m.find("annotation", attrs={"encoding": "application/x-tex"})
             if ann:
                 m["alttext"] = ann.get_text("").strip()
+            elif m.get("data-latex"):   # (Defuddle's)
+                m["alttext"] = m["data-latex"]
+        if m.get("alttext") and not m.find(lambda t: t.name not in ("semantics", "annotation", "annotation-xml")):
+            drawn = tex_math(m["alttext"], m.get("display") == "block")   # (its LaTeX alone: a page's MathJax drew it)
+            m.replace_with(drawn)
+            m = drawn
         if m.get("display") == "block" and not m.find_parent("table", class_="ltx_equation"):
             ph = soup.new_tag("span")
             m.replace_with(ph)
             ph.replace_with(_equation(soup, m))
+
+
+def upgrade(soup, root):
+    """A Markdown document stored before 0.10.34, read as one stored now: each display formula numbered (its \\label,
+    \\tag and environment read as _math reads them), $\\eqref{}$ its number and a link, every formula marked for KaTeX
+    (pf-tex), every table ruled (pf-grid). Only how they look: its paragraphs keep their ids (ids.freeze marked them)
+    and their words, so their levels and notes stay theirs, and the file stays as it was stored (parse.py)."""
+    labels, n, eqs = {}, 0, []
+    for t in root.find_all("table", class_="ltx_equation"):
+        m = t.find("math")
+        if m is None or not m.get("alttext") or t.find(class_="ltx_eqn_eqno"):
+            continue
+        latex, number, label = _numbered(m["alttext"], auto=True)
+        if number is None:
+            n += 1
+            number = f"({n})"
+        if label:
+            labels[label] = (number, t.get("id") or _label_id(label))
+            t["id"] = labels[label][1]
+        eqs.append((t, m, latex, number))
+    for t, m, latex, number in eqs:
+        m["alttext"] = latex
+        if number:
+            t.find("tr").append(_eqno(soup, number))
+    for m in root.find_all("math"):
+        if not m.get("alttext"):
+            continue
+        alone = None if m.get("display") == "block" else REF.fullmatch(m["alttext"].strip())
+        if alone:
+            m.replace_with(_ref_link(soup, alone, labels))
+            continue
+        m["alttext"] = REF.sub(lambda r: r"\text{" + _ref(r, labels) + "}", m["alttext"])
+        m["class"] = ["pf-tex"]
+    for t in root.find_all("table", class_="ltx_tabular"):
+        t["class"] = [c for c in t.get("class", []) if c != "pf-grid"] + ["pf-grid"]
 
 
 # ── footnotes ─────────────────────────────────────────────────────────
@@ -421,7 +544,9 @@ def _tables(soup, root):
     for t in root.find_all("table"):
         if _ours(t):
             continue   # an equation's table
-        t["class"] = ["ltx_tabular", "ltx_centering"]
+        # pf-grid: a table from Markdown, a web page or a document, drawn as Typora draws one (reader.css): every cell
+        # ruled, every other row shaded. A paper's (LaTeXML's) keeps its booktabs rules
+        t["class"] = ["ltx_tabular", "ltx_centering", "pf-grid"]
         rows = t.find_all("tr")
         for n, tr in enumerate(rows):
             head = tr.find_parent("thead") is not None or all(c.name == "th" for c in tr.find_all(["td", "th"]))
@@ -576,7 +701,13 @@ def _sections(soup, art, blocks):
                 anchors[slug(text)] = sid
                 if b.get("id"):   # a source's own id for the section (JATS: <sec id="sec2">), which its links use
                     anchors[b["id"]] = sid
-                sec = soup.new_tag("section", attrs={"class": SECTION_CLASS[depth], "id": sid})
+                cls = SECTION_CLASS[depth]
+                # an appendix where the source says so (JATS's <app> reaches the heading as ltx_title_appendix), not
+                # where a heading's words seem to. Its subsections sit inside it, as parse.in_appendix finds them;
+                # the class on them would take their level (SECTION_LEVEL: ltx_appendix is a section's)
+                if "ltx_title_appendix" in (b.get("class") or []):
+                    cls = [cls, "ltx_appendix"]
+                sec = soup.new_tag("section", attrs={"class": cls, "id": sid})
             h = soup.new_tag(f"h{rank}", attrs={"class": "ltx_title ltx_title_section"})
             for x in list(b.contents):
                 h.append(x.extract() if isinstance(x, Tag) else NavigableString(str(x)))

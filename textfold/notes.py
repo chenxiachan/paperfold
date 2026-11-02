@@ -357,15 +357,47 @@ and each page you drew on is given where you use it, as a Markdown link [its tit
 comes first."""
 
 
-def prompt(doc, note, question, lang, earlier=(), ui=None, tools=False):
-    """What the model is given: the paper (title, abstract, a line per section), where the reader is and whose words
-    they selected, the selection and its paragraph (or its section; or, for a question about the whole paper, every
-    paragraph's point), passages from anywhere in the paper that share the question's words, the conversation so
-    far, and the paragraphs it may cite. Paragraphs go by short numbers ([12]), which the answer cites inline and
-    ask() turns back into paragraph ids: a number is copied right far more often than an id like S3.SS2.p4.1.
-    Returns the prompt and the numbers: {"12": "S3.SS2.p4.1", ...}."""
+FULL_TOKENS = 60000   # the paper in full for every question, when it is no longer: about 240,000 characters of English
+                      # or 60,000 of Chinese, which a model of 128k tokens reads with room left to answer
+FULL_HEAD = "The paper in full, section by section, each paragraph in the authors' words after its number:"
+TOO_LONG = re.compile(r"context[ _-]?(length|window|limit)|maximum context|too many tokens|token limit|reduce the length"
+                      r"|(prompt|input|request) is too (long|large)|HTTP 413", re.I)
+
+
+def _rough_tokens(text):
+    """About as many tokens as a model counts in text, or a few more: a CJK character one, four other characters one."""
+    cjk = len(re.findall(r"[぀-ヿ㐀-鿿가-힯]", text))
+    return cjk + (len(text) - cjk) // 4
+
+
+def _full(doc, tag):
+    """The paper in full, its paragraphs numbered in order (tag), under its sections' titles; None when it is longer
+    than FULL_TOKENS."""
+    units, atoms = doc["units"], doc["atoms"]
+    secs, seen = [], set()
+    for c in doc["chunks"]:
+        us = [u for u in c["units"] if u in units and u not in seen]
+        seen.update(us)
+        secs.append((f"## {c.get('num') or ''} {c.get('title') or ''}".replace("##  ", "## ").rstrip(), us))
+    secs.append(("", [u for u in units if u not in seen]))
+    texts = {u: plain(units[u]["toks"], atoms) for _, us in secs for u in us}
+    if _rough_tokens("".join(texts.values())) > FULL_TOKENS:
+        return None
+    return "\n\n".join(((head + "\n") if head else "") + "\n".join(f"[{tag(u)}] {texts[u]}" for u in us) for head, us in secs if us)
+
+
+def prompt(doc, note, question, lang, earlier=(), ui=None, tools=False, full=True):
+    """What the model is given: the paper in full when it is short enough (full, and FULL_TOKENS), first, so that a
+    service that keeps a prompt's beginning (DeepSeek, OpenAI) reads it once for every question about it. Then where
+    the reader is and whose words they selected, the selection and its paragraph (or its section), the conversation so
+    far, and the paragraphs it may cite. A paper too long for that is given as its title, abstract and a line per
+    section, the selection's paragraph (or its section's points; or, for a question about the whole paper, every
+    paragraph's point), and passages from anywhere in it that share the question's words. Paragraphs go by short
+    numbers ([12]), which the answer cites inline and ask() turns back into paragraph ids: a number is copied right
+    far more often than an id like S3.SS2.p4.1. Returns the prompt and the numbers: {"12": "S3.SS2.p4.1", ...}."""
     nums = {}
     tag = lambda uid: nums.setdefault(uid, str(len(nums) + 1))  # noqa: E731
+    paper = _full(doc, tag) if full else None
     a = note["anchor"]
     units, atoms, chunks = doc["units"], doc["atoms"], doc["chunks"]
     order = list(units)
@@ -385,15 +417,20 @@ def prompt(doc, note, question, lang, earlier=(), ui=None, tools=False):
     if whole:
         near = []
         where = (f"They are reading at the {name} level of a zoomable reader and asked about the paper as a whole. Answer "
-                 "from the authors' text: every paragraph's point is listed below, section by section, and passages follow.")
-        body = "The paper, section by section (each paragraph's point, with its number):\n" + _map(chunks, units, line, atoms, tag)
+                 + ("from the authors' text, given in full above." if paper else
+                    "from the authors' text: every paragraph's point is listed below, section by section, and passages follow."))
+        body = "" if paper else "The paper, section by section (each paragraph's point, with its number):\n" + _map(chunks, units, line, atoms, tag)
         own = []
     elif unit:
         at = order.index(a["unit"])
         near = order[max(0, at - 8): at + 9]
         where = (f"They are reading at the {name} level of a zoomable reader, which shows {whose}, and selected text in a "
                  f"paragraph of section {sec_name}.")
-        if level <= 2:
+        if a.get("eq"):   # an equation set apart (reader.js eqEls): the selection is the formula, beside its paragraph
+            where = (f"They are reading at the {name} level of a zoomable reader, which shows {whose}, and selected an "
+                     f"equation set apart from the text in section {sec_name}, next to the paragraph below. The "
+                     "selected text is that equation, in LaTeX.")
+        elif level <= 2:
             where += (" The selection is the model's wording, not the authors': answer from the authors' text below, "
                       "and say so if that text does not bear the summary out.")
         body = f"The paragraph, in the authors' words:\n{plain(unit['toks'], atoms)}"
@@ -405,34 +442,38 @@ def prompt(doc, note, question, lang, earlier=(), ui=None, tools=False):
         near = list(sec_units)
         what = "the title of" if a.get("on") == "title" else "the one-line summary (written by a model) of"
         where = (f"They are reading at the {name} level of a zoomable reader and selected text in {what} section {sec_name}. "
-                 "Answer from the authors' text: the section's paragraphs are summed up below, and passages from it follow.")
+                 + ("Answer from the authors' text, given in full above: the section's paragraphs are summed up below." if paper else
+                    "Answer from the authors' text: the section's paragraphs are summed up below, and passages from it follow."))
         take = plain(chunk["lad"]["take"], atoms) if chunk and chunk.get("lad") else ""
         body = (f"The section's summary: {take}\n\nThe section, paragraph by paragraph (each paragraph's point):\n"
                 + "\n".join(f"[{tag(uid)}] {line(uid)}" for uid in sec_units[:40]))
         own = []
-    found = retrieve(doc, f"{question} {quote}", lang, skip=set(own), k=8 if whole else 5)
+    found = [] if paper else retrieve(doc, f"{question} {quote}", lang, skip=set(own), k=8 if whole else 5)
     passages = "\n\n".join(f"[{tag(uid)}] {plain(units[uid]['toks'], atoms)[:900]}" for uid in found)
     talk = ("Earlier in this conversation:\n" + "".join(f"Q: {t['q']}\nA: {t['a']}\n\n" for t in earlier)) if earlier else ""
     cite = list(dict.fromkeys([*own, *found, *near]))
-    citable = ("Any paragraph number in the paper above or in the passages." if whole
+    citable = ("Any paragraph number in the paper above." if paper else "Any paragraph number in the paper above or in the passages." if whole
                else "\n".join(f"[{tag(uid)}] {line(uid)}" for uid in cite))
     selected = f'The selected text:\n"{quote}"\n\n' if quote else ""
-    text = f"""A reader of this paper {"asked about it" if whole else "selected some text and asked about it"}.
-
-Paper: {doc['meta']['title']}
+    head = (f"Paper: {doc['meta']['title']}\n\n{FULL_HEAD}\n\n{paper}\n\n" if paper else "")
+    about = "" if paper else f"""Paper: {doc['meta']['title']}
 Abstract: {abstract}
 
-The paper, one line per section:
+"""
+    elsewhere = "" if paper else f"""Passages from elsewhere in the paper that share words with the question:
+{passages or "(none)"}
+
+"""
+    text = f"""{head}A reader of this paper {"asked about it" if whole else "selected some text and asked about it"}.
+
+{about}The paper, one line per section:
 {outline}
 
 {where}
 
 {selected}{body}
 
-Passages from elsewhere in the paper that share words with the question:
-{passages or "(none)"}
-
-{talk}The question:
+{elsewhere}{talk}The question:
 {question}
 
 Answer in the language the question is written in (when that is unclear, in {langs.name(ui or lang)}). Conclusion first, then
@@ -519,8 +560,16 @@ def _local_ask(pid, nid, question, spec, timeout=300, ui=None, req=None):
     lang = next((t.get("lang") for t in turns(note) if t.get("lang")), None) or note["anchor"].get("lang") or doc["meta"]["lang"]
     tools = isinstance(spec, dict) and bool(spec.get("tools"))   # (looked up on the web by the agent: the time that takes)
     timeout = max(timeout, 900) if tools else timeout
-    text, nums = prompt(doc, note, question, lang, done[-6:], ui if ui in langs.LANGS else None, tools)
-    rec, _ = llm.call(text, ASK_SCHEMA, spec, store.pdir(pid) / "llm-cache", timeout=timeout, system=kinds.adapt(SYSTEM_ASK, doc["meta"]))
+    ui = ui if ui in langs.LANGS else None
+    text, nums = prompt(doc, note, question, lang, done[-6:], ui, tools)
+    call = lambda text: llm.call(text, ASK_SCHEMA, spec, store.pdir(pid) / "llm-cache", timeout=timeout, system=kinds.adapt(SYSTEM_ASK, doc["meta"]))  # noqa: E731
+    try:
+        rec, _ = call(text)
+    except RuntimeError as e:   # the paper in full, more than this model takes: asked again as a long paper is
+        if kinds.adapt(FULL_HEAD, doc["meta"]) not in text or not TOO_LONG.search(str(e)):
+            raise
+        text, nums = prompt(doc, note, question, lang, done[-6:], ui, tools, full=False)
+        rec, _ = call(text)
     out = rec["out"]
     answer, cites = _cited(out["answer"], nums, doc["units"])
     held = []   # the citations kept aside while an id written out in full (not as a citation) becomes its section

@@ -26,7 +26,7 @@ Settings shows the version and checks by hand. A copy run from the code (`npm st
 
 ## Links
 
-`textfold://open?paper=<document id>[&u=<paragraph id>[&to=<paragraph id>]][&s=<section id>][&n=<note id>[&t=<turn>]][&level=<full|brief|key|takeaway|topic>][&lang=<code>]`,
+`textfold://open?paper=<document id>[&u=<paragraph id>[&to=<paragraph id>]][&s=<section id>][&eq=<equation id>][&n=<note id>[&t=<turn>]][&level=<full|brief|key|takeaway|topic>][&lang=<code>]`,
 its values URL-encoded, opens a document of the library in the window, at a paragraph (or the run of them from u to
 to) or a section and a level, or at a note (a conversation at one of its turns, counted from 0), in a language: another program (an editor's plugin) links to it so. A link with any part wrong is not followed;
 one to a document not in the library says so, with its id, and opens the library (`links.js`; `npm test` runs its tests, and `tests/test_desktop_links.py`

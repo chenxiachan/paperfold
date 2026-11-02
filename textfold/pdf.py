@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 
 from . import store
-from .fetch import UA
+from .fetch import UA, urlread
 
 LIMIT = 100 * 2**20       # no paper's PDF is larger; anything that is, is not one
 _lock = threading.Lock()  # two requests for the same paper download it once
@@ -60,8 +60,7 @@ def read(pid):
             return document.source.pdf
         for url in candidates(pid, document.meta):
             try:
-                with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=90) as r:
-                    data = r.read(LIMIT + 1)
+                data = urlread(urllib.request.Request(url, headers=UA), 90, LIMIT + 1)[0]
             except (urllib.error.URLError, OSError):
                 continue
             if data[:5] == b"%PDF-" and len(data) <= LIMIT:

@@ -19,7 +19,7 @@ import re
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 
 from .latexml_safe import make_safe
-from .semantic import _equation
+from .semantic import _equation, upgrade
 from .tokens import plain, split_sentences, tokenize_text
 
 SECTION_LEVEL = {
@@ -61,8 +61,8 @@ class Doc:
             if e.get("id"):
                 self.targets.setdefault(e["id"], {"k": kind, "id": tid})
 
-    def open_chunk(self, cid, num, title, html, level):
-        self.chunk = self.last = {"id": cid, "num": num, "title": title, "html": html, "level": level, "units": []}
+    def open_chunk(self, cid, num, title, html, level, app=False):
+        self.chunk = self.last = {"id": cid, "num": num, "title": title, "html": html, "level": level, "app": app, "units": []}
         self.chunks.append(self.chunk)
         self.blocks.append({"k": "h", "chunk": cid})
         if self.loose:   # read before any section: shown just under this one's heading, and read with it
@@ -228,6 +228,18 @@ def heading(el):
     return num, re.sub(r"\s+", " ", text_of(h)).strip(), html
 
 
+def in_appendix(el):
+    """An appendix is one LaTeXML named (ltx_appendix), or a section sitting inside one: the element's own
+    class, or an ancestor's — never the section read just before it (a plain sibling after the appendices, a
+    NeurIPS checklist, is body all the same)."""
+    node = el
+    while isinstance(node, Tag):
+        if "ltx_appendix" in (node.get("class") or []):
+            return True
+        node = node.parent
+    return False
+
+
 def section(el, doc):
     cls = el.get("class", [])
     level = next((v for k, v in SECTION_LEVEL.items() if k in cls), 5)
@@ -238,7 +250,7 @@ def section(el, doc):
         doc.targets.setdefault(el["id"], {"k": "chunk", "id": cid})
     if doc.made is not None and el.get("data-tf-k"):
         doc.made["chunks"][el["data-tf-k"]] = cid
-    doc.open_chunk(cid, num, title, html, level)
+    doc.open_chunk(cid, num, title, html, level, app=in_appendix(el))
     walk(el, doc)
 
 
@@ -393,6 +405,10 @@ def parse(html, meta, made=None):
         if (p.name == "p" and "ltx_p" in p.get("class", []) and not p.find_parent(["table", "figure"])
                 and [x for x in p.contents if not (isinstance(x, NavigableString) and not x.strip())] == [m]):
             p.replace_with(_equation(soup, m.extract()))
+    # a Markdown document stored before 0.10.34: its formulas numbered and drawn, its tables ruled, as a new one is
+    # (semantic.upgrade), with no new import
+    if str(meta.get("id", "")).startswith("md-") and not art.find(class_=["pf-tex", "pf-grid"]):
+        upgrade(soup, art)
     make_safe(art)   # arXiv's page reaches the reader as it is, so what could run script is taken out here (latexml_safe.py)
     doc.images = sorted({img["src"] for img in art.find_all("img") if img.get("src") and not img["src"].startswith("data:")})
     for ch in art.find_all(recursive=False):

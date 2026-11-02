@@ -172,16 +172,21 @@ Notes: select text anywhere (a paragraph at any level, a section's summary or it
 or ask the model about it (the answer, in the reading language, cites the paragraphs it rests on; a cite opens that
 paragraph to its full text in place). The reader's own notes sit in the left margin, the conversations with the model
 and the links in the right. Full and Brief show whole cards, Key shows them compact, and Takeaway and Topic show only a
-mark, with the notes on hover. Highlights zoom with the words. `#n=<note id>` opens the reader at a note (`&t=<turn>`: a conversation at that turn), `#u=<id>` at a paragraph (`&to=<id>`: the run of them to that one, flashed together), `#s=<id>` at a section (the whole of it flashed; with `#level=`, at a level); one no longer in the text opens the
+mark, with the notes on hover. Highlights zoom with the words. `#n=<note id>` opens the reader at a note (`&t=<turn>`: a conversation at that turn), `#u=<id>` at a paragraph (`&to=<id>`: the run of them to that one, flashed together), `#s=<id>` at a section (the whole of it flashed; with `#level=`, at a level), `&eq=<id>` with either at an equation set apart; one no longer in the text opens the
 section it was in, else the top, and the page says so (`ids.py`). ⌘F (Ctrl+F) finds words in the text (reader.js, `findAll`): in each paragraph's pieces at its level (the model's line at Key, Takeaway and Topic), then in its Full pieces for what that level leaves out, and in section titles, case and accents aside. The words found are marked through `pieces()` (`fd`, the one stepped to `fdc`), so a redraw keeps them; a step to words left out opens their paragraph at Full in place, one paragraph at a time, and a level or language changed finds them again. A paragraph, a heading, a section's summary or a message of a conversation (by the handle beside it on hover), a card of the Topic map (grabbed anywhere), a note's card or a selection, dragged into another app, carries its words and a `textfold://` link back to it ([drag-format.md](drag-format.md)).
 
-What the model is given for a question (`textfold/notes.py`, `prompt`): the title, the abstract and a line per section
-(with where the reader is); the level they read at and whose words it shows (at Key and below, a warning that the
-selection is the model's wording, not the authors'); the selection and its paragraph in the authors' words (or, for a
-section, its summary and each paragraph's point); up to five passages from anywhere in the paper that share the
-question's telling words (IDF over the text's own and the reading-language text; symbols such as D=4 kept whole, CJK
-matched by character pairs, question words dropped); the earlier turns; and the paragraphs it may cite. The system
-prompt asks it to answer from the paper, say where, and keep general knowledge apart.
+What the model is given for a question (`textfold/notes.py`, `prompt`): first, the paper in full, each paragraph in the
+authors' words after its number, when it comes to at most `FULL_TOKENS` (60,000, counted roughly: a CJK character one
+token, four other characters one), the same beginning for every question about it, which a service that keeps a
+prompt's beginning (DeepSeek, OpenAI) reads once; then a line per section (with where the reader is); the level they
+read at and whose words it shows (at Key and below, a warning that the selection is the model's wording, not the
+authors'); the selection and its paragraph in the authors' words (or, for a section, its summary and each paragraph's
+point); the earlier turns; and the paragraphs it may cite (any, in the paper in full). A paper longer than that, or one
+the model says is too long for it (`TOO_LONG`, asked again at once), is given as its title, abstract and a line per
+section, the selection's paragraph, and up to five passages from anywhere in it that share the question's telling
+words (IDF over the text's own and the reading-language text; symbols such as D=4 kept whole, CJK matched by
+character pairs, question words dropped), with the paragraphs it may cite listed. The system prompt asks it to
+answer from the paper, say where, and keep general knowledge apart.
 
 An agent on this computer answers as a one-shot text generator, with no tools, unless the switch beside the question
 is on: in a passage's question and its follow-ups, and in **Ask the whole text** (`reader.js` composer; off whenever a
@@ -215,8 +220,9 @@ for a whole text with its PDF), the mark folds and unfolds in place of the dialo
 (saved, or published) has its mark lead to the repository and ends with it.
 
 The chat (the button in the corner, in the app) asks about the whole paper. Each conversation is a note with
-`on: "paper"`; the model is given the abstract, every paragraph's point section by section (at most 60,000
-characters: a long paper keeps every section and fewer paragraphs each) and eight passages found for the question.
+`on: "paper"`; the model is given the paper in full, or, for a paper longer than `FULL_TOKENS`, the abstract, every
+paragraph's point section by section (at most 60,000 characters: a long paper keeps every section and fewer
+paragraphs each) and eight passages found for the question.
 The answer cites up to five paragraphs; a cite opens its paragraph in place.
 
 In the app the mark (in the bar and in the sidebar's rail) leads home; the rail's second button opens the list of
@@ -228,7 +234,8 @@ last opened, and kept in folders, one level deep, a document in one at most: dra
 right click opens on it. Folders and dates are in `library.json` beside `papers/` (`library.py`). The format, the contract for every export, is `docs/notes-format.md`; the server keeps notes in
 `papers/<id>/notes.json`, a static page in the browser.
 
-Links: the author's cross-references (parsed) and argument links (one model call: supports / builds on / qualifies /
+Links: the author's cross-references (parsed) and argument links (one model call over the paper's takeaways, in parts
+for a text too long for one: supports / builds on / qualifies /
 explains) show as margin notes at Full, Brief and Key; on the Topic map, hovering a chip
 keeps its linked chips lit and lets the rest step back. Hovering a reference previews its target; clicking jumps there
 and a Back pill returns.
@@ -335,8 +342,11 @@ arXiv's PDF). While the engine is not installed, a PDF that has its words in it 
 (`pdftext.py`): pdf-inspector's Markdown, page by page, into the engine's blocks, and each figure found by its caption
 (the drawings and pictures above or below it, up to the prose around them) and cut from its page with pypdfium2
 (`engine.crop_here`). A scanned PDF, and every PDF once the engine is there, goes to
-the PDF engine (`engine.py`): MinerU 4, pinned, in `<app data>/engine` (a PaperFold install in its old place is used
-there), installed from the landing, the settings or `python3 -m textfold engine install`. Its command line only (`mineru-kit
+the PDF engine (`engine.py`): MinerU 4, pinned, in `engine/` beside the library (`<app data>/engine`, or in the folder
+the library was moved to) or in an empty folder the reader chooses in Settings (`engine install <folder>`), installed
+from the landing, the settings or `python3 -m textfold engine install`. The folder it was installed in is kept in the
+settings (`engine_path`) and stays when the library moves, since its Python cannot move; removing it removes the folder
+(a PaperFold install in its old place is used too). Its command line only (`mineru-kit
 parse --format zip`), never the `mineru` document library. Fast is MinerU's flash tier (seconds, no model; formulas as
 pictures); accurate is advanced (a vision model, several seconds a page), with `--disable-image-analysis`.
 `pdfdoc.py` turns `structured_content.json` into the document: running heads and page numbers out, the title from the
@@ -359,7 +369,9 @@ The server has two queues (`Jobs`): generation (model calls) and the engine (ins
 time; a conversion's `next` is the generation that follows it. A converted PDF opens as soon as it is stored.
 
 Any other link is a web page (`webpage.py`): fetched with TextFold's own user agent, its hidden elements removed (they
-are where text meant for a model is put), its article taken out by trafilatura as Markdown and stored through the
+are where text meant for a model is put), its notes written inside sentences and shown on hover or in the margin taken
+out (an ARIA tooltip under its mark, DPUB-ARIA's doc-footnote, Distill's d-footnote, Tufte's sidenote) and put back as
+footnotes under the page's own marks, its article taken out by trafilatura as Markdown and stored through the
 Markdown path. Too little text (`web-notext`), a refusal (`web-blocked`), and a link to a PDF (fetched, then read as a
 dropped PDF) each have their own answer.
 
@@ -403,7 +415,7 @@ Frame intervals from requestAnimationFrame in a default headless browser hide mo
 ## Layout
 
 ```
-textfold/fetch.py    arXiv HTML + metadata, figure images
+textfold/fetch.py    arXiv HTML + metadata, figure images; urlread, every download of TextFold's, tried again when the network drops it
 textfold/picture.py  a picture kept smaller as it comes in: a large PNG or JPEG as WebP (quality 90, at most 3200 px)
 textfold/parse.py    LaTeXML → units (paragraph, list item, caption) as token streams; math, citations, refs stay atomic
 textfold/latexml_safe.py  what an arXiv page may carry into the reader: scripts, handlers and script URLs out, figures kept
@@ -415,7 +427,7 @@ textfold/epmc.py     papers from Europe PMC by PMC or PPR id, link or DOI (pmc�
 textfold/biorxiv.py  preprints from bioRxiv and medRxiv, from their own JATS (biorxiv-…, medrxiv-…)
 textfold/wiki.py     Wikipedia articles, any language edition (wiki-<lang>-<page id>)
 textfold/github.py   a GitHub repository's README (gh-<owner>--<repo>)
-textfold/webpage.py  any other web page: its article (trafilatura), hidden text removed first (web-<host>-<hash>)
+textfold/webpage.py  any other web page: its article (trafilatura), hidden text removed and in-sentence notes made footnotes first (web-<host>-<hash>)
 textfold/engine.py   the PDF engine: MinerU in a Python of its own under the app data folder; install, removal, conversion
 textfold/pdftext.py  a PDF with its own text, read without the engine (pdf-inspector); figures found by their captions, cut with pypdfium2
 textfold/pdfdoc.py   a converted PDF as a document: MinerU's structured output into Markdown and HTML (pdf-<file hash>;
@@ -427,7 +439,7 @@ textfold/pdffigs.py  an arXiv drawing whose words the browser set (TikZ): cut fr
 textfold/zotero.py   a Zotero library through Zotero Desktop's local API; an item read as a link or a dropped file
 textfold/tokens.py   tokenizer, sentence splitter, LCS alignment
 textfold/ladder.py   one model call per section; validation; written words aligned to source words for the morph
-textfold/links.py    argument links, one call over the whole paper
+textfold/links.py    argument links, one call over the whole paper (in parts of 400 units for a longer one)
 textfold/translate.py  any language: sentence-aligned translation + short levels, one call per section (langs.py: the languages a text can be read in)
 textfold/store.py    versioned layers per paper; assembling a reader from them
 textfold/pipeline.py fetch → parse → ladder + links in the text's own language (once) → translation, with progress

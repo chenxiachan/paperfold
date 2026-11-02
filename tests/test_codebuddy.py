@@ -1,9 +1,10 @@
 """CodeBuddy, and WorkBuddy's copy of it: WorkBuddy found where it runs, where it is usually put, where Windows'
 installer or a Mac's Spotlight says it is, its copy of CodeBuddy by name inside it, the first copy that answers taken
 (the app's program as node, else node, else one installed on its own); run with WorkBuddy's settings folder and quiet
-switches, CodeBuddy's own sign-in when WorkBuddy's has none; its models as its --help lists them; a generation called
-as claude -p is, with CodeBuddy's three differences (its user settings, the one tool its structured output needs, a
-list of messages for an output). A fake WorkBuddy and a fake CodeBuddy (Python scripts) stand in; no model, no
+switches, CodeBuddy's own sign-in when WorkBuddy's has none; WorkBuddy 5.8's copy, which brings its lite bundle alone, run with it, and taken
+after one installed on its own, since its sign-in is WorkBuddy's alone; its models as its --help lists them; a
+generation called as claude -p is, with CodeBuddy's three differences (its user settings, the one tool its structured
+output needs, a list of messages for an output). A fake WorkBuddy and a fake CodeBuddy (Python scripts) stand in; no model, no
 network.
 
 Run from the repo root:
@@ -25,6 +26,10 @@ from textfold import agents, llm, models
 CLI = '''\
 import json, os, sys
 args = sys.argv[1:]
+dist = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0]))), "dist")
+if os.path.exists(os.path.join(dist, "codebuddy-lite-wb.mjs")) and not os.path.exists(os.path.join(dist, "codebuddy.js")) \
+        and os.environ.get("CODEBUDDY_FORCE_LITE_WB_BUNDLE") != "1":   # (WorkBuddy 5.8's launcher, its full bundle gone)
+    sys.exit("Error: Cannot find module '../dist/codebuddy' code: 'MODULE_NOT_FOUND'")
 log = os.environ.get("FAKE_LOG")
 if log:
     with open(log, "a", encoding="utf-8") as f:
@@ -228,6 +233,42 @@ class CodeBuddy(unittest.TestCase):
             self.assertEqual(agents.run_codebuddy("auto", "Fold this.", {"type": "object"}, "s", None, 30), ({"takeaway": "Folded"}, 0))
         asked = [c for c in self.calls() if "-p" in c["args"]]
         self.assertEqual([("CODEBUDDY_CONFIG_DIR" in c["env"]) for c in asked], [True, False])
+
+    def lite(self):
+        """WorkBuddy 5.8's copy: its lite bundle beside its launcher, the full one gone."""
+        f = self.bin.parent / "dist" / "codebuddy-lite-wb.mjs"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("// lite", encoding="utf-8")
+
+    def test_workbuddy_58_runs_its_lite_bundle(self):
+        self.assertFalse(agents.workbuddy_lite(str(self.cli)))
+        self.assertNotIn("CODEBUDDY_FORCE_LITE_WB_BUNDLE", agents.env_for(str(self.cli)))
+        self.lite()
+        self.assertTrue(agents.workbuddy_lite(str(self.cli)))
+        self.assertFalse(agents.workbuddy_lite(str(self.alone)))
+        self.assertEqual(agents.env_for(str(self.cli))["CODEBUDDY_FORCE_LITE_WB_BUNDLE"], "1")
+        self.assertNotIn("CODEBUDDY_FORCE_LITE_WB_BUNDLE", agents.env_for(str(self.alone)))
+        schema = {"type": "object", "properties": {"takeaway": {"type": "string"}}}
+        with mock.patch.object(agents, "path_of", return_value=str(self.cli)):   # (without it: MODULE_NOT_FOUND)
+            self.assertEqual(agents.run_codebuddy("auto", "Fold this.", schema, "s", None, 30), ({"takeaway": "Folded"}, 0))
+
+    def test_workbuddy_58_after_one_signed_in_on_its_own(self):
+        self.lite()
+        with mock.patch.object(agents, "workbuddy_roots", return_value=[str(self.app)]):
+            self.assertEqual(agents.codebuddy_candidates(), [str(self.alone), str(self.cli)])
+            self.assertEqual(agents.locate_codebuddy(), str(self.alone))
+            self.alone.unlink()
+            self.assertEqual(agents.locate_codebuddy(), str(self.cli))   # (none on its own: WorkBuddy's, as before)
+
+    def test_workbuddy_58_signed_in_and_its_copy_not(self):
+        self.lite()
+        with mock.patch.object(agents, "path_of", return_value=str(self.cli)), mock.patch.dict(os.environ, {"FAKE_SIGNED_OUT": "1"}):
+            with self.assertRaises(RuntimeError) as e:
+                agents.run_codebuddy("auto", "Fold this.", {"type": "object"}, "s", None, 30)
+        said = str(e.exception)
+        self.assertNotIn("open WorkBuddy and sign in", said)   # (it is: that is not what is wrong)
+        self.assertIn("WorkBuddy 5.8 and later keep their sign-in to themselves", said)
+        self.assertIn("npm install -g @tencent-ai/codebuddy-code", said)
 
     def test_not_signed_in(self):
         with mock.patch.object(agents, "path_of", return_value=str(self.cli)), mock.patch.dict(os.environ, {"FAKE_SIGNED_OUT": "1"}):

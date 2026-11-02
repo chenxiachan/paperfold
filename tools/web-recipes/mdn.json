@@ -1,0 +1,16 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "developer.mozilla.org",
+ "pages": "/*/docs/*",
+ "article": "main#content",
+ "drop": [
+  "aside.layout__right-sidebar",
+  "section.article-footer",
+  "nav.reference-toc"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "MDN: the page is main#content; the contents sidebar and the contribution footer are furniture."
+}

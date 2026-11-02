@@ -8,6 +8,7 @@ run (the PDFs are read by TextFold's own reader, written by hand), and nothing i
 Run from the repo root:
     python3 -m unittest discover tests
 """
+import json
 import os
 import shutil
 import sys
@@ -77,12 +78,14 @@ class Superseded(Base):
         self.jobs = server.Jobs()
 
     def test_its_generations_stop_and_its_languages_are_given(self):
-        self.stored(langs=("de",))
+        d = self.stored(langs=("de",))
+        meta = json.loads((d / "meta.json").read_text())
+        (d / "meta.json").write_text(json.dumps({**meta, "pending": ["en", "fr"]}))   # its text edited when it was in French too
         running = self.jobs.submit(PID, "zh", False)
         running["status"] = "running"
         queued = self.jobs.submit(PID, "ja", False)
         other = self.jobs.submit("2401.00001", "zh", False)
-        self.assertEqual(self.jobs.superseded(PID), ["en", "de", "zh", "ja"])
+        self.assertEqual(self.jobs.superseded(PID), ["en", "de", "fr", "zh", "ja"])
         self.assertTrue(running["stopping"] and self.jobs.stops[running["id"]].is_set())
         self.assertEqual(queued["status"], "stopped")
         self.assertEqual(other["status"], "queued")   # another paper's goes on
@@ -126,7 +129,7 @@ class Convert(Base):
 
 
 
-class Notes(Base):
+class Converted(Base):
     HEAT = "Heat pumps move heat from a cold place to a warm one, and the compressor does the work."
     TANK = "The buffer tank stores heat for the night, so that the pump can rest while the price is high."
     HOUSE = "A paragraph the accurate conversion found before the others, about the house and its walls."
@@ -149,6 +152,8 @@ class Notes(Base):
     def unit_with(self, doc, words):
         return next(u for u, x in doc["units"].items() if words in _spans(x["toks"], doc["atoms"])[0])
 
+
+class Notes(Converted):
     def test_a_note_follows_its_passage(self):
         doc = self.store([self.HEAT, self.TANK], replace=False)
         uid = self.unit_with(doc, "buffer tank")
@@ -162,6 +167,49 @@ class Notes(Base):
         self.assertEqual(anchor["unit"], uid)   # its id stays, though its place is another now (ids.py)
         self.assertFalse(anchor.get("lost"))
         self.assertEqual(notes._quoted(new["units"][anchor["unit"]]["toks"], new["atoms"], *anchor["tokens"]), "buffer tank")
+
+
+class Edited(Converted):
+    """A converted PDF's text put right by the reader (a word the OCR read wrong; local.replace_text): the file's own
+    title and source, the file and its places on the pages stay, and every paragraph keeps its id and its notes."""
+    WRONG = "Heat pumps move heat from a cold place to a warm one, and the cornpressor does the work."
+
+    def test_a_word_read_wrong_is_put_right_in_place(self):
+        doc = self.store([self.WRONG, self.TANK], replace=False)
+        heat, tank = self.unit_with(doc, "cornpressor"), self.unit_with(doc, "buffer tank")
+        text, _ = _spans(doc["units"][tank]["toks"], doc["atoms"])
+        i = text.index("buffer tank")
+        notes.put(PID, {"id": "n-tank0001", "kind": "highlight", "text": "", "thread": [],
+                        "anchor": {**_at(doc, tank, i, i + len("buffer tank")), "lang": "en", "level": 4}})
+        store.write(PID, "en", {"version": "v1", "units": {}, "chunks": {}, "edges": []})
+        d = store.pdir(PID)
+        (d / "source.pdf").write_bytes(b"%PDF-1.4")   # (kept beside it by whoever converted it: pdftext.store, the server)
+        (d / "layout.json").write_text(json.dumps([{"p": 1, "b": [0.1, 0.2, 0.9, 0.25], "t": self.WRONG},   # (the engine's
+                                                   {"p": 1, "b": [0.1, 0.3, 0.9, 0.35], "t": self.TANK}]))    # places)
+        was = (d / "meta.json").read_text(encoding="utf-8")
+        md = local.text_of(PID)
+        self.assertIn("cornpressor", md)
+        self.assertEqual(local.replace_text(PID, md.replace("cornpressor", "compressor")), "Heat at Home")
+        new = store.parsed(PID)
+        self.assertEqual(self.unit_with(new, "the compressor does"), heat)   # its id stays
+        meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual({**meta, "replaced": None, "pending": None}, {**json.loads(was), "replaced": None, "pending": None})   # the
+        self.assertTrue(meta["replaced"])                                                                                     # file's title, source...
+        self.assertEqual(meta["pending"], ["en"])   # its levels, to be made again
+        self.assertTrue(all((d / f).exists() for f in ("source.pdf", "layout.json", "structured_content.json")))
+        self.assertEqual(pdfdoc.place(PID)[heat]["boxes"], [[0.1, 0.2, 0.9, 0.25]])   # still found where it is on its page
+        anchor = notes.read(PID)["notes"][0]["anchor"]
+        self.assertEqual((anchor["unit"], anchor.get("lost")), (tank, None))
+        self.assertIsNone(store.read(PID, "en"))   # its levels were the old text's
+        self.assertEqual(local.original(PID), md)   # the text read wrong, kept in its history
+
+    def test_converted_again_its_edit_history_goes_with_its_levels(self):
+        self.store([self.WRONG, self.TANK], replace=False)
+        local.replace_text(PID, local.text_of(PID).replace("cornpressor", "compressor"))
+        self.assertIsNotNone(local.original(PID))
+        self.store([self.HOUSE, self.WRONG, self.TANK], replace=True)   # converted again (accurately): a new text
+        self.assertIn("cornpressor", local.text_of(PID))
+        self.assertIsNone(local.original(PID))
 
 
 if __name__ == "__main__":

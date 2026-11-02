@@ -1,7 +1,8 @@
 """The download page, from one template and one table of words.
 
 dist/: index.html (English) and zh.html (Chinese), each with its own head for search engines and AI answers (title,
-description, canonical, hreflang, Open Graph, and JSON-LD for the app and its questions), robots.txt, sitemap.xml,
+description, canonical, hreflang, Open Graph, and JSON-LD for the app and its questions), privacy.html (the browser
+extension's privacy policy, as written, in both languages: the address its store listing names), robots.txt, sitemap.xml,
 llms.txt and assets/, with the clips from docs/assets and the app's own fonts (Inter and Source Serif 4, served from the
 site: no visitor's browser asks a font service for anything; monospace is the system's, as in the app). preview.html is the two pages in one, for a look before anything
 goes up, with what search engines and AI read shown at the bottom.
@@ -212,6 +213,7 @@ def sitemap(gallery=()):
     day = datetime.date.today().isoformat()
     alt = "".join(f'\n    <xhtml:link rel="alternate" hreflang="{h}" href="{PAGE[k]}"/>' for k, h in (("en", "en"), ("zh", "zh-CN")))
     urls = "".join(f"\n  <url>\n    <loc>{PAGE[k]}</loc>\n    <lastmod>{day}</lastmod>{alt}\n  </url>" for k in ("en", "zh"))
+    urls += f"\n  <url>\n    <loc>{SITE}privacy.html</loc>\n  </url>"
     urls += "".join(f"\n  <url>\n    <loc>{SITE}gallery/{p}</loc>\n  </url>" for p in gallery)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">{urls}\n</urlset>\n'
 
@@ -319,6 +321,7 @@ if __name__ == "__main__":
     gallery = with_gallery(a.gallery) if a.gallery else []
     (OUT / "index.html").write_text(page("en", css, js, mjs), encoding="utf-8")
     (OUT / "zh.html").write_text(page("zh", css, js, mjs), encoding="utf-8")
+    shutil.copy2(HERE / "privacy.html", OUT / "privacy.html")
     (OUT / "robots.txt").write_text(ROBOTS, encoding="utf-8")
     (OUT / "sitemap.xml").write_text(sitemap(gallery), encoding="utf-8")
     (OUT / "llms.txt").write_text(llms(), encoding="utf-8")

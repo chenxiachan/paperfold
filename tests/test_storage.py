@@ -155,7 +155,8 @@ class BackendContract:
             notes.put(pid, {"id": "n-storage2", "kind": "note", "text": "Mine", "anchor": {"on": "paper"}})
             local.replace_text(pid, TEXT.replace("Second paragraph.", "Edited paragraph."))
             self.assertIn(b"Edited paragraph", store.asset(pid, "source.md"))
-            self.assertIn(b"Second paragraph", store.asset(pid, "previous/source.md"))
+            history = "history/source.md" if store.is_local() else "previous/source.md"
+            self.assertIn(b"Second paragraph", store.asset(pid, history))
             self.assertEqual(notes.read(pid)["notes"][0]["text"], "Mine")
 
     def test_trash_restore_keeps_every_asset(self):

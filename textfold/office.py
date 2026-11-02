@@ -733,6 +733,33 @@ def _csv(path, doc, ext):
 
 # ── web pages (.html, .mhtml) and e-books ──
 
+def _holds(el, text, share=0.6):
+    """Does el hold most of text: of its runs of four words (of six characters, for a text in Chinese, Japanese or
+    Korean, which leave no spaces), at least share in el's own?"""
+    def runs(s):
+        s = re.sub(r"\s+", " ", s).strip().lower()
+        if len(re.findall(r"[぀-ヿ㐀-鿿가-힯]", s)) > len(s) / 4:
+            s = re.sub(r"\s", "", s)
+            return {s[i:i + 6] for i in range(max(0, len(s) - 5))}
+        w = s.split(" ")
+        return {tuple(w[i:i + 4]) for i in range(max(0, len(w) - 3))}
+    want = runs(text)
+    return bool(want) and len(want & runs(el.text_content())) >= share * len(want)
+
+
+def _told(tree):
+    """The page's article as trafilatura reads it, as plain text, on a copy of the tree without its HTML comments
+    (trafilatura 2.0 stops on one inside a heading: MDN's, Hugging Face's pages); "" when it reads nothing or stops."""
+    import trafilatura
+    from lxml import etree
+    box = copy.deepcopy(tree)
+    etree.strip_elements(box, etree.Comment, with_tail=False)
+    try:
+        return trafilatura.extract(box, include_comments=False, include_tables=True) or ""
+    except Exception:   # (a page it cannot read is read as before: its first <article>, or <main>)
+        return ""
+
+
 def _page(data, doc, files=None, url=None):
     """A saved web page: its article (trafilatura's, as on the web), and its pictures, from inside the file when it
     holds them (files: address -> bytes), else from where they are on the web."""
@@ -752,13 +779,22 @@ def _page(data, doc, files=None, url=None):
         return src if re.match(r"https?://|data:image/", src, re.I) else None
 
     # its article, where it marks one (the longest); else its main part; else its body, without the site's
-    # header, footer and side columns
+    # header, footer and side columns. An <article> or <main> is taken only when it holds most of the text trafilatura
+    # finds the page's article to be (#82: a page whose one <article> is an advert's box read as that box, or as
+    # nothing at all); a page trafilatura reads nothing in keeps the first there is. Its readers' comments are not
+    # that text: a blog's comments, outside its <article> and longer than it, would have it judged no article
+    told = _told(tree)
     arts = [a for a in tree.iter("article")]
-    root = max(arts, key=lambda a: len(a.text_content())) if arts else next(tree.iter("main"), None)
+    longest = max(arts, key=lambda a: len(a.text_content())) if arts else None
+    root = next((c for c in (longest, next(tree.iter("main"), None)) if c is not None and (not told or _holds(c, told))), None)
     if root is None:
         root = tree.find(".//body") if tree.find(".//body") is not None else tree
         for el in [e for e in root.iter("header", "footer", "aside") if e.getparent() is not None]:
             el.drop_tree()
+        size = lambda s: len(re.sub(r"\s", "", s))   # noqa: E731  (characters: a text in Chinese leaves no spaces)
+        for el in [a for a in arts if a.getparent() is not None and size(a.text_content()) < size(told) / 5
+                   and not _holds(a, told, 0.1)]:
+            el.drop_tree()   # (the advert's box itself: small, and none of the article's text in it)
     h1s = list(root.iter("h1"))
     if len(h1s) == 1:   # its one top heading: its title
         h1s[0].set("class", "tf-title")

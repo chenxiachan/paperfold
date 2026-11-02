@@ -1,0 +1,14 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "ruanyifeng.com",
+ "pages": "/blog/*",
+ "article": "article.hentry",
+ "drop": [
+  ".asset-nav"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "Movable Type: the post is article.hentry (microformats); the previous and next links are furniture; the comments and related posts are outside it."
+}

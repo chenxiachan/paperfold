@@ -66,6 +66,7 @@
   const lvBlocks = [];                    // blocks that show or hide by level: equations, raw blocks, title-page leftovers, bare figures
   const chunkOf = {};                     // uid -> chunk
   const headEls = [];                     // [chunk, heading element, stake element]
+  const eqEls = [];                       // the equations set apart, each with the paragraph it goes with (_unit)
   D.chunks.forEach((c) => c.units.forEach((uid) => { chunkOf[uid] = c; }));
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
   // the type as this reader likes it, for every text (kept in this browser): its size, the column's width, the font
@@ -124,6 +125,7 @@
   }
 
   // ── pieces: what a unit shows at a level ─────────────────────────────
+  let review = null;   // an edit's places shown (setReview, below)
   function pieces(uid, L) {
     const v = view(uid), p = `${uid}:${v.p}`;
     const ev = new Set(v.ev);
@@ -205,6 +207,8 @@
     }
     const fm = findMarks.get(uid);   // the words found (find in the text, below)
     if (fm) for (const x of out) x.fd = fm.get(x.id) || 0;
+    const rv = review && L >= 4 && !v.p ? review.units.get(uid) : null;   // an edit's places (review, below)
+    if (rv) for (const x of out) { x.rv = rv.put.get(x.i); x.rvb = rv.before.get(x.i); x.rva = rv.after.get(x.i); }
     return out;
   }
 
@@ -236,9 +240,16 @@
       el.className = 'tk' + (p.gap ? ' gap' : '') + atCls(t) + (t.f ? ' ' + t.f : '');
       el._base = el.className;
     }
-    el.className = el._base + (p.lead ? ' lead' : '') + (p.kept ? ' kept' : '') + hlCls(p) + fdCls(p);
+    el.className = el._base + (p.lead ? ' lead' : '') + (p.kept ? ' kept' : '') + hlCls(p) + fdCls(p) + rvCls(p);
+    if (p.rvb) el.dataset.was = p.rvb.was; else delete el.dataset.was;
+    if (p.rva) el.dataset.wasAfter = p.rva.was; else delete el.dataset.wasAfter;
   }
   const fdCls = (p) => (p.fd ? (p.fd === 2 ? ' fd fdc' : ' fd') : '');
+  // an edit's place (review): its words put in, and before a word (after the last), the words taken out; the one the
+  // reader is at, stronger
+  const rvCls = (p) => (p.rv !== undefined ? ` rv${p.rv === review.cur ? ' rvc' : ''}` : '') +
+    (p.rvb ? ` rvb${p.rvb.k === review.cur ? ' rvbc' : ''}` : '') + (p.rva ? ` rva${p.rva.k === review.cur ? ' rvac' : ''}` : '');
+  const rvDel = (d) => `<span class="rvdel${d.k === review.cur ? ' rvc' : ''}" data-was="${esc(d.was)}"></span>`;
 
   // where a line may break between two pieces written without a space: between Chinese characters yes (except
   // before closing or after opening punctuation), inside a Latin word or formula group no
@@ -323,9 +334,10 @@
       else if (group) { group.appendChild(s); group = null; }
       else frag.appendChild(s);
       if (space) {   // a space inside a highlight is highlighted too
-        const both = p.hl && !last && pcs[n + 1].hl, found = p.fd && !last && pcs[n + 1].fd;
+        const both = p.hl && !last && pcs[n + 1].hl, found = p.fd && !last && pcs[n + 1].fd, put = p.rv !== undefined && !last && pcs[n + 1].rv === p.rv;
         frag.appendChild(both ? h('span', `hlsp${p.hl === pcs[n + 1].hl && p.sh === pcs[n + 1].sh ? hlCls(p).replace(' hl', '') : ''}`, ' ')
-          : found ? h('span', `fdsp${p.fd === 2 && pcs[n + 1].fd === 2 ? ' fdc' : ''}`, ' ') : document.createTextNode(' '));
+          : found ? h('span', `fdsp${p.fd === 2 && pcs[n + 1].fd === 2 ? ' fdc' : ''}`, ' ')
+          : put ? h('span', `rvsp${p.rv === review.cur ? ' rvc' : ''}`, ' ') : document.createTextNode(' '));
       }
     });
     el._tx.replaceChildren(frag);
@@ -338,11 +350,14 @@
     const flush = () => { if (buf) html += run ? `<span class="${run}">${buf}</span>` : buf; buf = ''; };
     pcs.forEach((p, n) => {
       const t = p.tok || {};
-      const cls = p.gap ? 'tr gap' : `tr${p.lead ? ' lead' : ''}${p.kept ? ' kept' : ''}${t.f ? ' ' + t.f : ''}${hlCls(p)}${fdCls(p)}`;
+      const cls = p.gap ? 'tr gap' : `tr${p.lead ? ' lead' : ''}${p.kept ? ' kept' : ''}${t.f ? ' ' + t.f : ''}${hlCls(p)}${fdCls(p)}${p.rv !== undefined ? rvCls({ rv: p.rv }) : ''}`;
+      if (p.rvb) { flush(); run = null; html += rvDel(p.rvb); }
       if (cls !== run) { flush(); run = cls; }
       buf += p.gap ? '…' : t.a ? A[t.a].html : t.x ? `<span class="texsrc">${esc(t.x)}</span>` : esc(t.t);
+      if (p.rva) { flush(); run = null; html += rvDel(p.rva); }
       if (n < pcs.length - 1 && (p.gap || t.s || pcs[n + 1].gap)) {
-        if ((p.hl && !pcs[n + 1].hl) || (p.fd && !pcs[n + 1].fd)) { flush(); run = null; }   // a highlight ends on its last word, not the space after it
+        // a highlight ends on its last word, not the space after it
+        if ((p.hl && !pcs[n + 1].hl) || (p.fd && !pcs[n + 1].fd) || (p.rv !== undefined && pcs[n + 1].rv !== p.rv)) { flush(); run = null; }
         buf += ' ';
       }
     });
@@ -368,6 +383,23 @@
     if (katexLib) { try { katexLib.render(src, el, { throwOnError: false }); } catch { /* keep the source */ } return; }   // loaded: at once, so it is measured drawn
     loadKatex().then((k) => { if (k) try { k.render(src, el, { throwOnError: false }); } catch { /* keep the source */ } });
   }
+  // ── formulas written in LaTeX (semantic.py: math.pf-tex, a Markdown file's): drawn by KaTeX, as Typora draws them
+  //    with MathJax, once, before anything is laid out; the page has KaTeX before this script (build.py). Without it,
+  //    their MathML stays ──
+  const attrText = (x) => x.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  function drawTex(html) {
+    if (!katexLib || !html.includes('pf-tex')) return html;
+    return html.replace(/<math\b([^>]*)>[\s\S]*?<\/math>/g, (m, attrs) => {
+      const src = /\balttext="([^"]*)"/.exec(attrs);
+      if (!/\bclass="pf-tex"/.test(attrs) || !src) return m;
+      try { return katexLib.renderToString(attrText(src[1]), { displayMode: /\bdisplay="block"/.test(attrs), throwOnError: false }); } catch { return m; }
+    });
+  }
+  for (const a of Object.values(A)) if (a.kind === 'math') a.html = drawTex(a.html);
+  for (const b of D.blocks) { if (b.html) b.html = drawTex(b.html); if (b.title) b.title = drawTex(b.title); }   // (a box's title too)
+  // a section's title keeps its MathML, which mathify reads for the formulas of its translations: drawn as it is shown
+  const drawnTitles = new Map();
+  const titleTex = (html) => { if (!drawnTitles.has(html)) drawnTitles.set(html, drawTex(html)); return drawnTitles.get(html); };
 
   // ── a diagram written in Mermaid (semantic.py: pre.pf-mermaid, its source): drawn by Mermaid, loaded only for a text
   //    that has one, from where the page keeps it (D.mermaid, as D.katex), light or dark as the page is, and drawn
@@ -440,12 +472,13 @@
 
   function unitNode(uid, tag) {
     const u = U[uid];
-    const el = h(tag, `u ${u.role} r-${u.lad.role}${u.lad.model === 'local' ? ' is-local' : ''}`);
+    const labeled = u.role === 'item' && u.marker && /[\p{L}\p{N}]/u.test(u.marker);
+    const el = h(tag, `u ${u.role} r-${u.lad.role}${u.lad.model === 'local' ? ' is-local' : ''}${labeled ? ' numbered' : ''}`);
     el.dataset.u = uid;
     el.id = uid;
     const dot = h('span', 'dot'); dot.dataset.id = `dot:${uid}`;
     el.append(dot);
-    if (u.role === 'item' && u.marker) { const mk = h('span', 'mk', u.marker); mk.dataset.id = `mk:${uid}`; el.append(mk); }
+    if (u.role === 'item' && u.marker) { const mk = h('span', labeled ? 'mk mk-labeled' : 'mk', u.marker); mk.dataset.id = `mk:${uid}`; el.append(mk); }
     el._tx = h(tag === 'li' || tag === 'figcaption' ? 'div' : 'p', 'tx');
     el.append(el._tx);
     unitEl.set(uid, el); spans.set(uid, new Map()); order.set(uid, order.size);
@@ -491,6 +524,10 @@
     const chunkById = Object.fromEntries(D.chunks.map((c) => [c.id, c]));
     let body = chunksEl, list = null, listId = null, front = null;
     const boxes = [];       // open theorem / definition / proof frames
+    // an equation goes with the paragraph that brings it in (the one before it in its section), or, first in its
+    // section, the one after it: a note on it is that paragraph's (selectionAnchors)
+    let lastU = null;
+    const eqWait = [];
     for (const b of D.blocks) {
       if (b.k === 'box') {
         const cat = b.kind === 'proof' ? 'proof' : /^def/.test(b.kind) ? 'def' : /rem|exa|note|obs/.test(b.kind) ? 'rem' : 'thm';
@@ -504,6 +541,7 @@
       if (b.k === 'box_end') { boxes.pop(); list = null; continue; }
       if (b.k === 'h') {
         boxes.length = 0;
+        lastU = null; eqWait.length = 0;
         const c = chunkById[b.chunk];
         // An empty section whose title is a reference itself ([EB/OL], a URL): the converter read a footnote as a
         // section heading. Full keeps it as written; every folded level drops the section, or Takeaway shows a
@@ -525,6 +563,8 @@
       const target = boxes.length ? boxes[boxes.length - 1] : b.chunk ? body : front;
       if (b.k === 'u') {
         const u = U[b.u];
+        lastU = b.u;
+        for (const e of eqWait.splice(0)) e._unit = b.u;
         if (u.role === 'item') {
           if (!list || listId !== u.list) { list = h('ul', 'list'); listId = u.list; target.append(list); }
           list.append(unitNode(b.u, 'li'));
@@ -550,7 +590,10 @@
       } else if (b.k === 'eq' || b.k === 'raw') {
         list = null;
         const e = h('div', b.k, b.html); e.dataset.id = `${b.k}:${b.id || Math.random().toString(36).slice(2)}`;
-        if (b.k === 'eq') { e.dataset.eq = b.id; e.dataset.chunk = b.chunk; }
+        if (b.k === 'eq') {
+          e.dataset.eq = b.id; e.dataset.chunk = b.chunk; eqEls.push(e);
+          if (lastU) e._unit = lastU; else eqWait.push(e);
+        }
         e.dataset.l = level; lvBlocks.push(e);
         target.append(e);
       }
@@ -643,7 +686,7 @@
       if (tk.s) st.append(mk && mk.has(i) && mk.has(i + 1) ? h('span', `hlsp${mk.get(i) === mk.get(i + 1) ? mk.get(i) : ''}`, ' ') : ' ');
     });
   }
-  function chunkTitle(c) { const z = trOf(c); return z ? mathify(z.title, c.html) : c.html; }
+  function chunkTitle(c) { const z = trOf(c); return titleTex(z ? mathify(z.title, c.html) : c.html); }
 
   // Every unit at the current level: the ones in `hot` as tokens, the ones in `band` as text, and the rest
   // later. A unit far from the viewport keeps its old drawing for now (stale) and is redrawn when the browser
@@ -1999,6 +2042,30 @@
     }
     return exact.size || soft.size || line.size ? { exact, soft, old, line, sh, lineSh } : null;
   }
+  // an equation's LaTeX: its MathML's (alttext, LaTeXML's and semantic.py's), or KaTeX's annotation; the rows of one
+  // that has several (LaTeXML's eqnarray, align), gathered; and its number, (1), as \tag{1}, so a page that draws it
+  // (Obsidian's) numbers it the same
+  const texOf = (m) => m.getAttribute('alttext') || (m.querySelector('annotation[encoding="application/x-tex"]') || {}).textContent || '';
+  function eqTex(e) {
+    const rows = [...e.querySelectorAll('tr')].map((tr) => [...tr.querySelectorAll('math')].map(texOf).filter(Boolean).join(' ')).filter(Boolean);
+    return rows.length > 1 ? `\\begin{gathered} ${rows.join(' \\\\ ')} \\end{gathered}` : rows[0] || '';
+  }
+  function eqTag(e) {
+    const no = ((e.querySelector('.ltx_tag_equation') || {}).textContent || '').trim(), m = /^\((.+)\)$/.exec(no);
+    return m ? ` \\tag{${m[1]}}` : no ? ` \\tag*{${no}}` : '';
+  }
+  // the equations of a paragraph's notes on them (anchor.eq): lit whole, in the note's shade, in any language (the
+  // formula is the same in every one); a conversation leaves it as it was, as it leaves words
+  function eqMarks(uid) {
+    const list = (notesOf.get(uid) || []).filter((n) => n.anchor.eq && n.kind !== 'ask');
+    for (const e of eqEls) {
+      if (e._unit !== uid) continue;
+      const n = list.filter((x) => x.anchor.eq === e.dataset.eq).pop();
+      e.classList.toggle('hl', !!n);
+      e.classList.toggle('sh1', !!n && shadeOf(n) === 1);
+      e.classList.toggle('sh3', !!n && shadeOf(n) === 3);
+    }
+  }
   function indexNotes() {
     notesOf.clear();
     for (const n of notes) {
@@ -2011,7 +2078,7 @@
   // the mark of a paragraph (or heading) with notes: a band in the colour of each level its notes were made at, from
   // Full and Brief to Takeaway; a conversation alone leaves it as it was
   function noteBar(el, key) {
-    const tones = new Set((notesOf.get(key) || []).filter((n) => n.kind !== 'ask').map(toneOf));
+    const tones = new Set((notesOf.get(key) || []).filter((n) => n.kind !== 'ask' && !n.anchor.eq).map(toneOf));   // (an equation's: lit itself)
     const inks = ['src', 'key', 'take'].filter((g) => tones.has(g)).map((g) => `var(--lv-${g}-ink)`);
     if (!inks.length) { el.style.removeProperty('--note-bar'); return; }
     const k = inks.length;
@@ -2035,6 +2102,7 @@
       el.classList.toggle('has-notes', notesOf.has(uid));
       noteBar(el, uid);
       if (!el._stale) renderUnit(uid, el._mode === 'tok');
+      eqMarks(uid);
       renderNoteCards(uid);
     }
     capEpoch++;
@@ -2237,6 +2305,13 @@
         : { exact: text.slice(from, to).replace(/[\u200b\s]+/g, ' ').trim(), prefix: '', suffix: '' };
       return { unit: uid, section: chunkOf[uid] ? chunkOf[uid].id : null, lang, level: L >= 1 && L <= 2 && !line && tokens ? 4 : L, tokens, sents, quote, ...(shown ? { shown } : {}) };
     });
+    // an equation set apart, selected: marked whole, as a note on the paragraph it goes with; its quote the formula,
+    // in LaTeX (the model is asked about the formula, with that paragraph)
+    for (const e of eqEls) {
+      if (!e._unit || !range.intersectsNode(e) || !e.getClientRects().length) continue;
+      anchors.push({ unit: e._unit, section: chunkOf[e._unit] ? chunkOf[e._unit].id : null, lang, level, tokens: null, sents: null,
+        eq: e.dataset.eq, quote: { exact: `$${eqTex(e)}$`, prefix: '', suffix: '' } });
+    }
     // a section's one-line summary (written by the model; its words are counted in the summary) or its title
     for (const [c, hd, st] of headEls) {
       for (const [el, on] of [[st, 'summary'], [hd, 'title']]) {
@@ -2268,7 +2343,9 @@
     const t = T[ui];
     selbar.innerHTML = `<button type="button" data-act="hl">${esc(t.n_highlight)}</button>${swatches('hl', toneOf({ anchor: anchors[0] }), 0, lastShade)}` +
       `<button type="button" data-act="note">${esc(t.n_note)}</button>` +
-      `<button type="button" data-act="ask">${esc(t.n_ask)}</button>`;
+      `<button type="button" data-act="ask">${esc(t.n_ask)}</button>` +
+      // the author's words, in a document whose text can be put right (a PDF read wrong: app.js, editText)
+      (window.DRApp && window.DRApp.editText && anchors[0].tokens ? `<button type="button" data-act="edit">${esc(t.ed_fix)}</button>` : '');
     selbar.hidden = false;
     const r = getSelection().getRangeAt(0).getBoundingClientRect(), w = selbar.offsetWidth;
     selbar.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
@@ -2287,6 +2364,12 @@
     // a dot marks the selection in its shade; Highlight, and a note (opened to write), in the shade last chosen
     const b = e.target.closest('button'), act = b && b.dataset.act, anchors = selAnchors;
     if (!act || !anchors) return;
+    if (act === 'edit') {
+      hideSelbar();
+      getSelection().removeAllRanges();
+      window.DRApp.editText(anchors[0].quote.exact);
+      return;
+    }
     if (act === 'hl' && b.dataset.s) useShade(+b.dataset.s);
     const c = act !== 'ask' && lastShade !== 2 ? { shade: lastShade } : {};
     const made = anchors.map((a, k) => ({ id: noteId(), kind: k === 0 && act === 'note' ? 'note' : 'highlight', anchor: a, text: '', ask: null, ...c }));
@@ -2456,7 +2539,7 @@
       body = `<textarea class="np-text" rows="3" placeholder="${esc(t.n_note_ph)}">${esc(n.text || '')}</textarea>`;
     }
     const q = passage(a), at = a.shown ? lineAt(a) + (lineGone(a) ? ` · ${t.n_line_changed}` : '') : ask ? askedAt(a) : '';
-    npop.innerHTML = `<div class="np-quote${a.shown ? ` ai l${a.level}` : ''}${ask ? ` tn-${toneOf(n)}` : toneCls(n)}"><span class="np-where">${esc(whereA(a))}</span> ${esc(q.length > 160 ? q.slice(0, 157) + '…' : q)}` +
+    npop.innerHTML = `<div class="np-quote${a.shown ? ` ai l${a.level}` : ''}${ask ? ` tn-${toneOf(n)}` : toneCls(n)}"><span class="np-where">${esc(whereA(a))}</span> ${texLite(clipTex(q, 160))}` +
       `${at ? `<span class="np-at">${esc(at)}</span>` : ''}</div>${body}` +
       (draft ? '' : `<div class="np-acts">${!ask && !whole(a) ? `${swatches('shade', toneOf(n), shadeOf(n))}<button type="button" data-act="ask">${esc(t.n_ask)}</button>` : ''}` +
         `<button type="button" data-act="link">${esc(t.n_copy)}</button><button type="button" data-act="del">${esc(t.n_delete)}</button></div>`);
@@ -2804,6 +2887,7 @@
   }
   // the note under a mark: the one whose passage holds the clicked word (the latest, when several do)
   function noteAt(mark) {
+    if (mark.classList.contains('eq')) return (notesOf.get(mark._unit) || []).filter((n) => n.anchor.eq === mark.dataset.eq).pop() || null;
     let piece = mark.closest('[data-id]');
     if (!piece && mark.classList.contains('hlsp')) piece = mark.previousElementSibling;
     const i = piece ? piece._i : undefined, st = mark.closest('.stake');
@@ -2852,14 +2936,16 @@
     if (s && !secs.get(s)) { const now = (GONE.sections[s] || {}).now; s = now && secs.get(now) ? now : null; lost = lost || !s; }
     const sc = s && secs.get(s);
     if (lost) sayLink(sc ? T[ui].link_gone : T[ui].link_gone_top);
-    const el = n && !n.anchor.unit ? targetEl(n.anchor) : u ? unitEl.get(u) : sc ? (sc.hd.hidden ? sc.sec : sc.hd) : null;
+    // an equation (#eq=, with the paragraph it goes with as u=): itself, where the level shows it, else that paragraph
+    const eqId = !n && arg('eq'), eqEl = eqId ? eqEls.find((x) => x.dataset.eq === eqId && x.getClientRects().length) : null;
+    const el = eqEl || (n && !n.anchor.unit ? targetEl(n.anchor) : u ? unitEl.get(u) : sc ? (sc.hd.hidden ? sc.sec : sc.hd) : null);
     if (!el) return;
     if (el._stale) renderUnit(el.dataset.u, true);
     el.scrollIntoView({ block: 'center' });
     // all that the link names, flashed together: a run of paragraphs (#u=<first>&to=<last>), a section with the
     // subsections under it (#s=)
     const to = !n && u && arg('to');
-    const all = to ? unitsBetween(u, to).map((x) => unitEl.get(x)) : sc ? sectionWith(sc.c).map((x) => secs.get(x.id).sec) : [el];
+    const all = eqEl ? [eqEl] : to ? unitsBetween(u, to).map((x) => unitEl.get(x)) : sc ? sectionWith(sc.c).map((x) => secs.get(x.id).sec) : [el];
     for (const x of all) { if (x._stale) renderUnit(x.dataset.u, true); flash(x); }
     const tm = n && /[#&]t=(\d{1,3})(?:&|$)/.exec(location.hash);
     if (n) setTimeout(() => { openNote(n); if (tm) showTurn(n, +tm[1]); }, 300);
@@ -2896,7 +2982,7 @@
   const dragImg = h('div', 'dragimg');   // what the pointer carries: a line of what goes, not the whole paragraph
   document.body.append(handle, dragImg);
   let handleFor = null, handleTimer = 0;
-  const HANDLED = '.u, .hd, .stake', SAID = '.np-q, .np-a';   // in the column; in a conversation
+  const HANDLED = '.u, .hd, .stake, .eq', SAID = '.np-q, .np-a';   // in the column (an equation set apart too); in a conversation
   function placeHandle(el, again = false) {
     clearTimeout(handleTimer);
     if (el === handleFor && !handle.hidden && !again) return;
@@ -2979,8 +3065,14 @@
   }
   const headingOf = (c) => `${c.num || ''} ${secTitle(c)}`.trim();
   const summaryOf = (c) => { const lad = (trOf(c) && trOf(c).lad) || c.lad; return lad && lad.take.length ? toksText(lad.take, 0, lad.take.length - 1) : ''; };
-  // what a handle's paragraph, heading or summary gives (a heading: its whole section)
+  // what a handle's paragraph, heading, summary or equation gives (a heading: its whole section; an equation: its
+  // LaTeX, with its number, and a link to it, by way of the paragraph it goes with for a reader that knows no eq=)
   function itemDrag(el) {
+    if (el.classList.contains('eq')) {
+      const uid = el._unit || null;
+      return { kind: 'equation', uid, eq: el.dataset.eq, c: (uid && chunkOf[uid]) || D.chunks.find((x) => x.id === el.dataset.chunk) || null,
+        L: level, text: `$$${eqTex(el)}${eqTag(el)}$$`, written: false, units: uid ? [uid] : [] };
+    }
     if (el.classList.contains('u')) {
       const uid = el.dataset.u, L = levelOf(uid);
       return { kind: 'paragraph', uid, c: chunkOf[uid] || null, L, text: piecesText(pieces(uid, L)), written: L <= 2, units: [uid] };
@@ -3043,9 +3135,10 @@
   // the link names them from the first to the last (in one paragraph, that paragraph; in headings alone, the section)
   function selectionDrag(range) {
     const parts = [];
-    for (const el of docEl.querySelectorAll('.hd, .stake, .u')) {
+    for (const el of docEl.querySelectorAll('.hd, .stake, .u, .eq')) {
       const box = el.classList.contains('u') ? el._tx : el;
       if (!box || el.hidden || !range.intersectsNode(box) || !box.getClientRects().length) continue;   // (a summary the level does not show)
+      if (el.classList.contains('eq')) { parts.push({ el, uid: null, text: `$$${eqTex(el)}${eqTag(el)}$$` }); continue; }   // (an equation: whole)
       const r = range.cloneRange();
       if (!box.contains(range.startContainer)) r.setStart(box, 0);
       if (!box.contains(range.endContainer)) r.setEnd(box, box.childNodes.length);
@@ -3054,6 +3147,8 @@
     }
     if (!parts.length) return null;
     const units = parts.filter((x) => x.uid).map((x) => x.uid), text = parts.map((x) => x.text).join('\n\n');
+    const eqs = parts.filter((x) => x.el.classList.contains('eq'));
+    if (!units.length && eqs.length) return { ...itemDrag(eqs[0].el), kind: 'selection', text, quote: text };   // (equations alone: to the first)
     const sc = units.length ? null : secOfEl(parts[0].el);
     if (!units.length && !sc) return null;
     const L = units.length ? levelOf(units[0]) : level;
@@ -3064,12 +3159,13 @@
     const m = D.meta, title = m.name || (m.titles && m.titles[lang]) || m.title, c = d.c;
     const q = new URLSearchParams({ paper: m.id });
     if (d.note) { q.set('n', d.note.id); if (d.turn !== undefined) q.set('t', d.turn); } else if (d.uid) { q.set('u', d.uid); if (d.to) q.set('to', d.to); } else if (c) q.set('s', c.id);
+    if (d.eq && !d.note) q.set('eq', d.eq);
     if (!d.note) q.set('level', LEVEL_NAMES[d.L]);
     q.set('lang', lang);
     const link = `textfold://open?${q}`, citekey = m.zotero && m.zotero.citekey;
     const json = { format: 'textfold/drag', version: 1, paper: m.id, title, authors: m.authors || [], ...(citekey ? { citekey } : {}),
       section: c ? { id: c.id, num: c.num || '', title: secTitle(c) } : null, ...(d.heading ? { heading: d.heading } : {}), kind: d.kind, level: LEVEL_NAMES[d.L], lang,
-      text: d.text, written: d.written, ...(d.units ? { units: d.units } : {}), ...(d.quote ? { quote: d.quote } : {}), ...(d.comment ? { comment: d.comment } : {}), link };
+      ...(d.eq ? { equation: d.eq } : {}), text: d.text, written: d.written, ...(d.units ? { units: d.units } : {}), ...(d.quote ? { quote: d.quote } : {}), ...(d.comment ? { comment: d.comment } : {}), link };
     const where = c ? `${title} › ${`${c.num || ''} ${secTitle(c)}`.trim()}` : title;
     // after the quote: a note's text, or a conversation's question (in bold) and its answer (Markdown, the model's)
     const said = (d.part === 'q' ? [[d.text, true]] : d.kind === 'ask' ? [[d.comment, true], [d.text, false, true]] : d.kind === 'note' ? [[d.comment]] : []).filter(([x]) => x);
@@ -3259,7 +3355,10 @@
   const secOf = (a) => (whole(a) ? null : a.unit ? chunkOf[a.unit] : (secs.get(a.section) || {}).c);
   const groupOf = (a) => (whole(a) ? T[ui].n_whole : secOf(a) ? secName(secOf(a)) : '');
   // text with $formulas$ set as math, shortened without cutting a formula in two
-  const clipTex = (x, n) => { if (x.length <= n) return x; let c = x.slice(0, n - 1); if ((c.match(/\$/g) || []).length % 2) c = c.slice(0, c.lastIndexOf('$')); return c.trimEnd() + '…'; };
+  const clipTex = (x, n) => {
+    if (x.length <= n || /^\$[^$]+\$$/.test(x)) return x;   // (an equation alone: whole)
+    let c = x.slice(0, n - 1); if ((c.match(/\$/g) || []).length % 2) c = c.slice(0, c.lastIndexOf('$')); return c.trimEnd() + '…';
+  };
   const texLite = (x) => esc(x).replace(/\$([^$]+)\$/g, (m, t) => `<span class="texsrc">${t}</span>`);
   const secName = (c) => `${c.num ? c.num + ' ' : ''}${(trOf(c) || c).title.replace(/\$/g, '')}`;
   function renderNotesMenu() {
@@ -4404,7 +4503,6 @@ math { font-size: 1.05em; }
     clearTimeout(pillTimer);
     pillTimer = setTimeout(() => { pillEl.hidden = true; }, ms);
   }
-  pillEl.addEventListener('click', (e) => { if (e.target.closest('[data-top]')) { pillEl.hidden = true; scrollTo({ top: 0, behavior: 'smooth' }); } });
 
   // ── focus (F, or the Aa menu): the text alone. The top bar, the zoom bar, the sidebar and the chat move off and
   //    come back while the pointer is at their edge; F or Esc ends it. Nothing in the column moves but for the room
@@ -4912,10 +5010,7 @@ math { font-size: 1.05em; }
   try { if (PDF_OK && innerWidth >= 1100 && localStorage.getItem(CMP_KEY) === '1') openCompare(); } catch { /* private window */ }
   if (wasAt) {   // (once laid out; again once the type is in, which moves the lines)
     const el = unitEl.get(wasAt.u), back = () => scrollBy(0, el.getBoundingClientRect().top - wasAt.y);
-    requestAnimationFrame(() => {
-      back();
-      if (IDS.indexOf(wasAt.u) > 2) pill(`${esc(T[ui].pos_back)}<button type="button" data-top="1">${esc(T[ui].pos_top)}</button>`, 6000);
-    });
+    requestAnimationFrame(back);   // (said by nothing: it is where a reader means to be, and the top is a scroll away)
     if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(back));
   }
   // the page again after a generation (app.js): the level and the paragraph that were being read, where they were
@@ -4937,13 +5032,53 @@ math { font-size: 1.05em; }
     store.set(UI_KEY, code);
     if (AVAIL.includes(code) && code !== lang) setLang(code); else applyLang();
   }
+  // ── an edit's places on the page (app.js, review: the edit history): the words each put in lit, the words it took out
+  //    struck through before the word they were before (the mark's own content, not the text's: a selection or a
+  //    note does not take them), a heading it changed lit whole; the one the reader is at (cur), stronger, and gone to.
+  //    At Full, in the text's own words, which are the ones an edit changed. list: local.places, with was (the words
+  //    taken out), each or null; none: the page as it was ──
+  function setReview(list, cur = 0) {
+    const was = review, touched = new Set(was ? was.units.keys() : []);
+    review = null;
+    if (list) {
+      review = { units: new Map(), heads: new Map(), list, cur };
+      const of = (uid) => { if (!review.units.has(uid)) review.units.set(uid, { put: new Map(), before: new Map(), after: new Map() }); touched.add(uid); return review.units.get(uid); };
+      list.forEach((x, k) => {
+        if (!x) return;
+        if (x.section) { review.heads.set(x.section, [...(review.heads.get(x.section) || []), k]); return; }
+        for (const w of x.words) { if (U[w.unit]) for (let i = w.tokens[0]; i <= w.tokens[1]; i++) of(w.unit).put.set(i, k); }
+        const text = (x.was || '').replace(/\s+/g, ' ').trim() || (x.was ? '¶' : '');   // (a paragraph's end taken out: ¶)
+        if (text && U[x.at.unit]) of(x.at.unit)[x.at.after ? 'after' : 'before'].set(x.at.token, { was: text, k });
+      });
+    }
+    for (const [cid, sc] of secs) {
+      sc.hd.classList.toggle('rvh', !!(review && review.heads.has(cid)));
+      sc.hd.classList.toggle('rvc', !!(review && review.heads.has(cid) && review.heads.get(cid).includes(cur)));
+    }
+    if (review && level !== 4) { if (goal !== 4) setLevel(4); return; }   // (drawn as it zooms in)
+    for (const uid of touched) if (unitEl.has(uid)) renderUnit(uid, unitEl.get(uid)._mode === 'tok');
+  }
+  // the reader at another place: lit, and in the middle of the page
+  function reviewGo(k) {
+    if (!review || !review.list[k]) return;
+    const x = review.list[k], before = review.cur;
+    review.cur = k;
+    if (level !== 4) { if (goal !== 4) setLevel(4); setTimeout(() => { if (level === 4) reviewGo(k); }, DUR + 120); return; }
+    const near = [before, k].map((j) => review.list[j]).filter(Boolean);
+    if (near.some((y) => y.section)) setReview(review.list, k);
+    else for (const uid of new Set(near.flatMap((y) => [y.at.unit, ...y.words.map((w) => w.unit)]))) if (unitEl.has(uid)) renderUnit(uid, unitEl.get(uid)._mode === 'tok');
+    const el = x.section ? (secs.get(x.section) || {}).hd : unitEl.get(x.words.length ? x.words[0].unit : x.at.unit);
+    if (!el) return;
+    const at = el.querySelector('.rvc, .rvbc, .rvac') || el, r = at.getBoundingClientRect();
+    window.scrollTo({ top: scrollY + r.top - innerHeight * 0.38, behavior: reduced ? 'auto' : 'smooth' });
+  }
   // the name the reader gave the text in the library, changed while it is open: its head and the window's title follow
   function rename(name) {
     D.meta.name = name || undefined;
     document.title = name || D.meta.title;
     applyLang();
   }
-  window.__reader = { setLevel, setLang, setUi, rename, get ui() { return ui; }, zoomBy,
+  window.__reader = { setLevel, setLang, setUi, rename, review: setReview, reviewGo, get ui() { return ui; }, zoomBy,
     get compared() { if (!cmp || !cmp.grams) return null; const ids = [...order.keys()]; return { units: ids.length, found: ids.filter((id) => locate(id)).length, words: cmp.words.length }; }, get level() { return level; }, get lang() { return lang; }, get pos() { return pos; },
     get staged() { return !!stage; }, get _caps() { return caps; }, get keyframes() { return caps.map((c) => (c ? c.P.size : 0)); },
     // holding the zoom at a position, as a hand would (for looking at the motion frame by frame)

@@ -14,7 +14,7 @@ import urllib.request
 from bs4 import BeautifulSoup
 
 from . import local, markdown, store
-from .fetch import UA
+from .fetch import BUSY, UA, urlread
 
 URL = re.compile(r"(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})/([A-Za-z0-9._-]{1,100})", re.I)
 ID = re.compile(r"gh-([a-z0-9-]+)--([a-z0-9._-]+)")
@@ -35,8 +35,7 @@ def pid_of(owner, repo):
 def _api(path):
     req = urllib.request.Request(f"https://api.github.com{path}", headers={**UA, "Accept": "application/vnd.github+json"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())
+        return json.loads(urlread(req, 30, busy=BUSY - {429})[0])   # (its limit is an hour's: no use waiting)
     except urllib.error.HTTPError as e:
         if e.code == 404:   # no such repository, a private one, or one without a README
             raise ValueError("no-readme") from None

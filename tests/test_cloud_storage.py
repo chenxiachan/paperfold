@@ -364,7 +364,8 @@ class CloudRoutes(unittest.TestCase):
         self.start()
         status = self.call('/api/storage/cloud')[1]
         self.assertTrue(status['error'])
-        self.assertEqual(self.call('/api/settings')[0], 200)
+        code, settings = self.call('/api/settings')
+        self.assertEqual(code, 200, settings)
         with __import__('urllib.request', fromlist=['urlopen']).urlopen(f'http://127.0.0.1:{self.port}/') as response:
             self.assertIn(b'storageError', response.read())
         self.assertEqual(self.call('/api/storage/cloud', {'enabled': False})[0], 200)

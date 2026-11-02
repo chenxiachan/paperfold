@@ -12,7 +12,8 @@ ThoughtDAG's where.cjs does. Four can run a generation, the three ThoughtDAG dri
 CodeBuddy is Tencent's CLI, and WorkBuddy carries a copy of it (cli/bin/codebuddy in the app), which runs on the app's
 own Electron and the WorkBuddy sign-in, as WorkBuddy runs it: no node needed, the reader's WorkBuddy models.
 
-The others are reported when found, but not driven yet. A model id is ThoughtDAG's:
+The others are reported when found, but not driven yet. A command the reader adds in the settings (a custom agent:
+`mirasim claude`, which runs Claude Code under another name) is run by the driver of the one it speaks as. A model id is ThoughtDAG's:
 `claude/claude-code/opus`, `codex/codex/<model>`, `pi/<provider>/<model>`; CodeBuddy's `codebuddy/codebuddy/<model>`.
 Agents run here as one-shot text generators: no tools, no session, a scratch working directory. A question about a
 text can be looked up on the web (tools=True: the switch beside a question; models.ask_spec): the agent's own web
@@ -25,6 +26,7 @@ import json
 import os
 import queue
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -299,6 +301,14 @@ def workbuddy_app(path):
     return alone
 
 
+def workbuddy_lite(path):
+    """Is the CodeBuddy at `path` the copy WorkBuddy 5.8 and later bring: its lite bundle beside its launcher
+    (cli/dist/codebuddy-lite-wb.mjs), which the launcher runs only when CODEBUDDY_FORCE_LITE_WB_BUNDLE is 1, as
+    WorkBuddy runs it (else it looks for the full bundle, which is gone, and stops on MODULE_NOT_FOUND)? Such a copy
+    has no sign-in for another program: WorkBuddy keeps its token encrypted and hands the key to its own runs alone."""
+    return bool(path) and workbuddy_app(path) is not None and (Path(path).parent.parent / "dist" / "codebuddy-lite-wb.mjs").is_file()
+
+
 FUSE_WIRE = b"dL7pKGdnNz796PbbjQWNKmHXBZaB9tsX"   # Electron's fuses: this, a version byte, a count, a byte a fuse ('1' on)
 
 
@@ -371,8 +381,8 @@ CODEBUDDY_QUIET = {k: "1" for k in ("CODEBUDDY_DISABLE_AUTO_MEMORY", "CODEBUDDY_
 
 def env_for(path):
     """The environment an agent found at `path` runs in: child_env(), and for CodeBuddy its quiet switches; WorkBuddy's
-    copy on the app's Electron as node (without it the app itself would open) and with WorkBuddy's own settings, where
-    its sign-in is."""
+    copy on the app's Electron as node (without it the app itself would open), with WorkBuddy's own settings, where
+    its sign-in is (WorkBuddy 5.3's), and its lite bundle chosen where that is all it brings (workbuddy_lite)."""
     env = child_env()
     if path and Path(path).name.split(".")[0] == "codebuddy":
         env.update(CODEBUDDY_QUIET)
@@ -381,6 +391,8 @@ def env_for(path):
             conf = Path(os.environ.get("WORKBUDDY_CONFIG_DIR") or HOME / ".workbuddy")
             if conf.is_dir():
                 env["CODEBUDDY_CONFIG_DIR"] = str(conf)
+            if workbuddy_lite(path):
+                env["CODEBUDDY_FORCE_LITE_WB_BUNDLE"] = "1"
     return env
 
 
@@ -414,10 +426,11 @@ def _run(args, timeout, env=None, **kw):
                           timeout=timeout, env=env or child_env(), stdin=subprocess.DEVNULL, **kw)
 
 
-def _help_levels(path, flag, pattern):
-    """Effort or thinking levels as the CLI's own --help lists them."""
+def _help_levels(path, flag, pattern, cmd=None):
+    """Effort or thinking levels as the CLI's own --help lists them. (cmd: the command that starts it, where that is
+    not the program alone: a custom agent's)"""
     try:
-        text = _run([*argv(path), "--help"], 8, env_for(path)).stdout
+        text = _run([*(cmd or argv(path)), "--help"], 8, env_for(path)).stdout
     except Exception:
         return []
     m = re.search(pattern, text, re.S)
@@ -425,8 +438,10 @@ def _help_levels(path, flag, pattern):
 
 
 def codebuddy_candidates():
-    """WorkBuddy's copies of CodeBuddy, wherever WorkBuddy is, then one installed on its own (npm's)."""
-    out = [c for r in workbuddy_roots() for c in find_cli(r)] + [locate("codebuddy")]
+    """WorkBuddy's copies of CodeBuddy, wherever WorkBuddy is, then one installed on its own (npm's), signed in on its
+    own; WorkBuddy 5.8's copies after that one, since another program cannot use their sign-in (workbuddy_lite)."""
+    ours = [c for r in workbuddy_roots() for c in find_cli(r)]
+    out = [c for c in ours if not workbuddy_lite(c)] + [locate("codebuddy")] + [c for c in ours if workbuddy_lite(c)]
     return list(dict.fromkeys(c for c in out if c))
 
 
@@ -454,8 +469,8 @@ def locate_codebuddy():
 
 
 # ── catalogs ──────────────────────────────────────────────────────────
-def _claude_models(path):
-    efforts = _help_levels(path, "--effort", r"--effort <level>.*?\(([^)]*)\)")
+def _claude_models(path, cmd=None):
+    efforts = _help_levels(path, "--effort", r"--effort <level>.*?\(([^)]*)\)", cmd)
     efforts = (["off"] + efforts) if efforts else []   # off: no thinking at all (llm.py sets the thinking budget to nothing)
     # (the user's own effortLevel is not the default here: llm.py leaves the user settings out of a call)
     return [{"id": f"claude/claude-code/{a}", "name": f"Claude Code · {a.capitalize()}", "runtime": "claude-code",
@@ -504,8 +519,8 @@ def _rpc(args, requests, timeout=30, cwd=None):
     return got
 
 
-def _codex_models(path):
-    got = _rpc([*argv(path), "app-server"], [
+def _codex_models(path, cmd=None):
+    got = _rpc([*(cmd or argv(path)), "app-server"], [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize",
          "params": {"clientInfo": {"name": "textfold", "title": "TextFold", "version": "0.4"}, "capabilities": None}},
         {"jsonrpc": "2.0", "method": "initialized"},
@@ -525,11 +540,11 @@ def _codex_models(path):
     return out
 
 
-def _pi_models(path):
-    levels = _help_levels(path, "--thinking", r"--thinking <level>\s+Set thinking level:\s*([^\n]*)")
+def _pi_models(path, cmd=None):
+    levels = _help_levels(path, "--thinking", r"--thinking <level>\s+Set thinking level:\s*([^\n]*)", cmd)
     # without the extensions, skills and context files a generation runs without (run_pi): an extension Pi cannot load
     # would stop it here, and a model only an extension adds could not be used anyway
-    got = _rpc([*argv(path), "--mode", "rpc", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates",
+    got = _rpc([*(cmd or argv(path)), "--mode", "rpc", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates",
                 "--no-context-files"], [{"id": "1", "type": "get_available_models"}])
     data = (got.get("1") or {}).get("data")
     rows = data.get("models", []) if isinstance(data, dict) else (data or [])
@@ -629,6 +644,72 @@ def path_of(runtime):
     return locate(binary, extra)
 
 
+# ── agents the reader adds in the settings (#15) ─────────────────────
+# A program that starts one of the agents above under another command (`mirasim claude` runs Claude Code, routed
+# through Mirasim) is no agent of its own: the reader names its command and which one it speaks as, and it is run by
+# that one's driver with that command in front. It is kept in the settings (models.py), its models as they were when it
+# was saved, and its model ids have a prefix of their own, so the ids and cached replies of the agents above stay as
+# they are.
+CUSTOM = "custom/"
+PROTOCOLS = {"claude-code": "Claude Code", "codex": "Codex", "pi": "Pi"}
+
+
+def command_of(command):
+    """A custom agent's command line as (the arguments that start it, the program's path); None when its program is not
+    found. Its first word is looked for as an agent's program is (locate: PATH, the login shell's, the usual places) and
+    started as one is (argv: npm's .cmd on Windows by node); the words after it follow, as written."""
+    try:
+        words = shlex.split(command or "", posix=not WIN)
+    except ValueError:   # a quote left open
+        return None
+    if WIN:   # (not posix: a quoted word keeps its quotes)
+        words = [w[1:-1] if len(w) > 1 and w[0] == w[-1] == '"' else w for w in words]
+    if not words:
+        return None
+    first = os.path.expanduser(words[0])
+    if os.path.dirname(first):   # a path, not a name
+        path = first if os.path.isfile(first) else None
+    else:
+        path = locate(first)
+    return ([*argv(path), *words[1:]], path) if path else None
+
+
+def probe_custom(command, protocol=None):
+    """What a custom agent's command gives: its program, its version, and the models of the agent it speaks as (the one
+    the reader chose; none chosen, none yet) as that agent lists them, asked the way that agent is asked. A list it
+    cannot give is an error beside the rest: the reader then writes the models in."""
+    found = command_of(command)
+    if not found:
+        raise RuntimeError(f"{(command or '').split()[0] if (command or '').split() else 'The command'} was not found on this computer")
+    cmd, path = found
+    version, error = None, None
+    try:
+        out = _run([*cmd, "--version"], 15, env_for(path))
+        text = (out.stdout or out.stderr).strip()
+        version = (text.splitlines() or [""])[0][:80] or None
+    except Exception as e:
+        error = str(e)[:200]
+    protocol = protocol if protocol in PROTOCOLS else None
+    models = []
+    if protocol:
+        try:
+            # (a name as the list gives it, without the agent's own name in front: "Claude Code · Sonnet" is "Sonnet")
+            models = [{"id": m["model"], "name": m["name"].split(" · ", 1)[-1], "efforts": m.get("efforts") or []}
+                      for m in CATALOG[protocol](path, cmd)]
+        except Exception as e:
+            error = f"model list: {e}"[:200]
+    return {"path": path, "version": version, "protocol": protocol, "models": models, "error": error}
+
+
+def custom_models(rows):
+    """The models of the custom agents in the settings, as agents.models() gives the others'."""
+    if os.environ.get("TEXTFOLD_NO_MODELS"):   # (as scan: none, in a test server or a CI run)
+        return []
+    return [{"id": f"{CUSTOM}{a['key']}/{m['id']}", "name": f"{a['name']} · {m.get('name') or m['id']}", "runtime": CUSTOM + a["key"],
+             "model": m["id"], "efforts": m.get("efforts") or [], "defaultEffort": None}
+            for a in rows or [] if a.get("protocol") in PROTOCOLS for m in a.get("models") or [] if m.get("id")]
+
+
 # ── one-shot runs ─────────────────────────────────────────────────────
 def _strict(schema):
     """OpenAI-style structured output wants every object closed and every property required."""
@@ -662,15 +743,18 @@ def parse_json(text, schema=None):
     raise RuntimeError("no JSON in reply" if "{" not in text else "the reply's JSON does not parse")
 
 
-def run_codex(model, prompt, schema, system, effort, timeout, tools=False):
-    path = path_of("codex")
-    if not path:
-        raise RuntimeError("Codex was not found on this computer")
+def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
+    """(cmd: the command that starts it, a custom agent's; else the Codex found here)"""
+    if cmd is None:
+        path = path_of("codex")
+        if not path:
+            raise RuntimeError("Codex was not found on this computer")
+        cmd = argv(path)
     with tempfile.TemporaryDirectory() as tmp:  # a scratch cwd: no repository, nothing to edit
         sf, of = Path(tmp) / "schema.json", Path(tmp) / "out.txt"
         sf.write_text(json.dumps(_strict(schema)), encoding="utf-8")
         # (tools: its web search too; the sandbox stays read-only)
-        args = [*argv(path), *(["--search"] if tools else []), "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
+        args = [*cmd, *(["--search"] if tools else []), "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
                 "-m", model, "--output-schema", str(sf), "-o", str(of)]
         # off is "none" (gpt-5.5 takes it, and refuses "minimal"); a model that refuses "none" runs at "low"
         for level in (["none", "low"] if effort == "off" else [effort]):
@@ -684,14 +768,17 @@ def run_codex(model, prompt, schema, system, effort, timeout, tools=False):
         return parse_json(of.read_text(encoding="utf-8")), None
 
 
-def run_pi(model, prompt, schema, system, effort, timeout, tools=False):
-    path = path_of("pi")
-    if not path:
-        raise RuntimeError("Pi was not found on this computer")
+def run_pi(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
+    """(cmd: the command that starts it, a custom agent's; else the Pi found here)"""
+    if cmd is None:
+        path = path_of("pi")
+        if not path:
+            raise RuntimeError("Pi was not found on this computer")
+        cmd = argv(path)
     if tools:   # its extensions' tools (the web, where one gives it), none of its own: it reads, writes and runs nothing
-        args = [*argv(path), "-p", "--mode", "json", "--no-builtin-tools", "--no-session", "--model", model, "--append-system-prompt", system]
+        args = [*cmd, "-p", "--mode", "json", "--no-builtin-tools", "--no-session", "--model", model, "--append-system-prompt", system]
     else:
-        args = [*argv(path), "-p", "--mode", "json", "--no-tools", "--no-session", "--no-context-files", "--no-extensions", "--no-skills",
+        args = [*cmd, "-p", "--mode", "json", "--no-tools", "--no-session", "--no-context-files", "--no-extensions", "--no-skills",
                 "--no-prompt-templates", "--model", model, "--system-prompt", system]
     if effort:
         args += ["--thinking", effort]
@@ -702,6 +789,14 @@ def run_pi(model, prompt, schema, system, effort, timeout, tools=False):
         except ValueError:
             if attempt == 2:
                 raise
+
+
+# (WorkBuddy 5.8 and later signed in, its copy of CodeBuddy all the same not: workbuddy_lite)
+LITE_SIGNED_OUT = ("WorkBuddy 5.8 and later keep their sign-in to themselves, so TextFold cannot use it. Install CodeBuddy on its own "
+                   "(npm install -g @tencent-ai/codebuddy-code), run codebuddy once and use /login, then restart TextFold: it uses "
+                   "that one. Or choose another model in Settings. (WorkBuddy 5.8 起不把登录交给其他程序，TextFold 用不了。请单独安装 "
+                   "CodeBuddy：npm install -g @tencent-ai/codebuddy-code，运行一次 codebuddy 并用 /login 登录，再重启 TextFold；"
+                   "或在设置里换一个模型。)")
 
 
 def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
@@ -729,6 +824,8 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
             r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=timeout, env=env, cwd=tmp)
     said = (r.stderr or r.stdout)[-800:]
+    if signed_out(r) and workbuddy_lite(path):
+        raise RuntimeError(LITE_SIGNED_OUT)
     if signed_out(r):
         raise RuntimeError("WorkBuddy is not signed in: open WorkBuddy and sign in (WorkBuddy 没有登录：打开 WorkBuddy 登录)"
                            if workbuddy_app(path) else "CodeBuddy is not signed in: run codebuddy once and use /login")

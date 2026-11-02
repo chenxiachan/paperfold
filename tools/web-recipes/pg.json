@@ -1,0 +1,12 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "paulgraham.com",
+ "pages": "/*.html",
+ "article": "table[width='435'] td",
+ "drop": [],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "A page of 1990s tables: the essay is the cell of the 435-pixel table, one font element whose paragraphs are line breaks. Its notes are at its end, as text the reader sees, and stay there."
+}

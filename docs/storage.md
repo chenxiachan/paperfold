@@ -258,3 +258,18 @@ the Settings error explains why. No document data is moved or removed.
 
 See the [approved design](storage-offline-sync-design.md) for merging and
 retention rules. SQL schemas are internal adapter details, not backend interfaces.
+
+Upstream 0.10.43 compatibility: browser captures and saved extraction recipes
+write through the document backend and workspace checkpoints. Captures retain
+their original HTML, extracted article, and reference without replacing an
+existing document. An arXiv HTML download completed before a metadata failure
+is kept locally and reused after restart. Pending captures, notes and completed
+model replies remain protected from cache cleanup.
+
+Local folders retain upstream's text-edit history, regeneration of changed
+sections, and history settlement after every pending language is generated.
+Cloud originals remain immutable, so their source-edit action is not offered;
+notes and highlights stay editable offline. Existing generic backends retain
+their prior original through the document interface. The PDF engine remains
+local and respects its selected path even if cloud credentials are unavailable.
+No new storage migration or Worker deployment is needed for this integration.

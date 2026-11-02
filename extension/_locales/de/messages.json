@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "Schicke die Seite, die du liest, so wie du sie siehst, an TextFold auf diesem Computer und lies sie in fünf Stufen."
+  },
+  "action_title": {
+    "message": "An TextFold senden"
+  },
+  "sending": {
+    "message": "Wird an TextFold gesendet …"
+  },
+  "saved": {
+    "message": "In deiner TextFold-Bibliothek."
+  },
+  "already": {
+    "message": "Schon in deiner TextFold-Bibliothek."
+  },
+  "saved_closed": {
+    "message": "In deiner TextFold-Bibliothek. Öffne TextFold, um sie zu lesen."
+  },
+  "err_notext": {
+    "message": "TextFold fand auf dieser Seite zu wenig Text zum Lesen."
+  },
+  "err_notweb": {
+    "message": "TextFold liest nur Webseiten (http und https)."
+  },
+  "err_nopage": {
+    "message": "Diese Seite konnte nicht gelesen werden."
+  },
+  "err_update": {
+    "message": "TextFold braucht ein Update. Sieh im geöffneten Tab nach."
+  },
+  "err_setup": {
+    "message": "TextFold ist nicht verbunden. Sieh im geöffneten Tab nach."
+  },
+  "err_other": {
+    "message": "Die Seite wurde nicht gespeichert ($CODE$).",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "TextFold verbinden"
+  },
+  "ok_title": {
+    "message": "TextFold ist verbunden"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ antwortet. Klicke auf einer Seite, die du liest, auf die TextFold-Schaltfläche, um sie dorthin zu senden.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "Dieser Browser findet TextFold nicht"
+  },
+  "missing_text": {
+    "message": "Die Schaltfläche übergibt jede Seite an TextFold, eine kostenlose App auf diesem Computer. Einmal einrichten:"
+  },
+  "forbidden_title": {
+    "message": "TextFold lässt diese Erweiterung noch nicht zu"
+  },
+  "forbidden_text": {
+    "message": "Das TextFold auf diesem Computer ist älter als diese Erweiterung. Aktualisiere es:"
+  },
+  "exited_title": {
+    "message": "TextFold ist nicht gestartet"
+  },
+  "exited_text": {
+    "message": "Es wurde vielleicht seit dem letzten Öffnen verschoben oder entfernt. Dann:"
+  },
+  "update_title": {
+    "message": "TextFold braucht ein Update"
+  },
+  "update_text": {
+    "message": "Diese Erweiterung ist neuer als das TextFold auf diesem Computer. Aktualisiere es:"
+  },
+  "step_download": {
+    "message": "Lade TextFold für macOS oder Windows herunter und installiere es."
+  },
+  "step_update": {
+    "message": "Lade das neueste TextFold herunter und installiere es über das alte."
+  },
+  "step_open": {
+    "message": "Öffne TextFold einmal. Es verbindet sich selbst mit diesem Browser."
+  },
+  "step_again": {
+    "message": "Geh zurück zur Seite und klicke noch einmal auf die TextFold-Schaltfläche."
+  },
+  "download": {
+    "message": "TextFold herunterladen"
+  },
+  "check": {
+    "message": "Erneut prüfen"
+  },
+  "checking": {
+    "message": "Wird geprüft …"
+  },
+  "pip_title": {
+    "message": "Nutzt du TextFold über Python?"
+  },
+  "pip_text": {
+    "message": "Installiere oder aktualisiere es und führe dann einmal diesen Befehl aus, damit der Browser es findet:"
+  },
+  "privacy_note": {
+    "message": "Die Erweiterung übergibt die Seite an TextFold auf diesem Computer und an nichts sonst. TextFold schreibt ihre Stufen mit dem Modell, das du in den Einstellungen gewählt hast."
+  }
+}

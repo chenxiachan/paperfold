@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · TextFold for the browser</title>
+<meta name="description" content="What the TextFold browser extension reads, where it goes, and what the developer receives: nothing.">
+<link rel="canonical" href="https://chenxiachan.github.io/textfold/privacy.html">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/fonts/fonts.css">
+<style>
+  /* The privacy policy of the browser's button (extension/): one page, English then Chinese, in the site's own colours
+     and faces (style.css) */
+  :root {
+    --surface: #FAF9F7; --card: #FFFFFF; --ink: #1A1A1A; --ink-2: #4A4540; --muted: #6B6560; --line: #DCD8D1; --line-2: #EFEBE5;
+    --accent: #6B5CE7; --accent-soft: #EDE9FF;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --surface: #1B1915; --card: #24211C; --ink: #EDE9E3; --ink-2: #C9C3BA; --muted: #9C958B;
+      --line: #3A362F; --line-2: #2A2722; --accent: #A79FF4; --accent-soft: #2D2850; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --surface: #1B1915; --card: #24211C; --ink: #EDE9E3; --ink-2: #C9C3BA; --muted: #9C958B;
+    --line: #3A362F; --line-2: #2A2722; --accent: #A79FF4; --accent-soft: #2D2850; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+  main { max-width: 720px; margin: 0 auto; padding-block: 48px 80px; padding-left: max(20px, env(safe-area-inset-left, 0px));
+         padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 40px; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); text-decoration: none; font-weight: 650; }
+  .brand img { width: 22px; height: 22px; }
+  .top a.lang { color: var(--ink-2); font-size: 14px; text-decoration: none; padding: 6px 10px; border-radius: 8px; }
+  .top a.lang:hover { background: var(--line-2); }
+  h1 { font-size: clamp(26px, 4vw, 34px); line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 8px; text-wrap: balance; }
+  .date { color: var(--muted); font-size: 14px; margin: 0 0 28px; }
+  h2 { font-size: 19px; margin: 36px 0 8px; text-wrap: balance; }
+  p, li { color: var(--ink-2); }
+  ul { padding-left: 22px; }
+  li + li { margin-top: 4px; }
+  a { color: var(--accent); }
+  .lead { font-size: 17px; color: var(--ink); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 64px 0 48px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="">TextFold</a>
+    <a class="lang" href="#zh">中文</a>
+  </div>
+
+  <article lang="en">
+    <h1>Privacy policy: TextFold for the browser</h1>
+    <p class="date">Last updated October 28, 2026</p>
+    <p class="lead">TextFold for the browser is a button that sends the page you are reading to TextFold, the free program
+      on your computer. This policy is about the extension. It is short because the extension has no server: it sends
+      nothing over the internet.</p>
+
+    <h2>What the extension reads, and when</h2>
+    <p>Only when you click its button, and only in the tab you click it in:</p>
+    <ul>
+      <li>the page as your browser shows it: its HTML, the text in its frames and shadow roots, its title and its address.
+        This can include what the page shows only to you, such as your name when you are signed in;</li>
+      <li>the source of each formula the page's MathJax drew, asked of MathJax in the page;</li>
+      <li>the article in it, as two open-source reading views read it (Defuddle and Readability), run inside your browser.</li>
+    </ul>
+    <p>It reads no other tab, no page you have not clicked it on, and nothing in the background. It does not read your
+      browsing history, your cookies, your passwords, or what you type into forms.</p>
+
+    <h2>Where it goes</h2>
+    <p>The extension hands what it read to TextFold on your computer through the browser's native messaging, a channel
+      between the browser and a program installed on the same computer. No network port is opened, and only TextFold
+      receives it. The extension has no server, sends nothing over the network, and contains no analytics, advertising
+      or tracking. It runs only the code it ships with.</p>
+
+    <h2>What TextFold does with it</h2>
+    <p>TextFold keeps the page in your library, a folder on your computer that you can open, move and delete. Its levels,
+      from a one-screen map to every word, are written by the AI model you choose in TextFold's settings: a model that
+      runs on your computer, or a model provider you connected with your own account or key. When TextFold is running,
+      it starts writing the levels of a newly sent page at once, and the page's text goes to that model, under its
+      provider's terms. With a model on your computer, the text stays on it.</p>
+    <p>TextFold itself asks GitHub for its newest version from time to time; nothing of yours is sent.</p>
+
+    <h2>What the developer receives</h2>
+    <p>Nothing. The developer of TextFold receives no data from the extension or from the app, and sells or shares none.
+      The use of information received from the extension adheres to the
+      <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq" rel="noopener">Chrome Web Store User Data Policy</a>,
+      including the Limited Use requirements.</p>
+
+    <h2>Removing it</h2>
+    <p>Delete a page in TextFold, or its folder in your library. Removing the extension stops it reading anything;
+      removing TextFold removes the program it talks to, and your library stays yours to keep or delete.</p>
+
+    <h2>Questions and changes</h2>
+    <p>Ask in the project's <a href="https://github.com/chenxiachan/textfold/issues" rel="noopener">issues on GitHub</a>. If this
+      policy changes, this page says so, with the date above. The extension's code is open, with TextFold's:
+      <a href="https://github.com/chenxiachan/textfold" rel="noopener">github.com/chenxiachan/textfold</a>.</p>
+  </article>
+
+  <hr>
+
+  <article lang="zh-CN" id="zh">
+    <h1>隐私政策：TextFold 浏览器扩展</h1>
+    <p class="date">最后更新：2026 年 10 月 28 日</p>
+    <p class="lead">TextFold 浏览器扩展是一个按钮，把你正在读的网页发给 TextFold，也就是你电脑上的免费软件。本政策只讲这个扩展。它很短，因为扩展没有服务器，不往互联网发送任何东西。</p>
+
+    <h2>扩展读取什么，什么时候读取</h2>
+    <p>只在你点按钮的时候，只读你点按钮的那个标签页：</p>
+    <ul>
+      <li>浏览器显示出来的网页：它的 HTML、框架和 shadow root 里的文字、标题和网址。其中可能包括网页只显示给你的内容，比如登录后的用户名；</li>
+      <li>网页里 MathJax 排出的每个公式的源码，在网页里向 MathJax 询问得到；</li>
+      <li>网页里的正文，由两个开源的阅读模式程序（Defuddle 和 Readability）在你的浏览器里读出。</li>
+    </ul>
+    <p>它不读其他标签页，不读你没有点按钮的网页，也不在后台读取任何东西。它不读你的浏览记录、Cookie、密码，也不读你在表单里输入的内容。</p>
+
+    <h2>内容去往哪里</h2>
+    <p>扩展通过浏览器的原生消息（native messaging）把读到的内容交给你电脑上的 TextFold。这是浏览器和同一台电脑上已安装程序之间的通道，不开任何网络端口，只有 TextFold 能收到。扩展没有服务器，不通过网络发送任何东西，不含统计、广告或追踪代码，只运行它自带的代码。</p>
+
+    <h2>TextFold 怎么处理</h2>
+    <p>TextFold 把网页存进你的文献库，也就是你电脑上的一个文件夹，你可以打开、移动和删除。网页的各层（从一屏看完的地图到每一个字）由你在 TextFold 设置里选的 AI 模型来写：可以是在你电脑上运行的模型，也可以是你用自己的账号或密钥接入的模型服务商。TextFold 正在运行时，会马上开始为新发来的网页写各层，网页的文字会发给你选的模型，适用该服务商的条款。用本机模型时，文字留在你的电脑上。</p>
+    <p>TextFold 本身会不时向 GitHub 查询最新版本，不发送任何属于你的信息。</p>
+
+    <h2>开发者收到什么</h2>
+    <p>什么也收不到。TextFold 的开发者不从扩展或软件收集任何数据，也不出售或分享任何数据。扩展对所获信息的使用遵守
+      <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq" rel="noopener">Chrome 网上应用店用户数据政策</a>，包括其中的"有限使用"要求。</p>
+
+    <h2>如何删除</h2>
+    <p>在 TextFold 里删除网页，或者删除文献库里对应的文件夹。移除扩展后，它不再读取任何东西；卸载 TextFold 会移除扩展连接的程序，文献库仍归你保留或删除。</p>
+
+    <h2>问题和变更</h2>
+    <p>有问题请到 GitHub 上的 <a href="https://github.com/chenxiachan/textfold/issues" rel="noopener">issues</a> 提出。本政策如有变更，会在这一页说明，并更新上面的日期。扩展的代码和 TextFold 一起公开在
+      <a href="https://github.com/chenxiachan/textfold" rel="noopener">github.com/chenxiachan/textfold</a>。</p>
+  </article>
+</main>
+</body>
+</html>

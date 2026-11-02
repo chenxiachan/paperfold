@@ -1,0 +1,15 @@
+{
+ "format": "textfold/web-recipe",
+ "version": 1,
+ "site": "sspai.com",
+ "pages": "/post/*",
+ "article": "article.morning__paper__article",
+ "drop": [
+  "div.comment__list",
+  "div.comment__footer__wrapper"
+ ],
+ "notes": [],
+ "content": [],
+ "figures": [],
+ "why": "少数派 (Vue, its scoped data-v attributes aside): the post is article.morning__paper__article; each item of the morning paper carries its readers comments and a comment box, which are not the post."
+}

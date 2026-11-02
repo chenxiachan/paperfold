@@ -36,6 +36,15 @@ test('a link to a run of paragraphs, from u to to', () => {
   assert.equal(readerUrl(BASE, parse('textfold://open?paper=2512.23916&n=n-1&u=S1.p1.1&to=S1.p3.1')), `${BASE}/p/2512.23916#n=n-1`);
 });
 
+test('a link to an equation opens it, by way of the paragraph it goes with', () => {
+  const parts = parse('textfold://open?paper=md-notes-on-diffusion-694d6667&u=p-e426aba2&eq=eq-heat&level=full&lang=en');
+  assert.equal(parts.eq, 'eq-heat');
+  assert.equal(readerUrl(BASE, parts), `${BASE}/p/md-notes-on-diffusion-694d6667?lang=en#u=p-e426aba2&eq=eq-heat&level=full`);
+  assert.equal(readerUrl(BASE, parse('textfold://open?paper=2512.23916&s=S2&eq=S2.E1')), `${BASE}/p/2512.23916#s=S2&eq=S2.E1`);
+  assert.equal(readerUrl(BASE, parse('textfold://open?paper=2512.23916&n=n-1&eq=S2.E1')), `${BASE}/p/2512.23916#n=n-1`);   // (a note brings its own place)
+  assert.equal(parse('textfold://open?paper=2512.23916&eq=S2%2FE1'), null);
+});
+
 test('a link to one turn of a conversation', () => {
   const parts = parse('textfold://open?paper=2512.23916&n=n-chat0001&t=2&lang=de');
   assert.deepEqual(parts, { paper: '2512.23916', n: 'n-chat0001', t: '2', lang: 'de' });

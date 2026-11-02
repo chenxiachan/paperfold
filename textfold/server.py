@@ -12,17 +12,28 @@
   POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time. paper: an arXiv id or
                               link, a PMC or PPR id, a DOI (Europe PMC, epmc.py), or a stored document's id
   POST /api/import            {name, text, id?}: store a Markdown file as a paper (local.py); its id, to generate. With
-                              id (a Markdown document stored before, md-…): its text replaced by this one under the same
-                              id, its notes found again in it and its levels set aside ({paper, title, replaced: true};
-                              not while it is being generated); then /api/generate with force folds it again, asking the
-                              model only for the sections that changed
+                              id (a Markdown document stored before, md-…, or a converted PDF or file, pdf-… doc-…): its
+                              text replaced by this one under the same id, its notes found again in it and its levels
+                              set aside ({paper, title, replaced: true, pending: the languages they were in}; not
+                              while it is being generated); then /api/generate in each folds it again, asking the model
+                              only for the sections that changed
+  GET  /api/text/<id>         {text, original}: the Markdown such a document was read from, for the reader to put
+                              right (a PDF's OCR) and send back to /api/import with its id; original: the text it had
+                              when it was last generated, before the edits since (null: none; local.original)
+  POST /api/places            {id, spans: [[from, to], ...]}: where each place of that text is read on the page
+                              ({places: [{words: [{unit, tokens}], at: {unit, token, after}} | {section} | null]}:
+                              local.places), the edit history's changes marked on it
   GET  /api/models            saved configuration and the last model discovery results (no service probes); its "lang", the
                               reader's language as the page last told it (null until it has), for other programs
+  GET  /api/whatsnew          what the page says as it opens after an update: {version, updated, news, last} (news.py)
+                              ·  POST {seen}: the reader told of that release
   GET  /api/langs             the languages a text can be read in: [{code, name}], each by its own name (langs.py)
   POST /api/models/refresh    refresh local model services in the background; GET /api/models reports progress/errors
   POST /api/models/select     {model, effort}: the model generations use; {task: "ask", model, effort}: the one questions
                               are answered with (none: the same) and its reasoning level (none: the default)
   POST /api/agents/scan       look for agents again (also done at startup)
+  POST /api/agents/probe      {command, protocol?}: a custom agent's program, version, the agent it speaks as, its models
+  POST /api/agents/save       {key?, name, command, protocol, models: [{id, name?, efforts?}]}  ·  POST /api/agents/remove {key}
   POST /api/providers/probe   {base, api_key | key, preset}: a provider's /models
   POST /api/providers/save    {key?, preset, name, base, api_key?, models}  ·  POST /api/providers/remove {key}
   POST /api/settings          {use_thoughtdag_env}, {pdf_tier}, {lang} (one of langs.py; else 400)  ·  POST /api/settings/test
@@ -86,7 +97,7 @@ from .documents import ConflictError
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, zotero
+from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, zotero
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript"}
@@ -168,6 +179,9 @@ def models_payload():
         "agents": [{k: a[k] for k in ("runtime", "label", "binary", "path", "version", "runnable", "error")} | {"models": len(a["models"])}
                    for a in agents.STATE["agents"]],
         "scanning": agents.STATE["scanning"], "scannedAt": agents.STATE["scanned_at"],
+        "customAgents": [{k: a.get(k) for k in ("key", "name", "command", "protocol")} | {"models": [m["id"] for m in a.get("models") or []]}
+                         for a in s.get("custom_agents") or []],
+        "protocols": agents.PROTOCOLS,
         "providers": [{"key": p["key"], "name": p["name"], "source": p["source"], "base": p["base"], "protocol": p["protocol"],
                        "preset": p.get("preset"), "models": [m["id"] for m in p["models"]],
                        "hasKey": bool(p["api_key"]) and p["api_key"] not in ("none", "ollama")} for p in provs],
@@ -237,10 +251,12 @@ class Jobs:
         return self._same(kind="install") or self._new(self.eq, kind="install", title="PDF engine")
 
     def superseded(self, pid):
-        """A document about to be converted again: the languages it has and is being generated in, the generations of
-        its old text stopped (what they would write belongs to that text: a translation of another text's paragraphs,
-        laid on the new ones by their places)."""
-        langs = ([store.text_lang(pid)] if store.read(pid, "en") else []) + store.languages(pid)
+        """A document about to be converted again: the languages it has, is being generated in, and its edited text
+        waits to be generated again in (store.pending), the generations of its old text stopped (what they would write
+        belongs to that text: a translation of another text's paragraphs, laid on the new ones by their places)."""
+        en = store.read(pid, "en")
+        langs = ([store.text_lang(pid, en)] if en else []) + store.languages(pid)
+        langs += store.pending(pid, json.loads(store.read_text(store.pdir(pid) / "meta.json")), en)
         for j in list(self.items.values()):
             if j["kind"] == "generate" and j["pid"] == pid and j["status"] in ("queued", "running"):
                 langs.append(j["lang"])
@@ -292,12 +308,13 @@ class Jobs:
 
     def _end(self, job, e, stop):
         if job["pid"] and store.readable(job["pid"]):
-            job["readable"] = True   # what failed was its levels: it reads as written
+            job["readable"] = True   # what failed was its levels: it reads as written (an arXiv page without its
+            # metadata yet does not)
         if isinstance(e, (llm.Stopped, engine.Stopped)) or stop.is_set():
             job.update(status="stopped", stopping=False)
         else:
             job.update(status="error", error="no-model" if str(e).startswith("No model is available") else str(e))
-            self._log(job)(traceback.format_exc()[-800:])
+            self._log(job)(traceback.format_exc()[-4000:])   # (enough to keep the calls that led there)
             print(f"job {job['id']} {job['pid']} {job['lang']} failed:\n" + "\n".join(job["log"][-12:]), flush=True)
         job["finished"] = time.time()
         PAGES.pop(job["pid"], None)
@@ -340,8 +357,7 @@ class Jobs:
 
     def _pdf_link(self, job, url=None):
         url = url or store.text(job["pid"], "url.txt").strip()
-        with urllib.request.urlopen(urllib.request.Request(url, headers=fetch.UA), timeout=90) as r:
-            data = r.read(pdf.LIMIT + 1)
+        data = fetch.urlread(urllib.request.Request(url, headers=fetch.UA), 90, pdf.LIMIT + 1)[0]
         if data[:5] != b"%PDF-" or len(data) > pdf.LIMIT:
             raise ValueError("not-pdf")
         store.discard_document(job["pid"])   # (only its address was there)
@@ -725,6 +741,15 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and store.has(m.group(1)):
                     return self.json(notes.present(notes.read(m.group(1))))
+                if u.path == "/api/whatsnew":
+                    return self.json(news.state())
+                m = re.fullmatch(r"/api/text/([\w.-]+)", u.path)
+                if m:
+                    pid = m.group(1)
+                    text = local.text_of(pid) if store.valid_id(pid) else None
+                    if text is None:
+                        return self.json({"error": "no text to edit"}, 404)
+                    return self.json({"text": text, "original": local.original(pid)})
                 m = re.fullmatch(r"/api/doc/([\w.-]+)", u.path)   # (a document not folded yet: its local levels, said so)
                 if m:
                     pid, lang = m.group(1), (parse_qs(u.query).get("lang") or [None])[0]
@@ -854,7 +879,14 @@ def make_handler(jobs):
                         zotero.link(lib, key, pid, got["title"], got["record"])
                         zotero.apply(pid)   # (read at once, or read before: its record now; else once converted)
                     return self.json({**reply, "name": got["name"]}, code)
-                if u.path == "/api/engine/install":
+                if u.path == "/api/engine/install":   # (with a path: into that folder, chosen in Settings)
+                    if body.get("path"):
+                        if jobs._same(kind="install") or engine.where():
+                            return self.json({"error": "busy"}, 409)
+                        try:
+                            engine.choose(body["path"])
+                        except ValueError as error:   # (why, in the reader's language: its code)
+                            return self.json({"error": str(error), "code": getattr(error, "code", "")}, 400)
                     return self.json(jobs.install_engine())
                 if u.path == "/api/engine/remove":
                     if any(j["kind"] in ("install", "convert") and j["status"] in ("queued", "running") for j in jobs.items.values()):
@@ -877,6 +909,17 @@ def make_handler(jobs):
                 if u.path == "/api/jobs/stop":
                     job = jobs.stop(body.get("id", ""))
                     return self.json(job) if job else self.json({"error": "no such job"}, 404)
+                if u.path == "/api/whatsnew":   # the page told the reader of a release
+                    news.told(str(body.get("seen") or __version__)[:40])
+                    return self.json({"ok": True})
+                if u.path == "/api/places":   # the edit history's places, shown on the page (app.js, review)
+                    pid, spans = str(body.get("id") or ""), body.get("spans")
+                    if not (isinstance(spans, list) and all(isinstance(x, list) and len(x) == 2 and all(isinstance(n, int) for n in x) for x in spans)):
+                        return self.json({"error": "spans: [[from, to], ...]"}, 400)
+                    try:
+                        return self.json({"places": local.places(pid, spans)})   # (text_of: an id of no such document, none)
+                    except LookupError:
+                        return self.json({"error": "no text"}, 404)
                 if u.path == "/api/import":
                     text, name = str(body.get("text") or ""), str(body.get("name") or "document.md")[:200]
                     if not text.strip():
@@ -894,7 +937,8 @@ def make_handler(jobs):
                         except ValueError:
                             return self.json({"error": "not-markdown"}, 400)
                         PAGES.pop(pid, None)
-                        return self.json({"paper": pid, "title": title, "replaced": True})
+                        return self.json({"paper": pid, "title": title, "replaced": True,   # (its levels set aside: none yet)
+                                          "pending": store.pending(pid, json.loads(store.read_text(store.pdir(pid) / "meta.json")), None)})
                     try:
                         pid = local.import_text(text, name)
                     except ValueError:
@@ -1039,6 +1083,38 @@ def make_handler(jobs):
                         agents.scan()
                     finally:
                         agents.STATE["scanning"] = False
+                    return self.json(models_payload())
+                if u.path == "/api/agents/probe":
+                    try:
+                        return self.json(agents.probe_custom(body.get("command", ""), body.get("protocol")))
+                    except Exception as e:
+                        return self.json({"error": str(e)[:600]}, 400)
+                if u.path == "/api/agents/save":
+                    command, protocol = (body.get("command") or "").strip(), body.get("protocol")
+                    if not command or protocol not in agents.PROTOCOLS:
+                        return self.json({"error": "a custom agent needs a command and the agent it speaks as"}, 400)
+                    name = (body.get("name") or "").strip() or command.split()[0].split("/")[-1].split("\\")[-1]
+                    have = s.get("custom_agents") or []
+                    key = body.get("key") if any(a.get("key") == body.get("key") for a in have) else None
+                    if not key:   # (a new one: a key from its name, unlike any other's; it stays when it is edited)
+                        base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "agent"
+                        key, n = base, 2
+                        while any(a.get("key") == key for a in have):
+                            key, n = f"{base}-{n}", n + 1
+                    seen, rows = set(), []
+                    for m in body.get("models") or []:   # [{id, name?, efforts?}] or ids alone (written in by hand)
+                        m = m if isinstance(m, dict) else {"id": m}
+                        mid = str(m.get("id") or "").strip()
+                        if mid and mid not in seen:
+                            seen.add(mid)
+                            rows.append({"id": mid, "name": str(m.get("name") or mid), "efforts": [str(e) for e in m.get("efforts") or []]})
+                    row = {"key": key, "name": name, "command": command, "protocol": protocol, "models": rows[:providers.MAX_MODELS]}
+                    s["custom_agents"] = [a for a in have if a.get("key") != key] + [row]
+                    models.save_settings(s)
+                    return self.json(models_payload())
+                if u.path == "/api/agents/remove":
+                    s["custom_agents"] = [a for a in s.get("custom_agents") or [] if a.get("key") != body.get("key")]
+                    models.save_settings(s)
                     return self.json(models_payload())
                 if u.path == "/api/providers/probe":
                     key = (bridges.minted() if body.get("minted") else None) or body.get("api_key") or \

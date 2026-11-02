@@ -7,6 +7,7 @@ new import. A layout's table still reads as text.
 Run from the repo root:
     python3 -m unittest discover tests
 """
+import re
 import unittest
 
 from textfold import markdown, semantic
@@ -71,7 +72,8 @@ class Equations(unittest.TestCase):
             old = old[:start] + f'<p class="ltx_p">{math}</p>' + old[end:]
         self.assertEqual(old.count('<table class="ltx_equation'), 1)
         was = parse(old, {"id": "md-test", "unit_ids": "text"})
-        self.assertEqual(equations(was), equations(now))
+        unnumbered = lambda doc: [re.sub(r'<td class="ltx_eqn_cell ltx_eqn_eqno">.*?</td>', "", e) for e in equations(doc)]
+        self.assertEqual(unnumbered(was), unnumbered(now))   # (those stored before equations were numbered have none)
         self.assertEqual(was["units"].keys(), now["units"].keys())   # (the notes on the paragraphs stay where they are)
 
     def test_a_formula_among_words_or_in_a_table_is_left_alone(self):

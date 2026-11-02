@@ -2,7 +2,7 @@
 # Every claim here is the README's or the app's own (versions, systems, file names); keep them true when either changes.
 # Few words: what the page must say and nothing the README says better (it links there).
 
-VERSION = "0.10.33"
+VERSION = "0.10.43"
 SITE = "https://chenxiachan.github.io/textfold/"
 REPO = "https://github.com/chenxiachan/textfold"
 DL = REPO + "/releases/latest/download/"
@@ -94,6 +94,8 @@ S = {
         '格式'),
     "foot_releases": ('Releases',
         '所有版本'),
+    "foot_privacy": ('Privacy',
+        '隐私'),
     "foot_demo": ('Demo gallery',
         '在线试用'),
     "notes": ('Release notes',

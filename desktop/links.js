@@ -1,8 +1,8 @@
 // textfold:// links, which other programs (an editor's plugin) open the app with, and the reader's address each one
 // opens. Nothing here touches Electron, so node tests it alone (links.test.js).
 //
-//   textfold://open?paper=<document id>[&u=<paragraph id>[&to=<paragraph id>]][&s=<section id>][&n=<note id>[&t=<turn>]][&level=<level>][&lang=<code>]
-//     → <server>/p/<id>?lang=<code>#u=<paragraph id>[&to=<paragraph id>]&level=<level>, or #s=<section id>…, or
+//   textfold://open?paper=<document id>[&u=<paragraph id>[&to=<paragraph id>]][&s=<section id>][&eq=<equation id>][&n=<note id>[&t=<turn>]][&level=<level>][&lang=<code>]
+//     → <server>/p/<id>?lang=<code>#u=<paragraph id>[&to=<paragraph id>][&eq=<equation id>]&level=<level>, or #s=<section id>…, or
 //       #n=<note id>[&t=<turn>]…
 //
 // A link may come from any program, a web page among them, so every part is checked, and a link with one part wrong is
@@ -31,13 +31,14 @@ const CHECK = {
   u: (v) => PART.test(v),
   to: (v) => PART.test(v),   // the last paragraph of a run that starts at u
   s: (v) => PART.test(v),
+  eq: (v) => PART.test(v),   // an equation set apart (S2.E1, eq-heat), with the paragraph it goes with as u
   n: (v) => PART.test(v),
   t: (v) => /^\d{1,3}$/.test(v),   // a turn of a conversation, by its place in it (0 is the first)
   level: (v) => LEVELS.includes(v),
   lang: (v) => LANGS.includes(v),
 };
 
-// A link's parts ({paper, u, to, s, n, t, level, lang}, those it has), or null when it is not one the app follows. Other
+// A link's parts ({paper, u, to, s, eq, n, t, level, lang}, those it has), or null when it is not one the app follows. Other
 // parameters are left alone, so that a link a newer program makes still opens what this app knows of it.
 function parse(link) {
   let url;
@@ -59,11 +60,12 @@ function parse(link) {
 
 // The reader's address for a link's parts, on the server at base (http://127.0.0.1:<port>). One place in the text:
 // a note (which brings its own paragraph; a conversation, at one of its turns), else a paragraph (or a run of them,
-// from u to to), else a section, as the reader would choose.
+// from u to to), else a section, as the reader would choose; an equation, with either of the last two, the reader
+// opens at itself where the level shows it.
 function readerUrl(base, parts) {
   const at = parts.n ? `n=${parts.n}${parts.t ? `&t=${+parts.t}` : ''}` : parts.u ? `u=${parts.u}${parts.to ? `&to=${parts.to}` : ''}`
     : parts.s ? `s=${parts.s}` : '';
-  const hash = [at, parts.level ? `level=${parts.level}` : ''].filter(Boolean).join('&');
+  const hash = [at, parts.eq && !parts.n ? `eq=${parts.eq}` : '', parts.level ? `level=${parts.level}` : ''].filter(Boolean).join('&');
   return `${base}/p/${parts.paper}${parts.lang ? `?lang=${encodeURIComponent(parts.lang)}` : ''}${hash ? `#${hash}` : ''}`;
 }
 

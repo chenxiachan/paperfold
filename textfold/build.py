@@ -38,13 +38,15 @@ def _data(f, kind):
     return f"url(data:{kind};base64,{base64.b64encode(f.read_bytes()).decode()})"
 
 
-def fonts_head(base=None):
+def fonts_head(base=None, math=False):
     """The fonts, from base (the app's /static/vendor/, a gallery's assets/) or, with none, inside the page: there the
-    Latin faces only, the rest falling back to the system's."""
+    Latin faces only, the rest falling back to the system's, and the math font when the page has formulas in MathML."""
     if base:
         return f'<link rel="stylesheet" href="{base}fonts/fonts.css">'
     css = (VENDOR / "fonts" / "fonts.css").read_text(encoding="utf-8")
     faces = [m.group(0) for m in re.finditer(r"/\* latin \*/\n@font-face \{.*?\}", css, re.S)]
+    if math:
+        faces += re.findall(r"@font-face \{[^}]*'Latin Modern Math'.*?\}", css, re.S)
     return "<style>" + "\n".join(re.sub(r"url\(([\w.-]+\.woff2)\)", lambda u: _data(VENDOR / "fonts" / u.group(1), "font/woff2"), f)
                                  for f in faces) + "</style>"
 
@@ -66,8 +68,25 @@ def _has_diagram(doc):
 
 
 def _has_tex(doc):
-    """Math the model wrote that matches no formula of the paper ({"x": latex}): only that needs KaTeX."""
+    """Math the model wrote that matches no formula of the paper ({"x": latex}): KaTeX draws it when it is shown."""
     return '"x":' in json.dumps([doc["units"], doc["chunks"]])
+
+
+def _drawn_tex(doc):
+    """Formulas written in LaTeX (semantic.tex_math: a Markdown file's, math.pf-tex): KaTeX draws them as the page
+    opens, so it is there before the reader's script."""
+    return any('class="pf-tex"' in a["html"] for a in doc["atoms"].values()) or \
+        any('class="pf-tex"' in b.get("html", "") for b in doc["blocks"])
+
+
+def _mathml(doc):
+    """Formulas the browser draws as MathML (a paper's from arXiv): the math font."""
+    return any(a["kind"] == "math" and 'class="pf-tex"' not in a["html"] for a in doc["atoms"].values()) or \
+        any(b["k"] == "eq" and 'class="pf-tex"' not in b["html"] for b in doc["blocks"])
+
+
+def _katex_beside(base):
+    return f'<link rel="stylesheet" href="{base}katex.min.css"><script src="{base}katex.min.js"></script>'
 
 
 ANIMATED_INSIDE = 2_000_000   # a moving picture larger than this goes into a single-file page as its first frame
@@ -137,14 +156,18 @@ def page(doc, app=False, assets=None, saved=None, pdf=None):
         head, scripts = app_assets(head), app_assets(scripts)
         side, cls, katex = '<aside id="sidebar" class="collapsed"></aside>', "app", APP_ASSETS + "katex/"
         mermaid = APP_ASSETS + "mermaid/"
+        if _drawn_tex(doc):
+            head += _katex_beside(katex)
     else:
-        head = fonts_head(assets) + f"<style>{(WEB / 'reader.css').read_text(encoding='utf-8')}</style>"
+        head = fonts_head(assets, _mathml(doc)) + f"<style>{(WEB / 'reader.css').read_text(encoding='utf-8')}</style>"
         scripts = f"<script>{(WEB / 'i18n.js').read_text(encoding='utf-8')}</script><script>{(WEB / 'reader.js').read_text(encoding='utf-8')}</script>"
         side, cls, katex = "", "static", (assets + "katex/") if assets else None
         mermaid = (assets + "mermaid/") if assets else None
-        if not assets and (_has_tex(doc) or (saved and saved.get("notes"))):   # (an answer's formulas need it too)
+        if not assets and (_has_tex(doc) or _drawn_tex(doc) or (saved and saved.get("notes"))):   # (an answer's formulas need it too)
             head += _katex_inside()
             katex = "inside"
+        elif assets and _drawn_tex(doc):
+            head += _katex_beside(katex)
         if not assets and _has_diagram(doc):
             head += _mermaid_inside()
             mermaid = "inside"

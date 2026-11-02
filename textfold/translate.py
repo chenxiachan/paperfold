@@ -185,39 +185,45 @@ def _ask(doc, lang, tasks, cfg, cache_dir, jobs, log, tick, force, stop, again=F
         except Exception as e:
             return task, None, e
 
+    # each part counted as its reply comes, the replies then read in the paper's order: which part brings a section's
+    # lines and the paper's title stays the same whatever came back first (as #70 has it)
+    got = {}
     with ThreadPoolExecutor(jobs) as ex:
-        for (c, k, us), res, err in ex.map(run, tasks):
+        for i, r in llm.as_answered(ex, lambda it: (it[0], run(it[1])), list(enumerate(tasks)), log, llm.label(cfg)):
+            got[i] = r
             tick()
             if stop is not None and stop.is_set():
                 raise llm.Stopped()
-            if err:
-                errors.append(err)
-                log(f"  ! {lang} {c['id']}{f' part {k + 1}' if k else ''}: {err}")
-                continue
-            rec, cached = res
-            cost += 0 if cached else (rec.get("cost") or 0)
-            out = rec["out"]
-            by_id = {x.get("id"): x for x in llm.units_of(out)}
-            left = 0
-            for n, uid in enumerate(us):
-                o = by_id.get(f"U{n}")
-                z = assemble(doc["units"][uid], o, doc["atoms"], lang, warnings.append) if o else None
-                if z:
-                    doc["units"][uid].setdefault("tr", {})[lang] = z
-                else:
-                    left += 1
-                    warnings.append(f"{uid}: no translation")
-            if again and left:
-                llm.forget(rec)
-            if k == 0 and (not again or not (c.get("tr", {}).get(lang) or {}).get("lad")):
-                sec = llm.as_obj(out.get("section"))   # the section's title and lines, and the paper's title
-                # an untitled section (a document's opening text) stays untitled: the model would name it
-                title = (unmark(clean(sec.get("title")), doc["atoms"]) or c["title"]) if c["title"] else ""
-                c.setdefault("tr", {})[lang] = {"title": title,
-                                                 "lad": section_ladder(sec, langs.budget(lang)["topic"], doc, c)}
-                if out.get("paper_title") and not (again and meta["titles"].get(lang)):
-                    meta["titles"][lang] = clean(out["paper_title"])
-            log(f"  {'·' if cached else '✓'} {lang} {c['id']:<14} {len(us):>2} units{f' (part {k + 1})' if k else ''}{' again' if again else ''}")
+    for i in range(len(tasks)):
+        (c, k, us), res, err = got[i]
+        if err:
+            errors.append(err)
+            log(f"  ! {lang} {c['id']}{f' part {k + 1}' if k else ''}: {err}")
+            continue
+        rec, cached = res
+        cost += 0 if cached else (rec.get("cost") or 0)
+        out = rec["out"]
+        by_id = {x.get("id"): x for x in llm.units_of(out)}
+        left = 0
+        for n, uid in enumerate(us):
+            o = by_id.get(f"U{n}")
+            z = assemble(doc["units"][uid], o, doc["atoms"], lang, warnings.append) if o else None
+            if z:
+                doc["units"][uid].setdefault("tr", {})[lang] = z
+            else:
+                left += 1
+                warnings.append(f"{uid}: no translation")
+        if again and left:
+            llm.forget(rec)
+        if k == 0 and (not again or not (c.get("tr", {}).get(lang) or {}).get("lad")):
+            sec = llm.as_obj(out.get("section"))   # the section's title and lines, and the paper's title
+            # an untitled section (a document's opening text) stays untitled: the model would name it
+            title = (unmark(clean(sec.get("title")), doc["atoms"]) or c["title"]) if c["title"] else ""
+            c.setdefault("tr", {})[lang] = {"title": title,
+                                             "lad": section_ladder(sec, langs.budget(lang)["topic"], doc, c)}
+            if out.get("paper_title") and not (again and meta["titles"].get(lang)):
+                meta["titles"][lang] = clean(out["paper_title"])
+        log(f"  {'·' if cached else '✓'} {lang} {c['id']:<14} {len(us):>2} units{f' (part {k + 1})' if k else ''}{' again' if again else ''}")
     return cost, errors, warnings
 
 

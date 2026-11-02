@@ -5,7 +5,9 @@
   python -m textfold notes.md [--lang zh] ...           the same for a Markdown file
   python -m textfold export <arxiv id>                   one self-contained HTML file in out/<id>/
   python3 -m textfold get <link or file> [--level topic] [--section 3] [--json]   a document at one level (for a person or an agent)
-  python3 -m textfold engine status | install | remove              the PDF engine (MinerU, about 3.4 GB)
+  python3 -m textfold engine status | install [folder] | remove     the PDF engine (MinerU, about 3.4 GB)
+  python3 -m textfold adapt <url> [--snapshot page.html] [--try recipe.json [--keep]]   a web page read with a recipe
+  python3 -m textfold capture install                                the browser's button (extension/) reaches TextFold
 """
 import argparse
 import shutil
@@ -94,15 +96,57 @@ def engine_cmd(args):
     from . import engine
     what = args[0] if args else "status"
     if what == "install":
+        if len(args) > 1:   # a folder of the reader's
+            if engine.where():
+                _say(f"The PDF engine is installed in {engine.where()}: remove it first")
+                return 2
+            try:
+                engine.choose(args[1])
+            except ValueError as error:
+                _say(str(error))
+                return 2
         engine.install(progress=lambda s, d, t: _say(f"  {s} ({d}/{t})"), log=_say)
     elif what == "remove":
         engine.uninstall()
     elif what != "status":
-        _say("python3 -m textfold engine status | install | remove")
+        _say("python3 -m textfold engine status | install [folder] | remove")
         return 2
     st = engine.status()
     print(f"PDF engine: {'installed' if st['installed'] else 'not installed'} (MinerU {st['version']})"
           + (f", {st['bytes'] / 1e9:.1f} GB in {st['path']}" if st["installed"] else ""))
+    return 0
+
+
+def adapt_cmd(a):
+    """A web page and a recipe for its site (adapt.py): with no recipe, what an agent is given to write one; with one,
+    the page read with it and checked; --keep stores it so read, its snapshot beside it."""
+    import re
+    from . import adapt, store, webpage
+    page, final, how = adapt.snapshot(a.url, a.snapshot, a.rendered)
+    if not a.recipe:
+        print(adapt.brief(a.url, page, final, how))
+        return 0
+    try:
+        recipe = adapt.recipe_of(Path(a.recipe).read_text(encoding="utf-8"))
+        text, html = adapt.tried(page, final, recipe)
+    except ValueError as e:
+        print(f"the recipe: {e}")
+        return 2
+    print(text)
+    if a.keep:
+        pid = webpage.pid_of(final)
+        if store.has(pid):
+            print(f"{pid} is in the library already: delete it first")
+            return 2
+        info = webpage.about(webpage.visible(page, final), final)
+        meta = {**webpage.meta_of(pid, final, info), "recipe": recipe, "snapshot_kind": how}
+        pre = local.prefetch(re.findall(r'<img[^>]*\ssrc="([^"]+)"', html))
+        store.repository().prepare_import(pid)
+        with store.repository().workspace(pid):
+            local.store_doc(pid, html, meta, "snapshot.html", page, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)
+            with store.edit(pid) as document:
+                document.source.reference = final
+        print(f"kept: {pid}")
     return 0
 
 
@@ -127,6 +171,33 @@ def main():
         ap.add_argument("--json", action="store_true", help="the whole document in the TextFold format (docs/format.md)")
         ap.add_argument("--no-generate", action="store_true", help="call no model: the levels already written, or the local ones")
         return sys.exit(get(ap.parse_args(sys.argv[2:])))
+    if len(sys.argv) > 1 and sys.argv[1] == "adapt":
+        ap = argparse.ArgumentParser(prog="python3 -m textfold adapt", description="A web page read with a recipe for its site (docs/web-adapt.md).")
+        ap.add_argument("url", help="the page's address")
+        ap.add_argument("--snapshot", help="the page saved before (as fetched, or as a browser rendered it) instead of fetching it now")
+        ap.add_argument("--rendered", action="store_true", help="the snapshot is a browser's, after the page's scripts ran")
+        ap.add_argument("--try", dest="recipe", help="a recipe (JSON): the page read with it, and checked")
+        ap.add_argument("--keep", action="store_true", help="with --try: store the page so read in the library, its snapshot beside it")
+        return sys.exit(adapt_cmd(ap.parse_args(sys.argv[2:])))
+    if len(sys.argv) > 1 and sys.argv[1] == "capture-host":   # (started by the browser: its messages on stdin)
+        from . import capture
+        return sys.exit(capture.host())
+    if len(sys.argv) > 1 and sys.argv[1] == "capture":
+        ap = argparse.ArgumentParser(prog="python3 -m textfold capture", description="The browser's button (extension/) and TextFold on this computer.")
+        ap.add_argument("what", choices=["install"])
+        ap.add_argument("--extension", action="append", default=[], help="another extension's id (chrome://extensions), once or more: "
+                        "the store's is let in always")
+        ap.add_argument("--browser", action="append", choices=["chrome", "chromium", "edge", "brave"], help="only these (default: each)")
+        ap.add_argument("--app", action="store_true", help=argparse.SUPPRESS)   # (the desktop app's, each time it starts: desktop/main.js)
+        a = ap.parse_args(sys.argv[2:])
+        from . import capture
+        try:
+            for f in capture.install(a.extension, a.browser, app=a.app):
+                print(f)
+        except ValueError as e:
+            _say(str(e))
+            return sys.exit(2)
+        return
     if len(sys.argv) > 1 and sys.argv[1] == "engine":
         return sys.exit(engine_cmd(sys.argv[2:]))
     if len(sys.argv) > 1 and sys.argv[1] == "export":

@@ -1,0 +1,113 @@
+{
+  "description": {
+    "message": "जो पेज आप पढ़ रहे हैं, उसे जैसा दिखता है वैसा ही इस कंप्यूटर के TextFold में भेजें और पाँच स्तरों में पढ़ें।"
+  },
+  "action_title": {
+    "message": "TextFold में भेजें"
+  },
+  "sending": {
+    "message": "TextFold में भेजा जा रहा है…"
+  },
+  "saved": {
+    "message": "आपकी TextFold लाइब्रेरी में है।"
+  },
+  "already": {
+    "message": "यह पेज पहले से आपकी TextFold लाइब्रेरी में है।"
+  },
+  "saved_closed": {
+    "message": "आपकी TextFold लाइब्रेरी में है। पढ़ने के लिए TextFold खोलें।"
+  },
+  "err_notext": {
+    "message": "इस पेज पर पढ़ने लायक टेक्स्ट बहुत कम है।"
+  },
+  "err_notweb": {
+    "message": "TextFold केवल वेब पेज (http और https) पढ़ता है।"
+  },
+  "err_nopage": {
+    "message": "यह पेज पढ़ा नहीं जा सका।"
+  },
+  "err_update": {
+    "message": "TextFold को अपडेट करना होगा। खुले हुए टैब को देखें।"
+  },
+  "err_setup": {
+    "message": "TextFold जुड़ा नहीं है। खुले हुए टैब को देखें।"
+  },
+  "err_other": {
+    "message": "पेज सहेजा नहीं गया ($CODE$)।",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "web-notext"
+      }
+    }
+  },
+  "setup_title": {
+    "message": "TextFold से जोड़ें"
+  },
+  "ok_title": {
+    "message": "TextFold जुड़ा हुआ है"
+  },
+  "ok_text": {
+    "message": "TextFold $VERSION$ जवाब दे रहा है। जिस भी पेज को आप पढ़ रहे हों, उस पर TextFold बटन दबाकर उसे भेजें।",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.10.40"
+      }
+    }
+  },
+  "missing_title": {
+    "message": "यह ब्राउज़र TextFold को नहीं ढूँढ पा रहा"
+  },
+  "missing_text": {
+    "message": "यह बटन हर पेज को TextFold को सौंपता है, जो इस कंप्यूटर पर एक मुफ़्त ऐप है। इसे एक बार सेट करें:"
+  },
+  "forbidden_title": {
+    "message": "TextFold अभी इस एक्सटेंशन को अनुमति नहीं देता"
+  },
+  "forbidden_text": {
+    "message": "इस कंप्यूटर का TextFold इस एक्सटेंशन से पुराना है। उसे अपडेट करें:"
+  },
+  "exited_title": {
+    "message": "TextFold शुरू नहीं हुआ"
+  },
+  "exited_text": {
+    "message": "पिछली बार खोले जाने के बाद शायद इसे हटाया या कहीं और ले जाया गया है। तब:"
+  },
+  "update_title": {
+    "message": "TextFold को अपडेट करना होगा"
+  },
+  "update_text": {
+    "message": "यह एक्सटेंशन इस कंप्यूटर के TextFold से नया है। उसे अपडेट करें:"
+  },
+  "step_download": {
+    "message": "macOS या Windows के लिए TextFold डाउनलोड करके इंस्टॉल करें।"
+  },
+  "step_update": {
+    "message": "सबसे नया TextFold डाउनलोड करें और पुराने के ऊपर इंस्टॉल करें।"
+  },
+  "step_open": {
+    "message": "TextFold को एक बार खोलें। यह अपने आप इस ब्राउज़र से जुड़ जाता है।"
+  },
+  "step_again": {
+    "message": "पेज पर लौटें और TextFold बटन फिर से दबाएँ।"
+  },
+  "download": {
+    "message": "TextFold डाउनलोड करें"
+  },
+  "check": {
+    "message": "फिर से जाँचें"
+  },
+  "checking": {
+    "message": "जाँच हो रही है…"
+  },
+  "pip_title": {
+    "message": "क्या आप Python से TextFold चलाते हैं?"
+  },
+  "pip_text": {
+    "message": "इसे इंस्टॉल या अपडेट करें, फिर यह कमांड एक बार चलाएँ ताकि ब्राउज़र इसे ढूँढ सके:"
+  },
+  "privacy_note": {
+    "message": "एक्सटेंशन पेज को केवल इस कंप्यूटर के TextFold को सौंपता है, और कहीं नहीं। TextFold इसके स्तर उस मॉडल से लिखता है जिसे आपने उसकी सेटिंग में चुना है।"
+  }
+}
