@@ -518,7 +518,8 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-text:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .ed-top { display: flex; align-items: baseline; gap: 12px; }
 .ed-top .st-note { flex: 1; }
-.ed-text[hidden], .ed-past[hidden], .ed-histbtn[hidden] { display: none; }
+.ed-text[hidden], .ed-past[hidden], .ed-histbtn[hidden], .ed-all[hidden], .ed-sec[hidden] { display: none; }
+.ed-sec { margin: 8px 0 0; font: 600 12.5px var(--sans); color: var(--ink-2); }
 /* its edit history: a version, and what the save that made it changed, paragraph by paragraph and word by word */
 .ed-pbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .stp .ed-pbar select { max-width: 55%; }
