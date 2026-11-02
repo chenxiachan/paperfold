@@ -113,11 +113,15 @@ def build(doc, cfg, cache_dir, log=print, force=False, jobs=4):
     recs = [got[i] for i in range(len(asks)) if i in got]   # (in reading order, whatever came back first)
     have = {(e["f"], e["t"]) for e in doc["edges"]}
     per_from, added = {}, []
-    for rec, _ in recs:
-        for x in rec["out"].get("links", []):
+    for i in (i for i in range(len(asks)) if i in got):
+        shown = None if asks[i] is None else set(asks[i]) | set(abstract)   # a part names only the units it was shown
+        for x in got[i][0]["out"].get("links", []):
             try:
-                f, t = order[int(str(x["from"]).lstrip("U"))], order[int(str(x["to"]).lstrip("U"))]
+                a, b = int(str(x["from"]).lstrip("U")), int(str(x["to"]).lstrip("U"))
+                f, t = order[a], order[b]
             except (ValueError, IndexError, KeyError, TypeError):
+                continue
+            if min(a, b) < 0 or shown is not None and not (a in shown and b in shown):
                 continue
             if f == t or x.get("rel") not in RELS or (f, t) in {(e["f"], e["t"]) for e in added}:
                 continue

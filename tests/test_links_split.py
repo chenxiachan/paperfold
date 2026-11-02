@@ -64,7 +64,8 @@ def model(prompts, links_of=None, fail=None):
 
 
 def link_prompts(prompts):
-    return [p for p in prompts if "Find the argument links" in p]
+    """The links calls, in reading order (the parts are asked together: in the order they were asked, any)."""
+    return sorted((p for p in prompts if "Find the argument links" in p), key=lambda p: asked_numbers(p)[0])
 
 
 class Base(unittest.TestCase):
@@ -131,6 +132,19 @@ class Parts(Base):
         _, order, edges = self.edges(pid)
         self.assertGreater(len(link_prompts(asked)), 1)
         self.assertEqual(len([e for e in edges if e["f"] == order[0]]), links.MAX_FROM)
+
+    def test_a_part_keeps_only_links_between_units_it_was_shown(self):
+        # each part names a unit fifty before its first (the numbers are the whole text's: in the part before, unseen
+        # here) and the abstract's first: the first is dropped, the second kept
+        def of(prompt):
+            first = asked_numbers(prompt)[0]
+            return [{"from": f"U{first + 2}", "to": f"U{max(30, first - 50)}", "rel": "supports"},
+                    {"from": f"U{first + 3}", "to": "U0", "rel": "supports"}]
+        pid, asked, _ = self.generate(LONG, links_of=of)
+        firsts = [asked_numbers(p)[0] for p in link_prompts(asked)]
+        _, order, edges = self.edges(pid)
+        self.assertGreater(len(firsts), 1)
+        self.assertEqual({(order.index(e["f"]), order.index(e["t"])) for e in edges}, {(2, 30)} | {(n + 3, 0) for n in firsts})
 
     def test_a_part_that_fails_costs_only_its_own_links(self):
         # the second part fails (it is the one the abstract is given to): the first part's links are kept
