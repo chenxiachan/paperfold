@@ -175,6 +175,17 @@ def history(pid):
     return json.loads(store.read_text(f)) if store.valid_id(pid) and f.exists() else []
 
 
+def current(pid):
+    """The text a document has now, as history lists the ones before it: {at, read}."""
+    return _made(json.loads(store.read_text(store.pdir(pid) / "meta.json")))
+
+
+def _made(meta):
+    """When a document's text came to be (the edit that saved it, or the day it was read in) and whether it is the one
+    read from its file."""
+    return {"at": meta.get("replaced") or meta.get("snapshot") or "", "read": not meta.get("replaced")}
+
+
 def history_text(pid, n):
     """One of the texts a document had before (history), or None."""
     f = store.pdir(pid) / HISTORY / f"{int(n):04d}.md"
@@ -199,7 +210,7 @@ def keep_text(d):
         n = len(index) + 1
         (hist / "img").mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / "source.md", hist / f"{n:04d}.md")
-        index.append({"n": n, "at": was.get("replaced") or was.get("snapshot") or "", "read": not was.get("replaced")})
+        index.append({"n": n, **_made(was)})
         pool = {f.name.split("-", 1)[-1]: f for f in sorted((hist / "img").iterdir())}
         for f in sorted((src / "img").iterdir()) if (src / "img").is_dir() else []:
             name = f.name.split("-", 1)[-1]

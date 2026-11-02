@@ -428,11 +428,14 @@ class Server(Base):
         pid = self.post("/api/import", {"name": "diary.md", "text": TEXT})[1]["paper"]
         url = f"http://127.0.0.1:{self.httpd.server_port}/api/text/"
         with urllib.request.urlopen(url + pid, timeout=30) as r:
-            self.assertEqual(json.loads(r.read()), {"text": TEXT, "history": []})
+            got = json.loads(r.read())
+        self.assertEqual((got["text"], got["history"], got["now"]["read"]), (TEXT, [], True))
         self.post("/api/import", {"text": TEXT.replace("# Heat pump diary", "# Diary"), "id": pid})
         with urllib.request.urlopen(url + pid, timeout=30) as r:
             got = json.loads(r.read())
         self.assertEqual([(v["n"], v["read"]) for v in got["history"]], [(1, True)])   # the texts it had before
+        meta = json.loads((store.pdir(pid) / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(got["now"], {"at": meta["replaced"], "read": False})   # and the one it has: an edit
         with urllib.request.urlopen(f"{url}{pid}/1", timeout=30) as r:
             self.assertEqual(json.loads(r.read()), {"text": TEXT})
         for gone in ("md-gone-12345678", "2512.23916", "..%2Fpapers", f"{pid}/2", "2512.23916/1"):

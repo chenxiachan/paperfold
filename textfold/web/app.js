@@ -1094,12 +1094,21 @@
     }
     // The languages a document's levels were in before its text was edited (PAPER.pending, store.pending), made again
     // at once: the one the page was asked in first (it opens in it when that is done), the others queued after it, each
-    // from the replies kept, so the model is asked only for the sections that changed
+    // from the replies kept, so the model is asked only for the sections that changed. Stopped, the others stop with it
+    // (at once: queued after it, one would start as it ends), and once it has, the page opens on the text as edited,
+    // which the top bar says is to be generated (as after Save only)
     function regenerate(langs) {
       const want = new URLSearchParams(location.search).get('lang') || (window.__reader && window.__reader.lang);
-      const first = langs.includes(want) ? want : langs[0], update = toastFor(first);
-      submit(PAPER.id, first, false, update)
-        .then(() => Promise.all(langs.filter((l) => l !== first).map((l) => api('/api/generate', { paper: PAPER.id, lang: l, force: false }))))
+      const first = langs.includes(want) ? want : langs[0], update = toastFor(first), others = [];
+      let halted = null;
+      const follow = (j) => {
+        update(j);
+        if ((j.stopping || j.status === 'stopped') && !halted) halted = Promise.all(others.map((id) => api('/api/jobs/stop', { id }).catch(() => {})));
+        if (j.status === 'stopped') halted.then(() => reopen(first));
+      };
+      submit(PAPER.id, first, false, follow)
+        .then(() => Promise.all(langs.filter((l) => l !== first).map((l) => api('/api/generate', { paper: PAPER.id, lang: l, force: false })
+          .then((j) => others.push(j.id)))))
         .catch(update.fail);
     }
     // its text edited and saved without being generated again: said in the top bar, by the button that does it
@@ -1158,21 +1167,23 @@
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
     // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
-    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none. The texts
-    // it had before (History: local.keep_text) are compared with the one in the editor, and one is put back by being
-    // put in the editor and saved, as an edit is.
+    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none. Its edit
+    // history: the texts it had (local.keep_text) and the one it has, each with what the save that made it changed, and
+    // one put back by being put in the editor and saved, as an edit is.
     async function editText(words) {
       const T = t();
       if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
-      let text, history;
-      try { ({ text, history = [] } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
+      let text, history, now;
+      try { ({ text, history = [], now } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
       const when = (at) => at.replace('T', ' ').slice(0, 16);
+      const versions = history.length ? [...history, { ...now, n: 'now' }] : [];   // (oldest first; listed newest first)
+      const name = (v) => (v.read ? `${T.ed_v_read} · ${when(v.at)}` : T.ed_v_edit.replace('{t}', when(v.at))) + (v.n === 'now' ? ` · ${T.ed_current}` : '');
       const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
       dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_title)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
         <div class="stp-body"><div class="ed-top"><p class="st-note">${esc(T.ed_note)}</p>` +
-        (history.length ? `<button type="button" class="st-btn ed-histbtn">${esc(T.ed_history)} · ${history.length}</button>` : '') + `</div>
+        (versions.length ? `<button type="button" class="st-btn ed-histbtn">${esc(T.ed_history)}</button>` : '') + `</div>
         <textarea class="ed-text" spellcheck="false"></textarea>
-        <div class="ed-past" hidden><div class="ed-pbar"><select class="ed-ver">${history.slice().reverse().map((v) => `<option value="${v.n}">${esc(v.read ? `${T.ed_v_read} · ${when(v.at)}` : T.ed_v_edit.replace('{t}', when(v.at)))}</option>`).join('')}</select>
+        <div class="ed-past" hidden><div class="ed-pbar"><select class="ed-ver">${versions.map((v, i) => `<option value="${i}">${esc(name(v))}</option>`).reverse().join('')}</select>
           <span class="ed-count"></span><button type="button" class="st-btn ed-back">${esc(T.ed_back)}</button><button type="button" class="st-btn ed-use">${esc(T.ed_use)}</button></div>
           <div class="ed-diff"></div></div></div>
         <footer class="stp-foot"><p>${esc(T.ed_whole)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button>` +
@@ -1198,8 +1209,12 @@
       const at = [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0) ?? 0;
       ta.value = text;
       goTo(at, words && text.startsWith(words, at) ? words.length : 0);
-      // History: a text it had, compared with the one in the editor; used, it is put in the editor, to be saved
-      const texts = new Map(), split = (x) => x.split(/(\s+)/).filter(Boolean);
+      // its edit history: a version, and what the save that made it changed; gone back to, it is put in the editor, to be saved
+      const texts = new Map([['now', text]]), split = (x) => x.split(/(\s+)/).filter(Boolean);
+      const textOf = async (v) => {
+        if (!texts.has(v.n)) texts.set(v.n, (await api(`/api/text/${encodeURIComponent(PAPER.id)}/${v.n}`)).text);
+        return texts.get(v.n);
+      };
       const marked = (ops, kind, tag) => ops.map(([k, x]) => (k === '=' ? esc(x) : k === kind ? `<${tag}>${esc(x)}</${tag}>` : '')).join('');
       const editing = (on) => {
         ta.hidden = !on; past.hidden = on; histBtn.hidden = !on;
@@ -1208,29 +1223,29 @@
         if (only) only.disabled = !on;
       };
       const compare = async () => {
-        const n = +ver.value;
-        if (!texts.has(n)) {
-          try { texts.set(n, (await api(`/api/text/${encodeURIComponent(PAPER.id)}/${n}`)).text); }
-          catch (x) { box.textContent = errText(x.message); use.disabled = true; return; }
-        }
-        if (+ver.value !== n) return;   // (another chosen meanwhile)
-        const changes = changesOf(texts.get(n), ta.value);
-        dlg.querySelector('.ed-count').textContent = changes.length ? T.ed_diffs.replace('{n}', changes.length) : T.ed_same;
-        use.disabled = !changes.length;
+        const i = +ver.value, count = dlg.querySelector('.ed-count');
+        let was, put;
+        try { [was, put] = await Promise.all([i ? textOf(versions[i - 1]) : null, textOf(versions[i])]); }
+        catch (x) { box.textContent = errText(x.message); use.disabled = true; return; }
+        if (+ver.value !== i) return;   // (another chosen meanwhile)
+        use.disabled = put === ta.value;
+        box.scrollTop = 0;
+        if (was === null) { count.textContent = ''; box.innerHTML = `<p class="ed-first">${esc(T.ed_first)}</p>`; return; }
+        const changes = changesOf(was, put);
+        count.textContent = changes.length ? T.ed_diffs.replace('{n}', changes.length) : T.ed_same;
         box.innerHTML = changes.map((c) => {
           const ops = diffOf(split(c.was), split(c.now));
           return `<section>${c.heading ? `<h4>${esc(c.heading)}</h4>` : ''}` +
             (c.was ? `<div class="ed-was"><b>${esc(T.ed_was)}</b><pre>${marked(ops, '-', 'del')}</pre></div>` : '') +
             (c.now ? `<div class="ed-now"><b>${esc(T.ed_now)}</b><pre>${marked(ops, '+', 'ins')}</pre></div>` : '') + '</section>';
         }).join('');
-        box.scrollTop = 0;
       };
       if (histBtn) {
         histBtn.onclick = () => { editing(false); compare(); };
         ver.onchange = compare;
         dlg.querySelector('.ed-back').onclick = () => { editing(true); ta.focus(); };
         use.onclick = () => {
-          const was = ta.value, put = texts.get(+ver.value);
+          const was = ta.value, put = texts.get(versions[+ver.value].n);
           let i = 0;
           while (i < was.length && was[i] === put[i]) i++;   // (where they first differ)
           ta.value = put;

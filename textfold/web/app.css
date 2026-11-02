@@ -519,7 +519,7 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-top { display: flex; align-items: baseline; gap: 12px; }
 .ed-top .st-note { flex: 1; }
 .ed-text[hidden], .ed-past[hidden], .ed-histbtn[hidden] { display: none; }
-/* its History: a text it had, compared with the one in the editor, paragraph by paragraph and word by word */
+/* its edit history: a version, and what the save that made it changed, paragraph by paragraph and word by word */
 .ed-pbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .stp .ed-pbar select { max-width: 55%; }
 .ed-count { flex: 1; font-size: 12.5px; color: var(--muted); }
@@ -528,6 +528,7 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-diff section { padding: 10px 0; border-bottom: 1px solid var(--line-2); }
 .ed-diff section:last-child { border-bottom: 0; }
 .ed-diff h4 { margin: 0 0 4px; font: 600 12px var(--sans); color: var(--muted); }
+.ed-first { margin: 14px 0; font-size: 13px; color: var(--muted); }
 .ed-diff b { display: block; margin: 6px 0 2px; font: 600 11.5px var(--sans); color: var(--muted); }
 .ed-diff pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 var(--mono); color: var(--ink); }
 .ed-diff del { color: inherit; background: color-mix(in srgb, var(--r-limitation) 18%, transparent);
