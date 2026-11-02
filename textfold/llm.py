@@ -9,6 +9,10 @@
 Replies are cached on disk by a hash of everything that shapes them, so a rebuild costs nothing until
 the prompt, the schema, the model or its effort changes. `force` skips the cache read: that is what
 "regenerate" means, a new sample from the model.
+
+A reply is written whole, to a .tmp beside it and then moved onto its name, and a file that is not a
+reply (half of one, when a process died in the middle of writing it) is dropped and asked for again:
+the rule forget() already applies to a reply its caller could not read.
 """
 import hashlib
 import json
@@ -78,6 +82,17 @@ def label(model):
     return spec_of(model)["id"]
 
 
+def kept(f):
+    """The reply kept in a file, or None when the file is not one: half written when the process died, or written by a
+    version that kept something else. A reply is what every caller reads of it: `out`, `cost`, `models`."""
+    from .store import read_text   # (store imports ladder, which imports this)
+    try:
+        rec = json.loads(read_text(f))
+    except (OSError, ValueError):
+        return None
+    return rec if isinstance(rec, dict) and "out" in rec else None
+
+
 def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, system=SYSTEM):
     """(system: the generation's role unless a caller has another, as the questions about a paper do)"""
     spec = spec_of(model)
@@ -92,8 +107,10 @@ def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, syste
     cache_dir.mkdir(parents=True, exist_ok=True)
     f = cache_dir / f"{key}.json"
     if f.exists() and not force:
-        from .store import read_text   # (store imports ladder, which imports this)
-        return {**json.loads(read_text(f)), "file": str(f)}, True
+        rec = kept(f)
+        if rec is not None:
+            return {**rec, "file": str(f)}, True
+        f.unlink(missing_ok=True)   # (not a reply: asked for again, where before it was asked for on every generation)
     if os.environ.get("TEXTFOLD_NO_MODELS"):   # (agents.scan): a reply kept is read, none is asked for, whatever model is named
         raise RuntimeError("No model is available: TEXTFOLD_NO_MODELS is set")
     note = None
@@ -109,7 +126,10 @@ def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, syste
     rec = {"out": out, "cost": cost, "models": [spec["id"]] + ([effort] if effort else [])}
     if note:
         rec["note"] = note
-    f.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
+    # written beside it and moved onto its name: a process that dies here leaves a .tmp, never half a reply to read back
+    half = f.with_name(f.name + ".tmp")
+    half.write_text(json.dumps(rec, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(half, f)
     return {**rec, "file": str(f)}, False
 
 
