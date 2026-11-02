@@ -15,8 +15,8 @@
                               set aside ({paper, title, replaced: true, pending: the languages they were in}; not
                               while it is being generated); then /api/generate in each folds it again, asking the model
                               only for the sections that changed
-  GET  /api/text/<id>         {text, original}: the Markdown such a document was read from, for the reader to put
-                              right (a PDF's OCR) and send back to /api/import with its id; original: the text it had
+  GET  /api/text/<id>         {text, original}: a document's text as Markdown (local.text_of), for the reader to put
+                              right (a PDF's OCR, a page's words) and send back to /api/import with its id; original: the text it had
                               when it was last generated, before the edits since (null: none; local.original)
   POST /api/places            {id, spans: [[from, to], ...]}: where each place of that text is read on the page
                               ({places: [{words: [{unit, tokens}], at: {unit, token, after}} | {section} | null]}:

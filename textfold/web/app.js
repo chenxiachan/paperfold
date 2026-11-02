@@ -1233,8 +1233,9 @@
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
     // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
-    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none. span: the
-    // characters of the Markdown to open at, in place of the words (a place of the review)
+    // bar says it is to be). Any document's: a Markdown file's, a converted file's, and an arXiv paper's or a web page's,
+    // written from its page (editable.py). span: the characters of the Markdown to open at, in place of the words (a
+    // place of the review)
     async function editText(words, span = null) {
       const T = t();
       if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
@@ -1363,7 +1364,7 @@
         submit(PAPER.id, lang, force, update).catch(update.fail);
       },
       fill(lang) { fillGaps(lang, true); },
-      editText: /^(md|pdf|doc)-/.test(PAPER.id) ? editText : null,
+      editText,
       // questions go to an agent on this computer, which can look them up on the web (reader.js: the switch by a question)
       askAgent() {
         const d = modelData, m = d && (d.models || []).find((x) => x.id === (d.askModel || d.selected));

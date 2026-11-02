@@ -2223,7 +2223,7 @@
     selbar.innerHTML = `<button type="button" data-act="hl">${esc(t.n_highlight)}</button>${swatches('hl', toneOf({ anchor: anchors[0] }), 0, lastShade)}` +
       `<button type="button" data-act="note">${esc(t.n_note)}</button>` +
       `<button type="button" data-act="ask">${esc(t.n_ask)}</button>` +
-      // the author's words, in a document whose text can be put right (a PDF read wrong: app.js, editText)
+      // the author's words, which the reader can put right in any document (app.js, editText)
       (window.DRApp && window.DRApp.editText && anchors[0].tokens ? `<button type="button" data-act="edit">${esc(t.ed_fix)}</button>` : '');
     selbar.hidden = false;
     const r = getSelection().getRangeAt(0).getBoundingClientRect(), w = selbar.offsetWidth;

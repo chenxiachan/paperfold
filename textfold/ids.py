@@ -97,6 +97,14 @@ def carry(old, new, gone):
         if cid not in chunks and sid not in taken:
             chunks[cid] = sid
             taken.add(sid)
+    heads = {}   # one with no paragraph from before (a heading over its subsections): an old one's with its heading
+    for c in old["chunks"]:
+        if c["id"] not in taken:
+            heads.setdefault((c.get("num"), c.get("title")), []).append(c["id"])
+    for c in new["chunks"]:
+        if c["id"] not in chunks and (was := heads.get((c.get("num"), c.get("title")))):
+            chunks[c["id"]] = was.pop(0)
+            taken.add(chunks[c["id"]])
     sused = set(titles) | set(gone["sections"]) | {c["id"] for c in new["chunks"]}
     for c in new["chunks"]:
         cid = c["id"]
