@@ -374,13 +374,27 @@ class Refold(Base):
             local.replace_text(pid, once.replace("Nobody felt the change.", "Nobody felt the change at all."))
             self.assertEqual(store.assemble(pid)["meta"]["pending"], ["en", "zh"])
             self.assertTrue(store.papers()[0]["pending"])   # (listed as a document to open, not one to go on generating)
+            self.assertEqual((len(local.history(pid)), store.assemble(pid)["meta"]["history"]), (2, True))   # its edit history
             asked.clear()
             pipeline.generate(pid, "en", self.SPEC)
             self.assertEqual(len(asked), 3)   # Monday, Tuesday and the links over the whole text
             self.assertEqual(store.assemble(pid)["meta"]["pending"], ["zh"])
+            self.assertEqual(len(local.history(pid)), 2)   # (still to be generated in Chinese)
             translated()
+            local.settle(pid)   # (as the generation that translates it does at its end)
         self.assertEqual(store.assemble(pid)["meta"]["pending"], [])
         self.assertNotIn("pending", store.papers()[0])
+        self.assertEqual((local.history(pid), store.assemble(pid)["meta"]["history"]), ([], False))   # gone, as the page said
+        self.assertNotIn("pending", json.loads((store.pdir(pid) / "meta.json").read_text(encoding="utf-8")))
+
+    def test_generated_after_an_edit_its_edit_history_goes(self):
+        pid = local.import_text(TEXT, "diary.md")
+        with mock.patch.object(llm, "_once", fake_model([])), mock.patch.dict(os.environ):
+            os.environ.pop("TEXTFOLD_NO_MODELS", None)   # (the build runs the tests with it: the model here is a stand-in)
+            local.replace_text(pid, TEXT.replace("how loud", "how quiet"))   # (never generated: nothing pending)
+            self.assertEqual(len(local.history(pid)), 1)
+            pipeline.generate(pid, "en", self.SPEC)
+        self.assertEqual(local.history(pid), [])
 
 
 class FakeJobs:

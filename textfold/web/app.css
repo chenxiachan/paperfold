@@ -516,11 +516,8 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-text { display: block; width: 100%; height: min(62vh, 640px); box-sizing: border-box; margin-top: 10px; resize: vertical; padding: 12px 14px;
   font: 13px/1.6 var(--mono); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; outline: none; }
 .ed-text:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-.ed-top { display: flex; align-items: baseline; gap: 12px; }
-.ed-top .st-note { flex: 1; }
-.ed-text[hidden], .ed-past[hidden], .ed-histbtn[hidden], .ed-all[hidden], .ed-sec[hidden] { display: none; }
-.ed-sec { margin: 8px 0 0; font: 600 12.5px var(--sans); color: var(--ink-2); }
-/* its edit history: a version, and what the save that made it changed, paragraph by paragraph and word by word */
+/* its edit history (app.js, showHistory): a version, and what the save that made it changed, paragraph by paragraph
+   and word by word */
 .ed-pbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .stp .ed-pbar select { max-width: 55%; }
 .ed-count { flex: 1; font-size: 12.5px; color: var(--muted); }
@@ -535,7 +532,8 @@ dialog.settings.edtext { width: min(900px, calc(100vw - 32px)); }
 .ed-diff del { color: inherit; background: color-mix(in srgb, var(--r-limitation) 18%, transparent);
   text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--r-limitation) 65%, transparent); }
 .ed-diff ins { text-decoration: none; background: color-mix(in srgb, var(--r-result) 22%, transparent); }
-/* its text edited and saved, its levels not made again yet (app.js, PAPER.pending): in the top bar, the button that does it */
+/* its text edited and saved, its levels not made again yet (app.js, PAPER.pending): in the top bar, the button that does it;
+   its edit history (PAPER.history) beside it */
 .edbtn { order: 3; flex: none; display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px var(--sans); color: var(--ink-2); background: none;
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
 .edbtn i { width: 7px; height: 7px; border-radius: 50%; background: var(--r-limitation); }

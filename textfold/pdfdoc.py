@@ -398,8 +398,8 @@ def store_pdf(pid, folder, sc, name, tier, replace=False):
     extension>); the engine's structured content as
     structured_content.json, so that its figures and places can be made again without the engine. Converted again
     (replace), the reader's notes and the file stay, the notes found again in the new text (notes.reanchor: its
-    paragraphs are named by their places, so an old place now names another paragraph), and the text it had goes to its
-    history with the ones before (local.keep_text); the levels go, since they belong to the text they were made from."""
+    paragraphs are named by their places, so an old place now names another paragraph); the levels go, since they
+    belong to the text they were made from, and its edit history (local.keep_text) with them."""
     from . import engine
     d = store.pdir(pid)
     ext = "pdf" if pid.startswith("pdf-") else engine.kind_of(name) or "file"
@@ -418,17 +418,14 @@ def store_pdf(pid, folder, sc, name, tier, replace=False):
         meta["source"] = {"kind": "file", "format": ext, "name": name, "tier": engine.tier_for(f"x.{ext}", tier) if ext in engine.PICTURES else "",
                           "engine": producer}
         meta["label"] = f"{engine.FILES.get(ext, ext.upper())} · {name}"
-    keep = d.with_name(d.name + ".keep")   # the reader's notes, the file and the texts it had (its history), on disk
-    old = store.parsed(pid) if replace and (d / "source.html").exists() else None   # while the document is rewritten
+    keep = d.with_name(d.name + ".keep")   # the reader's notes and the file, on disk while the document is rewritten
+    old = store.parsed(pid) if replace and (d / "source.html").exists() else None
     if replace and d.exists():
         shutil.rmtree(keep, ignore_errors=True)
         keep.mkdir(parents=True)
-        local.keep_text(d)   # the text converted before (or put right since): it can be put back
         for f in [source_of(pid), d / "notes.json", d / ids.FILE]:
             if f and f.exists():
                 shutil.copy2(f, keep / f.name)
-        if (d / local.HISTORY).is_dir():
-            shutil.copytree(d / local.HISTORY, keep / local.HISTORY)
         if (d / "source.html").exists():
             (d / "source.html").unlink()   # so that store_doc writes the document again
     try:
@@ -440,11 +437,7 @@ def store_pdf(pid, folder, sc, name, tier, replace=False):
     finally:
         if keep.exists():
             for f in keep.iterdir():
-                if f.is_dir():
-                    shutil.rmtree(d / f.name, ignore_errors=True)
-                    shutil.copytree(f, d / f.name)
-                else:
-                    shutil.copy2(f, d / f.name)
+                shutil.copy2(f, d / f.name)
             shutil.rmtree(keep)
     if old is not None:
         from . import notes

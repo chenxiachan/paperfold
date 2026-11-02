@@ -1111,7 +1111,8 @@
           .then((j) => others.push(j.id)))))
         .catch(update.fail);
     }
-    // its text edited and saved without being generated again: said in the top bar, by the button that does it
+    // its text edited and saved without being generated again: said in the top bar, by the button that does it (which
+    // says first that the edit history goes once it is done); the edit history beside it
     if ((PAPER.pending || []).length) {
       const b = h('button', 'edbtn');
       b.type = 'button';
@@ -1119,7 +1120,19 @@
       b.title = t().ed_pending_tip.replace('{langs}', PAPER.pending.map(nameOf).join(', '));
       const bar = document.querySelector('.topbar .cmpbtn') || document.querySelector('.topbar .langpick');
       if (bar) bar.before(b);
-      b.onclick = () => { b.disabled = true; regenerate(PAPER.pending); };
+      b.onclick = () => {
+        if (PAPER.history && !confirm(t().ed_clears_ask)) return;
+        b.disabled = true;
+        regenerate(PAPER.pending);
+      };
+    }
+    if (PAPER.history) {
+      const b = h('button', 'edbtn edhist');
+      b.type = 'button';
+      b.textContent = t().ed_history;
+      const bar = document.querySelector('.topbar .cmpbtn') || document.querySelector('.topbar .langpick');
+      if (bar) bar.before(b);
+      b.onclick = showHistory;
     }
     // What differs between two lists (a text's paragraphs, a paragraph's words), in order: ['=', x], ['-', x] (only in
     // a), ['+', x] (only in b). What both begin and end with is set aside first (an edit is mostly a few words), the
@@ -1164,95 +1177,81 @@
       }
       return out.map((c) => ({ heading: c.heading, was: c.was.join('\n\n'), now: c.now.join('\n\n') }));
     }
-    // The section of a Markdown text a place in it is in, [start, end]: from the heading above it (else the top) to the
-    // next heading (else the end)
-    function sectionAt(text, at) {
-      const heads = [...text.matchAll(/^#{1,6}[ \t]/gm)].map((m) => m.index);
-      return [heads.filter((i) => i <= at).pop() ?? 0, heads.find((i) => i > at) ?? text.length];
-    }
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
     // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
-    // bar says it is to be). The section the words are in is what the editor shows (the rest is kept as it is around
-    // it), and the whole text when asked for, or when the words are not found in the Markdown (a formula drawn from its
-    // LaTeX). A Markdown file's and a converted file's; an arXiv paper or a web page has none. Its edit
-    // history: the texts it had (local.keep_text) and the one it has, each with what the save that made it changed, and
-    // one put back by being put in the editor and saved, as an edit is.
+    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none.
     async function editText(words) {
       const T = t();
       if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
-      let text, history, now;
-      try { ({ text, history = [], now } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
-      const when = (at) => at.replace('T', ' ').slice(0, 16);
-      const versions = history.length ? [...history, { ...now, n: 'now' }] : [];   // (oldest first; listed newest first)
-      const name = (v) => (v.read ? `${T.ed_v_read} · ${when(v.at)}` : T.ed_v_edit.replace('{t}', when(v.at))) + (v.n === 'now' ? ` · ${T.ed_current}` : '');
-      // the words selected, else their first few, else the top; the section they are in, alone, or all of it
-      const found = [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0);
-      const at = found ?? 0, [start, end] = found === undefined ? [0, text.length] : sectionAt(text, at);
-      const head = text.slice(0, start), tail = text.slice(end), heading = text.slice(start).match(/^#{1,6}[ \t]+(.*)/);
-      let whole = start === 0 && end === text.length;
+      let text;
+      try { text = (await api(`/api/text/${encodeURIComponent(PAPER.id)}`)).text; } catch (x) { alert(errText(x.message)); return; }
       const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
       dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_title)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
-        <div class="stp-body"><div class="ed-top"><p class="st-note">${esc(T.ed_note)}</p>` +
-        (whole ? '' : `<button type="button" class="st-btn ed-all">${esc(T.ed_all)}</button>`) +
-        (versions.length ? `<button type="button" class="st-btn ed-histbtn">${esc(T.ed_history)}</button>` : '') + `</div>` +
-        (whole ? '' : `<p class="ed-sec">${esc(T.ed_sec.replace('{h}', heading ? heading[1].trim().slice(0, 90) : T.ed_top))}</p>`) + `
-        <textarea class="ed-text" spellcheck="false"></textarea>
-        <div class="ed-past" hidden><div class="ed-pbar"><select class="ed-ver">${versions.map((v, i) => `<option value="${i}">${esc(name(v))}</option>`).reverse().join('')}</select>
-          <span class="ed-count"></span><button type="button" class="st-btn ed-back">${esc(T.ed_back)}</button><button type="button" class="st-btn ed-use">${esc(T.ed_use)}</button></div>
-          <div class="ed-diff"></div></div></div>
-        <footer class="stp-foot"><p>${esc(T.ed_whole)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button>` +
+        <div class="stp-body"><p class="st-note">${esc(T.ed_note)}</p><textarea class="ed-text" spellcheck="false"></textarea></div>
+        <footer class="stp-foot"><p>${esc(T.ed_whole)} ${esc(T.ed_clears)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button>` +
         (modelName ? `<button type="button" class="st-btn ed-only" title="${esc(T.ed_only_tip)}">${esc(T.ed_only)}</button>` : '') +
         `<button type="button" class="primary ed-save">${esc(modelName ? T.ed_save : T.save)}</button></footer></div>`;
       const ta = dlg.querySelector('.ed-text'), save = dlg.querySelector('.ed-save'), only = dlg.querySelector('.ed-only');
-      const note = dlg.querySelector('.ed-top .st-note'), past = dlg.querySelector('.ed-past'), ver = dlg.querySelector('.ed-ver');
-      const histBtn = dlg.querySelector('.ed-histbtn'), use = dlg.querySelector('.ed-use'), box = dlg.querySelector('.ed-diff');
-      const allBtn = dlg.querySelector('.ed-all'), sec = dlg.querySelector('.ed-sec');
-      const full = () => (whole ? ta.value : head + ta.value + tail);   // the text it is to have, all of it
       dlg.addEventListener('close', () => dlg.remove());
       dlg.querySelector('.stp-x').onclick = dlg.querySelector('.ed-cancel').onclick = () => dlg.close();
       dlg.showModal();
-      // the editor at a place: the text above it measured where it wraps, a third of the way down
-      const goTo = (at, len) => {
-        const all = ta.value;
-        ta.value = all.slice(0, at);
-        const above = ta.scrollHeight;
-        ta.value = all;
-        ta.focus();
-        ta.setSelectionRange(at, at + len);
-        ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
+      // the words selected, else their first few, else the top: the text above them measured where it wraps
+      const at = [words, (words || '').split(/\s+/).slice(0, 4).join(' ')].map((w) => (w ? text.indexOf(w) : -1)).find((i) => i >= 0) ?? 0;
+      ta.value = text.slice(0, at);
+      const above = ta.scrollHeight;
+      ta.value = text;
+      ta.focus();
+      ta.setSelectionRange(at, at + (words && text.startsWith(words, at) ? words.length : 0));
+      ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
+      const keep = async (generate) => {
+        if (ta.value === text) { dlg.close(); return; }
+        save.disabled = true;
+        if (only) only.disabled = true;
+        let r;
+        try { r = await api('/api/import', { id: PAPER.id, text: ta.value }); }
+        catch (x) { save.disabled = false; if (only) only.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+        dlg.close();
+        const lang = (window.__reader && window.__reader.lang) || 'en';
+        if (generate) regenerate(r.pending.length ? r.pending : [lang]);
+        else reopen(lang);
       };
-      ta.value = text.slice(start, end);
-      goTo(at - start, words && text.startsWith(words, at) ? words.length : 0);
-      // the whole text, the section as it is now in it, the place in it kept
-      const toWhole = () => {
-        if (whole) return;
-        whole = true;
-        allBtn.hidden = sec.hidden = true;
-        ta.value = head + ta.value + tail;
-      };
-      if (allBtn) allBtn.onclick = () => { const i = ta.selectionStart, j = ta.selectionEnd; toWhole(); goTo(head.length + i, j - i); };
-      // its edit history: a version, and what the save that made it changed; gone back to, it is put in the editor, to be saved
+      save.onclick = () => keep(!!modelName);
+      if (only) only.onclick = () => keep(false);
+    }
+    // Its edit history, from the top bar (PAPER.history): the texts it had since it was last generated (local.keep_text)
+    // and the one it has, each with what the save that made it changed; one gone back to is saved as its text, as an
+    // edit is, the one it had kept too. Generated again in every language, the history goes (local.settle).
+    async function showHistory() {
+      const T = t();
+      let text, history, now;
+      try { ({ text, history = [], now } = await api(`/api/text/${encodeURIComponent(PAPER.id)}`)); } catch (x) { alert(errText(x.message)); return; }
+      const when = (at) => at.replace('T', ' ').slice(0, 16);
+      const versions = [...history, { ...now, n: 'now' }];   // (oldest first; listed newest first)
+      const name = (v) => (v.read ? `${T.ed_v_read} · ${when(v.at)}` : T.ed_v_edit.replace('{t}', when(v.at))) + (v.n === 'now' ? ` · ${T.ed_current}` : '');
+      const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
+      dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_history)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
+        <div class="stp-body"><p class="st-note">${esc(T.ed_hist_note)}</p>
+          <div class="ed-pbar"><select class="ed-ver">${versions.map((v, i) => `<option value="${i}">${esc(name(v))}</option>`).reverse().join('')}</select>
+            <span class="ed-count"></span><button type="button" class="st-btn ed-use">${esc(T.ed_use)}</button></div>
+          <div class="ed-diff"></div></div></div>`;
+      const ver = dlg.querySelector('.ed-ver'), use = dlg.querySelector('.ed-use'), box = dlg.querySelector('.ed-diff'), count = dlg.querySelector('.ed-count');
+      dlg.addEventListener('close', () => dlg.remove());
+      dlg.querySelector('.stp-x').onclick = () => dlg.close();
+      dlg.showModal();
       const texts = new Map([['now', text]]), split = (x) => x.split(/(\s+)/).filter(Boolean);
       const textOf = async (v) => {
         if (!texts.has(v.n)) texts.set(v.n, (await api(`/api/text/${encodeURIComponent(PAPER.id)}/${v.n}`)).text);
         return texts.get(v.n);
       };
       const marked = (ops, kind, tag) => ops.map(([k, x]) => (k === '=' ? esc(x) : k === kind ? `<${tag}>${esc(x)}</${tag}>` : '')).join('');
-      const editing = (on) => {
-        ta.hidden = !on; past.hidden = on; histBtn.hidden = !on;
-        if (!whole) allBtn.hidden = sec.hidden = !on;
-        note.textContent = on ? T.ed_note : T.ed_hist_note;
-        save.disabled = !on;
-        if (only) only.disabled = !on;
-      };
       const compare = async () => {
-        const i = +ver.value, count = dlg.querySelector('.ed-count');
+        const i = +ver.value;
         let was, put;
         try { [was, put] = await Promise.all([i ? textOf(versions[i - 1]) : null, textOf(versions[i])]); }
         catch (x) { box.textContent = errText(x.message); use.disabled = true; return; }
         if (+ver.value !== i) return;   // (another chosen meanwhile)
-        use.disabled = put === full();
+        use.disabled = versions[i].n === 'now';
         box.scrollTop = 0;
         if (was === null) { count.textContent = ''; box.innerHTML = `<p class="ed-first">${esc(T.ed_first)}</p>`; return; }
         const changes = changesOf(was, put);
@@ -1264,35 +1263,16 @@
             (c.now ? `<div class="ed-now"><b>${esc(T.ed_now)}</b><pre>${marked(ops, '+', 'ins')}</pre></div>` : '') + '</section>';
         }).join('');
       };
-      if (histBtn) {
-        histBtn.onclick = () => { editing(false); compare(); };
-        ver.onchange = compare;
-        dlg.querySelector('.ed-back').onclick = () => { editing(true); ta.focus(); };
-        use.onclick = () => {
-          const was = full(), put = texts.get(versions[+ver.value].n);
-          let i = 0;
-          while (i < was.length && was[i] === put[i]) i++;   // (where they first differ)
-          toWhole();   // (a version is a whole text)
-          ta.value = put;
-          editing(true);
-          note.textContent = T.ed_used;
-          goTo(Math.min(i, put.length), 0);
-        };
-      }
-      const keep = async (generate) => {
-        if (full() === text) { dlg.close(); return; }
-        save.disabled = true;
-        if (only) only.disabled = true;
-        let r;
-        try { r = await api('/api/import', { id: PAPER.id, text: full() }); }
-        catch (x) { save.disabled = false; if (only) only.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+      ver.onchange = compare;
+      use.onclick = async () => {
+        if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
+        use.disabled = true;
+        try { await api('/api/import', { id: PAPER.id, text: texts.get(versions[+ver.value].n) }); }
+        catch (x) { use.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
         dlg.close();
-        const lang = (window.__reader && window.__reader.lang) || 'en';
-        if (generate) regenerate(r.pending.length ? r.pending : [lang]);
-        else reopen(lang);
+        reopen((window.__reader && window.__reader.lang) || 'en');
       };
-      save.onclick = () => keep(!!modelName);
-      if (only) only.onclick = () => keep(false);
+      compare();
     }
     // A translation stored with paragraphs it has none for (PAPER.gaps: a call that failed, a paragraph the model left
     // out; or made before TextFold asked for them again): they are asked for as it is opened, with the model in use, the

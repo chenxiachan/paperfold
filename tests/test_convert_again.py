@@ -203,14 +203,13 @@ class Edited(Converted):
         self.assertIsNone(store.read(PID, "en"))   # its levels were the old text's
         self.assertEqual(local.history_text(PID, 1), md)   # the text read wrong, kept in its history
 
-    def test_converted_again_the_texts_it_had_stay_in_its_history(self):
+    def test_converted_again_its_edit_history_goes_with_its_levels(self):
         self.store([self.WRONG, self.TANK], replace=False)
-        md = local.text_of(PID)
-        local.replace_text(PID, md.replace("cornpressor", "compressor"))
-        self.store([self.HOUSE, self.WRONG, self.TANK], replace=True)   # converted again (accurately): the edit is gone
+        local.replace_text(PID, local.text_of(PID).replace("cornpressor", "compressor"))
+        self.assertEqual(len(local.history(PID)), 1)
+        self.store([self.HOUSE, self.WRONG, self.TANK], replace=True)   # converted again (accurately): a new text
         self.assertIn("cornpressor", local.text_of(PID))
-        self.assertEqual([v["read"] for v in local.history(PID)], [True, False])
-        self.assertEqual(local.history_text(PID, 2), md.replace("cornpressor", "compressor"))   # but can be put back
+        self.assertEqual(local.history(PID), [])
 
 
 if __name__ == "__main__":

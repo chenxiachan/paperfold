@@ -17,7 +17,7 @@ section after an atom added or taken out is translated again too.
 """
 import urllib.error
 
-from . import biorxiv, epmc, github, ladder, links, llm, models, notes, store, translate, webpage, wiki
+from . import biorxiv, epmc, github, ladder, links, llm, local, models, notes, store, translate, webpage, wiki
 from .fetch import fetch
 
 
@@ -97,5 +97,6 @@ def generate(ref, lang, cfg, force=False, jobs=4, progress=lambda *a: None, log=
                 was = tr.get("model") or model
                 check()
                 store.save_tr(doc, lang, en["version"], was if was == model else f"{was} + {model}")
+    local.settle(pid)   # (its text edited: once generated in every language it was in, its edit history goes)
     progress("done", 1, 1)
     return pid

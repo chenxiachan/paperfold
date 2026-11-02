@@ -154,7 +154,7 @@ def import_text(text, name="document.md", base=None):
 # what a replaced text takes with it: the text (kept in its history: keep_text), what was read from it, its pictures
 # (kept there too), and the levels made from it
 REPLACED = ("source.md", "source.html", "meta.json", "img", "layers")
-HISTORY = "history"   # the texts a document had before it was edited or converted again (keep_text)
+HISTORY = store.HISTORY
 _REPLACING = threading.Lock()   # one replace at a time (the server answers on several threads; a note saved twice)
 EDITABLE = ("md-", "pdf-", "doc-")   # a Markdown file's text, and a converted file's (pdfdoc.py), kept as Markdown
 
@@ -169,8 +169,9 @@ def text_of(pid):
 
 
 def history(pid):
-    """The texts a document had before (keep_text), oldest first: [{n, at, read}] (at: when it was saved, or the day it
-    was read in; read: the text read from its file, not one put right by the reader). Each is had by history_text."""
+    """The texts a document had since it was last generated (keep_text), oldest first: [{n, at, read}] (at: when it was
+    saved, or the day it was read in; read: the text read from its file, not one put right by the reader). Each is had
+    by history_text."""
     f = store.pdir(pid) / HISTORY / "index.json"
     return json.loads(store.read_text(f)) if store.valid_id(pid) and f.exists() else []
 
@@ -193,9 +194,9 @@ def history_text(pid, n):
 
 
 def keep_text(d):
-    """The text a stored document (its folder, d) has now, kept in its history before another takes its place: an edit
-    saved (replace_text) or the file converted again (pdfdoc.store_pdf), so that it can be put back, by being saved
-    again (the page's Edit text, History). As history/NNNN.md, listed in history/index.json; its pictures in
+    """The text a stored document (its folder, d) has now, kept in its history before an edit takes its place
+    (replace_text), so that it can be put back, by being saved again (the page's edit history: app.js, showHistory),
+    until the document is generated again (settle). As history/NNNN.md, listed in history/index.json; its pictures in
     history/img, the last of each name, where a text put back finds them (Images: a converted PDF's were read from the
     engine's folder, which is gone). The text an earlier TextFold kept in previous/ goes in first."""
     hist = d / HISTORY
@@ -227,12 +228,29 @@ def keep_text(d):
         os.replace(tmp, hist / "index.json")
 
 
+def settle(pid):
+    """A document generated again in every language its levels were in when its text was edited (store.pending): its
+    edit history goes, as the page said it would, and the languages it was to be generated in with it."""
+    d = store.pdir(pid)
+    if not (d / HISTORY).exists():   # (never edited, or settled before)
+        return
+    meta = json.loads(store.read_text(d / "meta.json"))
+    if store.pending(pid, meta, store.read(pid, "en")):
+        return
+    shutil.rmtree(d / HISTORY, ignore_errors=True)
+    if meta.pop("pending", None) is not None:
+        tmp = d / "meta.json.tmp"
+        tmp.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, d / "meta.json")
+
+
 def replace_text(pid, text, name=None, base=None):
     """A stored document's text replaced by an edited one, under the same id: a Markdown file's, or a converted file's
     (a PDF's Markdown, its OCR put right by the reader; its title, authors and source stay the file's, and the file
     stays beside it). Its notes, its folder and the model's replies (llm-cache) stay; its notes are found again in the
     new text (notes.reanchor), its pictures among the ones kept for the old (Images). The old text goes to its history
-    (keep_text), from which it can be put back. Its levels belonged to the old text: they go, and the next generation
+    (keep_text), from which it can be put back until it is generated again. Its levels belonged to the old text: they
+    go, and the next generation
     makes them again from the replies kept, so the model is asked only for the sections whose text changed
     (pipeline.py); none at all for a text put back. The languages they were in are kept in its meta ("pending", with those of an edit before not made
     again yet): the page says they are to be generated again, and does it for all of them at once (app.js), so a text
