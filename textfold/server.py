@@ -12,8 +12,9 @@
   POST /api/import            {name, text, id?}: store a Markdown file as a paper (local.py); its id, to generate. With
                               id (a Markdown document stored before, md-…, or a converted PDF or file, pdf-… doc-…): its
                               text replaced by this one under the same id, its notes found again in it and its levels
-                              set aside ({paper, title, replaced: true}; not while it is being generated); then
-                              /api/generate with force folds it again, asking the model only for the sections that changed
+                              set aside ({paper, title, replaced: true, pending: the languages they were in}; not
+                              while it is being generated); then /api/generate in each folds it again, asking the model
+                              only for the sections that changed
   GET  /api/text/<id>         {text}: the Markdown such a document was read from, for the reader to put right (a PDF's
                               OCR) and send back to /api/import with its id
   GET  /api/models            saved configuration and the last model discovery results (no service probes); its "lang", the
@@ -235,10 +236,12 @@ class Jobs:
         return self._same(kind="install") or self._new(self.eq, kind="install", title="PDF engine")
 
     def superseded(self, pid):
-        """A document about to be converted again: the languages it has and is being generated in, the generations of
-        its old text stopped (what they would write belongs to that text: a translation of another text's paragraphs,
-        laid on the new ones by their places)."""
-        langs = ([store.text_lang(pid)] if store.read(pid, "en") else []) + store.languages(pid)
+        """A document about to be converted again: the languages it has, is being generated in, and its edited text
+        waits to be generated again in (store.pending), the generations of its old text stopped (what they would write
+        belongs to that text: a translation of another text's paragraphs, laid on the new ones by their places)."""
+        en = store.read(pid, "en")
+        langs = ([store.text_lang(pid, en)] if en else []) + store.languages(pid)
+        langs += store.pending(pid, json.loads(store.read_text(store.pdir(pid) / "meta.json")), en)
         for j in list(self.items.values()):
             if j["kind"] == "generate" and j["pid"] == pid and j["status"] in ("queued", "running"):
                 langs.append(j["lang"])
@@ -800,7 +803,8 @@ def make_handler(jobs):
                         except ValueError:
                             return self.json({"error": "not-markdown"}, 400)
                         PAGES.pop(pid, None)
-                        return self.json({"paper": pid, "title": title, "replaced": True})
+                        return self.json({"paper": pid, "title": title, "replaced": True,   # (its levels set aside: none yet)
+                                          "pending": store.pending(pid, json.loads(store.read_text(store.pdir(pid) / "meta.json")), None)})
                     try:
                         pid = local.import_text(text, name)
                     except ValueError:

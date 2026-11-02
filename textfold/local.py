@@ -171,7 +171,10 @@ def replace_text(pid, text, name=None, base=None):
     new text (notes.reanchor), its pictures among the ones kept for the old (Images). Its levels belonged to the old
     text: they go to previous/ with it (the one replaced last, notes as they were included), and the next generation
     makes them again from the replies kept, so the model is asked only for the sections whose text changed
-    (pipeline.py). Returns the new title. LookupError: no such document, or none with a text to edit (text_of)."""
+    (pipeline.py). The languages they were in are kept in its meta ("pending", with those of an edit before not made
+    again yet): the page says they are to be generated again, and does it for all of them at once (app.js), so a text
+    can be put right in several places first and the model asked once. Returns the new title. LookupError: no such
+    document, or none with a text to edit (text_of)."""
     with _REPLACING:
         return _replace(pid, text, name, base)
 
@@ -185,7 +188,9 @@ def _replace(pid, text, name, base):
         title, html, meta = _read_md(text, name or (was.get("source") or {}).get("name") or "document.md")
     else:   # a converted file's: what was read from the file itself (its title, authors, Zotero's) stays
         html, title, meta = markdown.to_html(text)[0], was.get("title", ""), {}
-    meta = {**was, **meta, "id": pid, "replaced": store.stamp()}
+    en = store.read(pid, "en")
+    had = ([store.text_lang(pid, en)] if en else []) + store.languages(pid)
+    meta = {**was, **meta, "id": pid, "replaced": store.stamp(), "pending": list(dict.fromkeys(had + was.get("pending", [])))}
     old = store.parsed(pid)
     tmp = d.with_name(d.name + ".tmp")
     shutil.rmtree(tmp, ignore_errors=True)

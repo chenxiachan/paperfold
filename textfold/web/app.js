@@ -151,7 +151,7 @@
       }
       const langs = p.langs.map((l) => `<span${l === readLang ? ' class="on"' : ''}>${SHORT[l] || l.toUpperCase()}</span>`).join('');
       const active = PAPER && PAPER.id === p.id;
-      const unfinished = !j && !p.langs.length;   // stopped (or failed) before its first language: a click goes on with it
+      const unfinished = !j && !p.langs.length && !p.pending;   // stopped (or failed) before its first language: a click goes on with it
       return `<div class="sb-row${chosen.has(p.id) ? ' chosen' : ''}" data-pid="${p.id}" data-q="${esc(hay(p))}"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
         <span class="sb-t">${esc(title)}</span><span class="sb-m"><span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span></span>
         ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
@@ -1092,9 +1092,30 @@
         catch (x) { update.fail(x); acc.disabled = false; }
       };
     }
+    // The languages a document's levels were in before its text was edited (PAPER.pending, store.pending), made again
+    // at once: the one the page was asked in first (it opens in it when that is done), the others queued after it, each
+    // from the replies kept, so the model is asked only for the sections that changed
+    function regenerate(langs) {
+      const want = new URLSearchParams(location.search).get('lang') || (window.__reader && window.__reader.lang);
+      const first = langs.includes(want) ? want : langs[0], update = toastFor(first);
+      submit(PAPER.id, first, false, update)
+        .then(() => Promise.all(langs.filter((l) => l !== first).map((l) => api('/api/generate', { paper: PAPER.id, lang: l, force: false }))))
+        .catch(update.fail);
+    }
+    // its text edited and saved without being generated again: said in the top bar, by the button that does it
+    if ((PAPER.pending || []).length) {
+      const b = h('button', 'edbtn');
+      b.type = 'button';
+      b.innerHTML = `<i></i>${esc(t().ed_pending)}`;
+      b.title = t().ed_pending_tip.replace('{langs}', PAPER.pending.map(nameOf).join(', '));
+      const bar = document.querySelector('.topbar .cmpbtn') || document.querySelector('.topbar .langpick');
+      if (bar) bar.before(b);
+      b.onclick = () => { b.disabled = true; regenerate(PAPER.pending); };
+    }
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
-    // for the sections that changed. A Markdown file's and a converted file's; an arXiv paper or a web page has none.
+    // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
+    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none.
     async function editText(words) {
       const T = t();
       if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
@@ -1103,8 +1124,10 @@
       const dlg = h('dialog', 'settings prefs edtext'); document.body.append(dlg);
       dlg.innerHTML = `<div class="stp"><header class="stp-head"><h2>${esc(T.ed_title)}</h2><button type="button" class="stp-x" aria-label="${esc(T.close)}" title="${esc(T.close)}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 6l8 8M14 6l-8 8"/></svg></button></header>
         <div class="stp-body"><p class="st-note">${esc(T.ed_note)}</p><textarea class="ed-text" spellcheck="false"></textarea></div>
-        <footer class="stp-foot"><p>${esc(T.ed_whole)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button><button type="button" class="primary ed-save">${esc(modelName ? T.ed_save : T.save)}</button></footer></div>`;
-      const ta = dlg.querySelector('.ed-text'), save = dlg.querySelector('.ed-save');
+        <footer class="stp-foot"><p>${esc(T.ed_whole)}</p><button type="button" class="st-btn ed-cancel">${esc(T.cancel)}</button>` +
+        (modelName ? `<button type="button" class="st-btn ed-only" title="${esc(T.ed_only_tip)}">${esc(T.ed_only)}</button>` : '') +
+        `<button type="button" class="primary ed-save">${esc(modelName ? T.ed_save : T.save)}</button></footer></div>`;
+      const ta = dlg.querySelector('.ed-text'), save = dlg.querySelector('.ed-save'), only = dlg.querySelector('.ed-only');
       dlg.addEventListener('close', () => dlg.remove());
       dlg.querySelector('.stp-x').onclick = dlg.querySelector('.ed-cancel').onclick = () => dlg.close();
       dlg.showModal();
@@ -1116,17 +1139,20 @@
       ta.focus();
       ta.setSelectionRange(at, at + (words && text.startsWith(words, at) ? words.length : 0));
       ta.scrollTop = Math.max(0, above - ta.clientHeight / 3);
-      save.onclick = async () => {
+      const keep = async (generate) => {
         if (ta.value === text) { dlg.close(); return; }
         save.disabled = true;
-        try { await api('/api/import', { id: PAPER.id, text: ta.value }); }
-        catch (x) { save.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
+        if (only) only.disabled = true;
+        let r;
+        try { r = await api('/api/import', { id: PAPER.id, text: ta.value }); }
+        catch (x) { save.disabled = false; if (only) only.disabled = false; alert(x.message === 'busy' ? T.ed_busy : errText(x.message)); return; }
         dlg.close();
         const lang = (window.__reader && window.__reader.lang) || 'en';
-        if (!modelName) { reopen(lang); return; }
-        const update = toastFor(lang);
-        submit(PAPER.id, lang, true, update).catch(update.fail);
+        if (generate) regenerate(r.pending.length ? r.pending : [lang]);
+        else reopen(lang);
       };
+      save.onclick = () => keep(!!modelName);
+      if (only) only.onclick = () => keep(false);
     }
     // A translation stored with paragraphs it has none for (PAPER.gaps: a call that failed, a paragraph the model left
     // out; or made before TextFold asked for them again): they are asked for as it is opened, with the model in use, the

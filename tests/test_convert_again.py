@@ -78,12 +78,14 @@ class Superseded(Base):
         self.jobs = server.Jobs()
 
     def test_its_generations_stop_and_its_languages_are_given(self):
-        self.stored(langs=("de",))
+        d = self.stored(langs=("de",))
+        meta = json.loads((d / "meta.json").read_text())
+        (d / "meta.json").write_text(json.dumps({**meta, "pending": ["en", "fr"]}))   # its text edited when it was in French too
         running = self.jobs.submit(PID, "zh", False)
         running["status"] = "running"
         queued = self.jobs.submit(PID, "ja", False)
         other = self.jobs.submit("2401.00001", "zh", False)
-        self.assertEqual(self.jobs.superseded(PID), ["en", "de", "zh", "ja"])
+        self.assertEqual(self.jobs.superseded(PID), ["en", "de", "fr", "zh", "ja"])
         self.assertTrue(running["stopping"] and self.jobs.stops[running["id"]].is_set())
         self.assertEqual(queued["status"], "stopped")
         self.assertEqual(other["status"], "queued")   # another paper's goes on
@@ -191,8 +193,9 @@ class Edited(Converted):
         new = store.parsed(PID)
         self.assertEqual(self.unit_with(new, "the compressor does"), heat)   # its id stays
         meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
-        self.assertEqual({**meta, "replaced": None}, {**json.loads(was), "replaced": None})   # the file's title, source...
-        self.assertTrue(meta["replaced"])
+        self.assertEqual({**meta, "replaced": None, "pending": None}, {**json.loads(was), "replaced": None, "pending": None})   # the
+        self.assertTrue(meta["replaced"])                                                                                     # file's title, source...
+        self.assertEqual(meta["pending"], ["en"])   # its levels, to be made again
         self.assertTrue(all((d / f).exists() for f in ("source.pdf", "layout.json", "structured_content.json")))
         self.assertEqual(pdfdoc.place(PID)[heat]["boxes"], [[0.1, 0.2, 0.9, 0.25]])   # still found where it is on its page
         anchor = notes.read(PID)["notes"][0]["anchor"]

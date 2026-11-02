@@ -319,6 +319,31 @@ class Refold(Base):
         self.assertEqual(doc["meta"]["langs"], ["en"])
         self.assertTrue(all(u["lad"].get("model") == "fake/model" for u in doc["units"].values()))
 
+    def test_edits_saved_one_after_another_are_generated_once_in_every_language(self):
+        """Saved without being generated (the page's Save only), one edit after another: the languages its levels were
+        in wait to be made again (store.pending: the top bar says so), and each is made once, the model asked for the
+        sections changed since they were made."""
+        pid = local.import_text(TEXT, "diary.md")
+        asked = []
+        with mock.patch.object(llm, "_once", fake_model(asked)), mock.patch.dict(os.environ):
+            os.environ.pop("TEXTFOLD_NO_MODELS", None)   # (the build runs the tests with it: the model here is a stand-in)
+            pipeline.generate(pid, "en", self.SPEC)
+            translated = lambda: store.write(pid, "tr-zh", {"version": store.stamp(), "base": store.read(pid, "en")["version"], "units": {}, "chunks": {}})
+            translated()   # (as a translation is stored: the stand-in does not translate)
+            self.assertEqual(store.assemble(pid)["meta"]["pending"], [])
+            once = TEXT.replace("how loud it was", "how loud it was at night")
+            local.replace_text(pid, once)
+            local.replace_text(pid, once.replace("Nobody felt the change.", "Nobody felt the change at all."))
+            self.assertEqual(store.assemble(pid)["meta"]["pending"], ["en", "zh"])
+            self.assertTrue(store.papers()[0]["pending"])   # (listed as a document to open, not one to go on generating)
+            asked.clear()
+            pipeline.generate(pid, "en", self.SPEC)
+            self.assertEqual(len(asked), 3)   # Monday, Tuesday and the links over the whole text
+            self.assertEqual(store.assemble(pid)["meta"]["pending"], ["zh"])
+            translated()
+        self.assertEqual(store.assemble(pid)["meta"]["pending"], [])
+        self.assertNotIn("pending", store.papers()[0])
+
 
 class FakeJobs:
     def __init__(self):
@@ -354,7 +379,10 @@ class Server(Base):
         self.assertEqual((code, set(got)), (200, {"paper", "title"}))
         pid = got["paper"]
         code, got = self.post("/api/import", {"name": "diary.md", "text": TEXT.replace("# Heat pump diary", "# Diary"), "id": pid})
-        self.assertEqual((code, got), (200, {"paper": pid, "title": "Diary", "replaced": True}))
+        self.assertEqual((code, got), (200, {"paper": pid, "title": "Diary", "replaced": True, "pending": []}))
+        store.write(pid, "en", {"version": store.stamp(), "model": "fake", "units": {}, "chunks": {}, "edges": []})
+        code, got = self.post("/api/import", {"text": TEXT, "id": pid})   # folded: its language, to be folded again
+        self.assertEqual((code, got["pending"]), (200, ["en"]))
         self.assertEqual(self.post("/api/import", {"text": TEXT, "id": "md-gone-12345678"})[0], 404)
         self.assertEqual(self.post("/api/import", {"text": TEXT, "id": "../papers"})[0], 404)
 
