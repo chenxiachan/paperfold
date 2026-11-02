@@ -1120,12 +1120,10 @@ html.compare .chunk > .side, html.compare .chunk > .lside { position: static; }
 }
 @media print { .tview, .mmap { display: none !important; } }
 
-/* ── a word over the page: where it was opened, focus begun ── */
+/* ── a word over the page: focus begun ── */
 .rpill { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 46; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
-  padding: 6px 7px 6px 14px; border-radius: 999px; background: var(--ink); color: var(--surface); font: 500 13px var(--sans); box-shadow: var(--pop); }
+  padding: 6px 14px; border-radius: 999px; background: var(--ink); color: var(--surface); font: 500 13px var(--sans); box-shadow: var(--pop); }
 html.focus .rpill { top: 14px; }   /* (no top bar over it) */
-.rpill button { flex: none; border: 0; border-radius: 999px; padding: 3px 11px; font: 600 12.5px var(--sans); cursor: pointer;
-  color: var(--ink); background: var(--surface); }
 /* focus (reader.js, F): the top bar, the zoom bar and the chat off the page, back while the pointer is at their edge;
    moved and faded, not removed, so nothing in the column moves */
 html.focus .topbar, html.focus footer.zoom, html.focus .chatbtn { transition: transform .25s var(--ease), opacity .2s; }

@@ -4274,7 +4274,6 @@ math { font-size: 1.05em; }
     clearTimeout(pillTimer);
     pillTimer = setTimeout(() => { pillEl.hidden = true; }, ms);
   }
-  pillEl.addEventListener('click', (e) => { if (e.target.closest('[data-top]')) { pillEl.hidden = true; scrollTo({ top: 0, behavior: 'smooth' }); } });
 
   // ── focus (F, or the Aa menu): the text alone. The top bar, the zoom bar, the sidebar and the chat move off and
   //    come back while the pointer is at their edge; F or Esc ends it. Nothing in the column moves but for the room
@@ -4782,10 +4781,7 @@ math { font-size: 1.05em; }
   try { if (PDF_OK && innerWidth >= 1100 && localStorage.getItem(CMP_KEY) === '1') openCompare(); } catch { /* private window */ }
   if (wasAt) {   // (once laid out; again once the type is in, which moves the lines)
     const el = unitEl.get(wasAt.u), back = () => scrollBy(0, el.getBoundingClientRect().top - wasAt.y);
-    requestAnimationFrame(() => {
-      back();
-      if (IDS.indexOf(wasAt.u) > 2) pill(`${esc(T[ui].pos_back)}<button type="button" data-top="1">${esc(T[ui].pos_top)}</button>`, 6000);
-    });
+    requestAnimationFrame(back);   // (said by nothing: it is where a reader means to be, and the top is a scroll away)
     if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(back));
   }
   // the page again after a generation (app.js): the level and the paragraph that were being read, where they were
