@@ -832,6 +832,8 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
     try:
         got = json.loads(r.stdout)
     except ValueError:
+        if r.returncode == 0 and r.stdout.strip():   # (finished, its output cut short: #99)
+            raise RuntimeError(f"codebuddy -p: its output is not whole JSON, cut off after: {r.stdout[-300:]}")
         raise RuntimeError(f"codebuddy -p exited {r.returncode}: {said}")
     rows = got if isinstance(got, list) else [got]
     res = next((x for x in reversed(rows) if isinstance(x, dict) and x.get("type") == "result"), None)

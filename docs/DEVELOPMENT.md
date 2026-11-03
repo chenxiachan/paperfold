@@ -120,7 +120,8 @@ Models (⚙ Model & API), ported from ThoughtDAG's model access:
   through Pi took 44 s without thinking and 386 s at xhigh, with the same blind grades; Sonnet 108 s against 395 s,
   +0.14 on a 5-point scale; Haiku 163 s against 1545 s. A weaker model costs more quality than switching thinking off.
   Without thinking a reply's JSON fails to parse now and then (asked for once more), and a long section's
-  translation came back short: translations are made in parts of about 5,000 characters.
+  translation came back short: translations are made in parts of about 6,500 characters, a paragraph's sentences
+  and its levels counted (a section of many short paragraphs has more levels than text: #99).
 - **API providers**: keys from the environment, or a `.env` here or in `~/.textfold/`: Zhipu, Qwen, OpenAI,
   Anthropic, Google, DeepSeek, Kimi, OpenRouter, Ollama. (Until v0.9 ThoughtDAG's `.env` was read too; its providers
   were copied once into the settings.) Others are added in the dialog
