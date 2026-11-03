@@ -338,7 +338,7 @@ from the landing, the settings or `python3 -m textfold engine install`. The fold
 settings (`engine_path`) and stays when the library moves, since its Python cannot move; removing it removes the folder
 (a PaperFold install in its old place is used too). Its command line only (`mineru-kit
 parse --format zip`), never the `mineru` document library. Fast is MinerU's flash tier (seconds, no model; formulas as
-pictures); accurate is advanced (a vision model, several seconds a page), with `--disable-image-analysis`.
+pictures, each drawn as a display formula, as wide against the reader's column as against its own); accurate is advanced (a vision model, several seconds a page), with `--disable-image-analysis`.
 `pdfdoc.py` turns `structured_content.json` into the document: running heads and page numbers out, the title from the
 page or the file, heading depth from numbering, a figure's panels grouped under the caption that names it, figures from
 after the references put before them, short front matter dropped. A file that waits for the engine is kept in

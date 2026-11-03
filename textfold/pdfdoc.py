@@ -353,7 +353,9 @@ def to_markdown(sc, name="", crops=None, want=None):
                 box = b.get("bbox") or [0, 0, 0.3, 0]
                 # as wide against the reader's column (about 760 px) as against its own column on the page (#97)
                 width = max(40, min(760, round((box[2] - box[0]) / measure(b) * 760)))
-                out.append(f'<p><img src="{b["image_source"]}" alt="formula" width="{width}"></p>')
+                img = f'<img src="{b["image_source"]}" alt="formula" width="{width}">'   # (a formula, not a figure: no caption)
+                out.append('<table class="ltx_equation ltx_eqn_table"><tr class="ltx_equation ltx_eqn_row"><td class="ltx_eqn_cell ltx_eqn_center_padleft"></td>'
+                           f'<td class="ltx_eqn_cell ltx_align_center">{img}</td><td class="ltx_eqn_cell ltx_eqn_center_padright"></td></tr></table>')
             continue
         if kind == "ref_text" or (in_refs and kind in ("text", "list")):
             for line in content.splitlines():
