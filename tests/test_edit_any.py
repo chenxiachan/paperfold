@@ -150,9 +150,10 @@ class EditAny(Base):
             pipeline.generate(PID, "en", test_replace.Refold.SPEC, force=True)
             # the introduction and the links; and once, at the first edit, the abstract: read from Markdown, its
             # paragraph is a paragraph, no longer LaTeXML's abstract
-            self.assertEqual([a.split("This section: ")[1].split("\n")[0] if "This section: " in a else "links" for a in asked],
-                             ["Abstract", "1 Introduction", "links"])
-            self.assertIn("a squash fold, last.", asked[1])
+            said = {a.split("This section: ")[1].split("\n")[0] if "This section: " in a else "links": a for a in asked}
+            self.assertEqual(sorted(said), ["1 Introduction", "Abstract", "links"])   # (the sections at once, in any order)
+            self.assertNotIn("This section: ", asked[-1])   # (the links after them)
+            self.assertIn("a squash fold, last.", said["1 Introduction"])
             local.replace_text(PID, local.text_of(PID).replace("a valley fold,", "a valley fold, first,"))
             asked.clear()
             pipeline.generate(PID, "en", test_replace.Refold.SPEC, force=True)
