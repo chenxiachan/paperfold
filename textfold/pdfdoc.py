@@ -205,6 +205,17 @@ def to_markdown(sc, name="", crops=None, want=None):
     blocks = [b for p in sc.get("pages", []) for b in p.get("blocks", []) if b.get("type") not in DROP]
     page_of = {id(b): p.get("page_idx", n) + 1 for n, p in enumerate(sc.get("pages", [])) for b in p.get("blocks", [])}
     zones = _zones(blocks, page_of)
+    # the width of each page's text, a share of the page: its paragraphs' median (a column of a two-column paper is
+    # about half the page), for a formula drawn as a picture to take as much of the reader's column as of its own
+    measures = {}
+    for b in blocks:
+        if b.get("type") == "text" and b.get("bbox"):
+            measures.setdefault(page_of[id(b)], []).append(b["bbox"][2] - b["bbox"][0])
+    every = [w for ws in measures.values() for w in ws]
+
+    def measure(b):
+        ws = sorted(measures.get(page_of.get(id(b))) or every)
+        return ws[len(ws) // 2] if ws else 1.0
     # the title the page shows, when the engine found a whole one; else the file's own when it is words (it is often a
     # code: "11-nelson65 mc-nwf1"); else the file's name
     first = next((b for b in blocks if b.get("type") == "doc_title"), None)
@@ -340,7 +351,8 @@ def to_markdown(sc, name="", crops=None, want=None):
                 out.append(f"$$\n{latex}\n$$")
             elif b.get("image_source"):   # the fast tier: the formula as a picture of it
                 box = b.get("bbox") or [0, 0, 0.3, 0]
-                width = max(40, round((box[2] - box[0]) * 760))   # as wide as on the page (a column is about 760 px)
+                # as wide against the reader's column (about 760 px) as against its own column on the page (#97)
+                width = max(40, min(760, round((box[2] - box[0]) / measure(b) * 760)))
                 out.append(f'<p><img src="{b["image_source"]}" alt="formula" width="{width}"></p>')
             continue
         if kind == "ref_text" or (in_refs and kind in ("text", "list")):
