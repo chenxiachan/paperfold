@@ -1976,13 +1976,17 @@
         : `<div class="st-item"><div class="st-main st-meta st-desc">${esc(t.engine_off)}</div>${act}</div>`;
       const tier = `<div class="st-item"><label class="st-main" for="st-tier"><b>${esc(t.tier)}</b></label><select class="st-tiersel" id="st-tier">${['fast', 'accurate'].map((k) =>
         `<option value="${k}"${(data.pdfTier || 'fast') === k ? ' selected' : ''}>${esc(t['tier_' + k])}</option>`).join('')}</select></div>`;
+      // a PDF that names its paper online (an arXiv id, a DOI): read there, or read from the file itself (#89)
+      const src = `<div class="st-item"><label class="st-main" for="st-pdfsrc"><b>${esc(t.pdf_src)}</b></label><select class="st-pdfsrc" id="st-pdfsrc">${['online', 'file'].map((k) =>
+        `<option value="${k}"${(data.pdfOnline === false ? 'file' : 'online') === k ? ' selected' : ''}>${esc(t['pdf_src_' + k])}</option>`).join('')}</select></div>`;
       // not installed: the folder it goes into (textfold/engine.py target), beside the library unless the reader chooses
       // an empty one (in the same system dialog as the library's folder)
       const why = engineError ? t[`storage_err_${engineError.code}`] || engineError.message : '';
       const folder = job || e.installed ? '' : `<div class="st-form"><label>${esc(t.storage_destination)}<div class="st-row" style="margin:0"><input class="st-engine-path" style="flex:1;min-width:0" value="${esc(engineDraft ?? e.path ?? '')}" spellcheck="false">${window.desktop?.chooseLibraryFolder ? `<button type="button" class="st-btn st-engine-pick">${esc(t.storage_choose)}</button>` : ''}</div></label>
         <p class="st-note">${esc(t.engine_where)}</p>${why ? `<p class="st-note warn" role="alert">${esc(why)}</p>` : ''}</div>`;
-      box.innerHTML = `<h3>${esc(t.engine)}</h3><div class="st-list">${state}${folder}${tier}</div>`;
+      box.innerHTML = `<h3>${esc(t.engine)}</h3><div class="st-list">${state}${folder}${tier}${src}</div>`;
       box.querySelector('.st-tiersel').onchange = async (ev) => { data = await api('/api/settings', { pdf_tier: ev.target.value }); renderEngine(); };
+      box.querySelector('.st-pdfsrc').onchange = async (ev) => { data = await api('/api/settings', { pdf_online: ev.target.value === 'online' }); renderEngine(); };
       const inst = box.querySelector('.st-engine-in');
       if (inst) inst.onclick = async () => {
         inst.disabled = true; engineError = null;

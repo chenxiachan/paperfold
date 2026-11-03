@@ -59,6 +59,7 @@ class Fake:
         self.off = False
         self.items = {
             "ARXVKEY2": item("ARXVKEY2", "Chain of thought", url="https://arxiv.org/abs/2201.11903", extra="Citation Key: wei2022"),
+            "ARXFKEY2": item("ARXFKEY2", "An arXiv paper with its PDF", url="https://arxiv.org/abs/2310.06825", children=1),
             "HTMLKEY2": item("HTMLKEY2", "A saved page", itemType="webpage",
                              links={"attachment": {"attachmentType": "text/html"}}),
             "PDFSKEY2": item("PDFSKEY2", "A paper with its PDF", DOI="10.1234/abcd",
@@ -73,6 +74,7 @@ class Fake:
             "HTMLKEY2": [attachment("ATTHTML2", "text/html", "imported_url", filename="snap.html")],
             "PDFSKEY2": [attachment("ATTPDFS2", "application/pdf", "imported_file", filename="paper.pdf")],
             "PLNPKEY2": [attachment("ATTPLNP2", "application/pdf", "imported_file", filename="plain.pdf")],
+            "ARXFKEY2": [attachment("ATTARXF2", "application/pdf", "imported_file", filename="arxiv.pdf")],
             "FAKEPDF2": [attachment("ATTFAKE2", "application/pdf", "imported_file", filename="fake.pdf")],
             "TRAVKEY2": [attachment("ATTTRAV2", "application/pdf", "imported_file", filename="../../secret.pdf")],
         }
@@ -155,6 +157,8 @@ class Setup(unittest.TestCase):
         (zdata / "storage" / "ATTPDFS2" / "paper.pdf").write_bytes(PDF)
         (zdata / "storage" / "ATTPLNP2").mkdir(parents=True)
         (zdata / "storage" / "ATTPLNP2" / "plain.pdf").write_bytes(PDF + b"%plain\n")
+        (zdata / "storage" / "ATTARXF2").mkdir(parents=True)
+        (zdata / "storage" / "ATTARXF2" / "arxiv.pdf").write_bytes(PDF + b"%arxiv\n")
         (cls.tmp / "secret.pdf").write_bytes(PDF)   # what "../../secret.pdf" would reach from storage/<key>/
         files = {"snapshot": cls.tmp / "snap.html", "fake": cls.tmp / "fake.pdf", "outside": cls.tmp / "outside.pdf"}
         files["snapshot"].write_text(SNAPSHOT, encoding="utf-8")
@@ -235,6 +239,12 @@ class ReadTest(Setup):
     def test_an_arxiv_item_is_read_from_arxiv(self):
         got = zotero.read("users/0", "ARXVKEY2")   # (with its record, kept with the paper it becomes)
         self.assertEqual((got["ref"], got["title"], got["record"]["citekey"]), ("2201.11903", "Chain of thought", "wei2022"))
+
+    def test_an_arxiv_item_is_read_from_its_file_when_settings_say_a_pdf_is_read_itself(self):
+        self.assertEqual(zotero.read("users/0", "ARXFKEY2")["ref"], "2310.06825")
+        got = zotero.read("users/0", "ARXFKEY2", online=False)   # (#89)
+        self.assertEqual((got["name"], got["data"]), ("arxiv.pdf", PDF + b"%arxiv\n"))
+        self.assertEqual(zotero.read("users/0", "ARXVKEY2", online=False)["ref"], "2201.11903")   # (no file: arXiv still)
 
     def test_a_saved_page_is_its_file(self):
         got = zotero.read("users/0", "HTMLKEY2")
@@ -356,6 +366,21 @@ class ServerTest(Setup):
         code, d = self.call("/api/zotero/read", {"item": "users/0/PLNPKEY2", "lang": "en"})   # (no DOI: nothing looked up online)
         self.assertEqual((code, d.get("needs"), d["name"]), (200, "engine", "plain.pdf"), d)
         self.assertTrue(d["upload"].startswith("pdf-"))
+
+    def test_a_pdf_read_itself_when_settings_say_so(self):
+        """#89: a PDF that names its paper online (an arXiv id), read from the file: a Zotero item's, a dropped one."""
+        code, d = self.call("/api/settings", {"pdf_online": False})
+        self.addCleanup(self.call, "/api/settings", {"pdf_online": True})
+        self.assertEqual((code, d["pdfOnline"]), (200, False))
+        code, d = self.call("/api/zotero/read", {"item": "users/0/ARXFKEY2", "lang": "en"})
+        self.assertEqual((code, d.get("needs"), d["name"]), (200, "engine", "arxiv.pdf"), d)   # (its file, not 2310.06825)
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/files", data=PDF + b"%dropped\n", headers={
+            "Content-Type": "application/pdf", "X-Name": "dropped.pdf", "X-Lang": "en",
+            "X-Refs": urllib.parse.quote(json.dumps(["2310.06825"]))})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            d = json.loads(r.read())
+        self.assertEqual((d.get("needs"), d.get("via")), ("engine", None), d)   # (not looked for online)
+        self.assertEqual(self.call("/api/settings", {"pdf_online": True})[1]["pdfOnline"], True)
 
     def test_an_arxiv_item_comes_back_as_its_reference(self):
         self.assertEqual(self.call("/api/zotero/read", {"item": "users/0/ARXVKEY2", "lang": "en"}), (200, {"ref": "2201.11903", "title": "Chain of thought"}))
