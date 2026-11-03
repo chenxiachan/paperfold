@@ -428,9 +428,9 @@ textfold/pdf.py      a paper's original PDF for the side-by-side view (source.pd
 textfold/pdffigs.py  an arXiv drawing whose words the browser set (TikZ): cut from the paper's PDF when the reader asks
 textfold/zotero.py   a Zotero library through Zotero Desktop's local API; an item read as a link or a dropped file
 textfold/tokens.py   tokenizer, sentence splitter, LCS alignment
-textfold/ladder.py   one model call per section; validation; written words aligned to source words for the morph
+textfold/ladder.py   one model call per section (in parts of 40 units for a longer one); validation; written words aligned to source words for the morph
 textfold/links.py    argument links, one call over the whole paper (in parts of 400 units for a longer one)
-textfold/translate.py  any language: sentence-aligned translation + short levels, one call per section (langs.py: the languages a text can be read in)
+textfold/translate.py  any language: sentence-aligned translation + short levels, one call per section (in parts of about 6,500 characters for a longer one; langs.py: the languages a text can be read in)
 textfold/store.py    versioned layers per paper; assembling a reader from them
 textfold/pipeline.py fetch → parse → ladder + links in the text's own language (once) → translation, with progress
 textfold/server.py   local server: pages, /api/papers, /api/jobs (and /api/jobs/stop), /api/generate, /api/settings
