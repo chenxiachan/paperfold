@@ -227,13 +227,21 @@ html.compare { --colmax: 100vw; }   /* (beside the PDF the notes are in the colu
 html[data-font="sans"] { --text: var(--sans); }
 @media print { :root { --fs: 1 !important; --lh: 1 !important; --colw: 700px !important; } }
 .doc[data-level="0"] { max-width: 1280px; }
-.tk { display: inline-block; transform-origin: 0 0; white-space: pre-wrap; }
+.tk { display: inline-block; max-width: 100%; overflow-wrap: anywhere; transform-origin: 0 0; white-space: pre-wrap; }
 .tk.at { white-space: nowrap; }
-.tk.at.wrap { white-space: normal; max-width: 100%; }
-.wg { white-space: nowrap; }
+/* MathML and KaTeX scroll inside themselves; other unbreakable HTML needs an outer scroll box. */
+.tk.at:not(.wrap):not(:has(math, .katex)) { display: inline-flex; overflow-x: auto; align-items: baseline; }
+.tk.at.wrap { white-space: normal; }
+.wg { display: inline-block; max-width: 100%; white-space: normal; }
+/* An unusually long inline formula scrolls as a formula too. Scrolling an outer inline-block would move the
+   baseline of every ordinary formula; keep the scroll box on the MathML (and its inline zoom copy). */
+.u .tx math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; }
+.u .tx .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
+.u img { max-width: 100%; height: auto; }
 [data-id] { transform-origin: 0 0; }
 
-.paper-head { margin: 28px 0 34px; position: relative; }
+.paper-head { margin: 28px 0 34px; position: relative; overflow-wrap: anywhere; }
+.hd { overflow-wrap: anywhere; }
 .paper-head h1 { font-family: var(--sans); font-size: calc(34px * var(--fs)); line-height: 1.15; letter-spacing: -.025em; font-weight: 700; margin: 0 0 12px; text-wrap: balance; }
 .paper-head .authors { color: var(--muted); font-size: calc(15px * var(--fs)); }
 .paper-head .orig { color: var(--muted); font-size: calc(15px * var(--fs)); font-style: italic; margin: -4px 0 8px; font-family: var(--text); }
@@ -257,8 +265,8 @@ html[data-font="sans"] { --text: var(--sans); }
 .doc.cjk[data-level="3"] .stake { display: block; }
 
 /* ── units ──────────────────────────────────────────────── */
-.u { position: relative; transition: background-color .35s, border-color .35s, color .35s; border: 1px solid transparent; }
-.u .tx { margin: 0; }
+.u { position: relative; min-width: 0; max-width: 100%; transition: background-color .35s, border-color .35s, color .35s; border: 1px solid transparent; }
+.u .tx { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--beat); opacity: 0; transition: opacity .3s; --beat: var(--r-context); }
 .u.r-gap .dot { --beat: var(--r-gap); } .u.r-claim .dot { --beat: var(--r-claim); }
 .u.r-method .dot { --beat: var(--r-method); } .u.r-setup .dot { --beat: var(--r-setup); }
@@ -335,7 +343,7 @@ li.u[data-l="2"] .mk.mk-labeled, li.u[data-l="1"] .mk.mk-labeled, li.u[data-l="0
 li.u.numbered[data-l="2"] .tx, li.u.numbered[data-l="1"] .tx, li.u.numbered[data-l="0"] .tx { display: inline; }
 
 /* ── figures, tables, equations ─────────────────────────── */
-figure.fig { margin: 26px 0; }
+figure.fig { max-width: 100%; margin: 26px 0; }
 figure.fig .fbody { text-align: center; overflow-x: auto; transition: opacity .3s; }
 figure.fig .fbody img { max-width: 100%; height: auto; display: inline-block; }
 /* a picture LaTeXML sized both ways in its style (a width and a height, in em): its height follows its width, which the
@@ -376,7 +384,7 @@ figure.fig figcaption.u { font-family: var(--sans); }
 figure.fig figcaption.u[data-l="4"], figure.fig figcaption.u[data-l="3"] { font-family: var(--sans); font-size: calc(14.5px * var(--fs)); line-height: calc(1.5 * var(--lh, 1)); margin: 10px 0 0; }
 .flabel { display: none; font-family: var(--sans); font-weight: 650; color: var(--ink); margin-right: .4em; white-space: nowrap; }
 figure.fig[data-l="3"] .fbody { max-width: 82%; margin: 0 auto; }
-figure.fig[data-l="2"] { display: grid; grid-template-columns: 168px 1fr; gap: 14px; align-items: start; margin: 8px 0 14px; }
+figure.fig[data-l="2"] { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 14px; align-items: start; margin: 8px 0 14px; }
 figure.fig[data-l="2"] .fbody { order: 0; }
 figure.fig[data-l="2"] figcaption.u { padding-left: 0; margin: 0; }
 figure.fig[data-l="2"] figcaption .dot, figure.fig[data-l="1"] figcaption .dot { display: none; }
@@ -417,7 +425,13 @@ figure.fig[data-l="0"] .flabel { font-weight: 600; color: var(--muted); }
 .fbody .ltx_transformed_inner { transform: none !important; }
 
 .eq { overflow-x: auto; margin: 6px 0 16px; font-size: calc(17px * var(--fs)); }
-.raw { margin: 0 0 calc(14px * var(--fs)); font-family: var(--text); color: var(--ink-2); }
+.raw { max-width: 100%; overflow-x: auto; margin: 0 0 calc(14px * var(--fs)); font-family: var(--text); color: var(--ink-2); }
+/* A title-page picture may be outside a figure. It follows the column too; a table or formula kept as raw HTML
+   keeps its own width and scrolls inside that block, including beside the PDF. */
+.raw img { max-width: 100%; height: auto !important; }
+.raw svg.ltx_picture[viewBox], .raw .ltx_picture > svg[viewBox] { max-width: 100%; height: auto; }
+/* Zoom copies already have measured pixel widths and may live in a zero-width positioned group. */
+.zp.tk, .zp.raw { max-width: none; }
 .raw pre { font-family: var(--mono); font-size: calc(13px * var(--fs)); line-height: 1.55; overflow-x: auto; margin: 0; padding: 10px 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 /* a diagram written in Mermaid, drawn (reader.js drawDiagrams): centred, as wide as its drawing or the column */
@@ -477,12 +491,6 @@ math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em
 .ltx_rule { display: none; }
 .ltx_note_outer { display: none; }
 
-/* Markdown display math may arrive as a raw block, not an .eq. Keep it
-   scrollable locally instead of widening the mobile layout and its fixed bar. */
-@media screen and (max-width: 720px) {
-  .doc .raw { max-width: 100%; overflow-x: auto; }
-}
-
 @media (max-width: 640px) {
   .tagline, div.legend, .hint { display: none !important; }
   .doc { padding: 4px 16px 170px; }
@@ -491,7 +499,7 @@ math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em
   html[data-font="sans"] .u[data-l="4"], html[data-font="sans"] .u[data-l="3"] { font-size: calc(16px * var(--fs)); }
   .zoombar button { padding: 6px 9px; font-size: 13px; }
   .zoombar .sep { display: none; }
-  figure.fig[data-l="2"] { grid-template-columns: 96px 1fr; }
+  figure.fig[data-l="2"] { grid-template-columns: 96px minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 

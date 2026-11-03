@@ -212,8 +212,8 @@
     return out;
   }
 
-  // an atom is kept on one line, except a citation, which may list many works and breaks between them
-  const atCls = (t) => (t.a ? (A[t.a].wrap ??= A[t.a].html.includes('ltx_cite')) ? ' at wrap' : ' at' : t.x ? ' at' : '');
+  // A citation can list many works; a link can be an unbroken URL. Both may wrap within the column.
+  const atCls = (t) => (t.a ? (A[t.a].wrap ??= A[t.a].kind === 'ref' || A[t.a].html.includes('ltx_cite')) ? ' at wrap' : ' at' : t.x ? ' at' : '');
   // a piece's highlight (pieces(): hl): marked at Full or Brief, the same more lightly (another language), marked at
   // Key, marked at Takeaway
   const HL = ['', ' hl', ' hl hls', ' hl hlk', ' hl hlt'];
