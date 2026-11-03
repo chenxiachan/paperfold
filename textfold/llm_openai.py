@@ -121,7 +121,9 @@ def reasoning(base, level):
         own = [{"reasoning": {"effort": level}}] if on else [{"reasoning": {"enabled": False}}, {"reasoning": {"effort": "low"}}]
     elif any(h in host for h in ("bigmodel.cn", "z.ai")):   # GLM: a level by reasoning_effort, off by the toggle (where it exists)
         own, generic = ([], generic + [toggle]) if on else ([toggle], generic)
-    elif any(h in host for h in ("deepseek.com", "moonshot.", "kimi.com")):
+    elif "deepseek.com" in host:   # on by the toggle, at its level by reasoning_effort: toggled on alone, it thinks at high
+        own = [{**toggle, "reasoning_effort": level}, toggle] if on else [toggle]
+    elif any(h in host for h in ("moonshot.", "kimi.com")):
         own = [toggle]
     elif "dashscope" in host:   # Qwen
         own = [{"enable_thinking": on, **({"thinking_budget": {"low": 2048, "medium": 8192}[level]} if level in ("low", "medium") else {})}]

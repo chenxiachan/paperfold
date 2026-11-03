@@ -109,8 +109,8 @@ Models (⚙ Model & API), ported from ThoughtDAG's model access:
   `model_reasoning_effort` (off as `none`, else `low`); Pi `--thinking`; the Claude API thinking and effort by model
   (off is `between_tools` on Sonnet 5.x, `disabled` on older models, the least effort where thinking cannot be
   switched off, no thinking on Haiku); OpenAI-compatible APIs the provider's field (OpenRouter `reasoning`, GLM and
-  DeepSeek and Kimi `thinking`, Qwen `enable_thinking`), then OpenAI's `reasoning_effort` (off as none, minimal, low:
-  some models always think).
+  DeepSeek and Kimi `thinking`, DeepSeek's level as `reasoning_effort` beside it since on alone it thinks at high, Qwen
+  `enable_thinking`), then OpenAI's `reasoning_effort` (off as none, minimal, low: some models always think).
 - **A level is a request, never a condition.** These spellings change as APIs change, so a request refused for one
   (a 400 or 422, or an answer left in the reasoning) is sent the next way, and last without any reasoning field; the
   way that worked is remembered for the run. Under every caller, a call that fails with a level set is made once more
