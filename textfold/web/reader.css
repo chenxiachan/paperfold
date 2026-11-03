@@ -297,6 +297,8 @@ html[data-font="sans"] .u[data-l="4"], html[data-font="sans"] .u[data-l="3"] { f
 .u[data-l="0"] .tx { display: inline; }
 
 .doc[data-level="0"] .chunks { display: grid; grid-template-columns: repeat(auto-fill, minmax(226px, 1fr)); gap: 10px; align-items: start; }
+/* A teaser before the first section keeps its label above the map, without taking a section card's grid cell. */
+.doc[data-level="0"] .chunks > figure.fig { grid-column: 1 / -1; }
 .doc[data-level="0"] .chunk { background: var(--card); border-color: var(--line); padding: 10px 10px 6px; box-shadow: 0 4px 18px -14px rgba(40, 30, 10, .3); }
 .doc[data-level="0"] .chunk > .hd { font-size: calc(13.5px * var(--fs)); font-weight: 650; margin: 0 0 4px; padding-bottom: 0; box-shadow: none; }
 .doc[data-level="0"] .chunk .stake { font-size: calc(12px * var(--fs)); line-height: 1.35; margin: 0 0 8px; }

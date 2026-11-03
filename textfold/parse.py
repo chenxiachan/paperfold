@@ -48,6 +48,7 @@ class Doc:
         self.by_text, self.seen = meta.get("unit_ids") == "text", {}
         self.made = None   # (ids.freeze: the units and sections read from each marked element)
         self.frozen = set()   # every id written into the page (data-u): one worked out here does not take one
+        self.joined, self.deferred, self.captions = set(), set(), []
 
     def text_id(self, toks):
         """A unit's id made from its words: the same paragraph has it wherever it moves, whatever changes around it.
@@ -67,7 +68,13 @@ class Doc:
         self.blocks.append({"k": "h", "chunk": cid})
         if self.loose:   # read before any section: shown just under this one's heading, and read with it
             moved = [b for b in self.blocks if b.get("chunk") is None and (b.get("u") or b.get("cap")) in self.loose]
-            self.blocks = [b for b in self.blocks if not any(b is m for m in moved)] + [{**b, "chunk": cid} for b in moved]
+            # A joined teaser stays where its picture was, while its caption is read with that section. Other
+            # title-page content keeps the existing placement just under the heading.
+            relocated = [b for b in moved if b.get("id") not in self.joined]
+            self.blocks = [b for b in self.blocks if not any(b is m for m in relocated)] + [{**b, "chunk": cid} for b in relocated]
+            for b in moved:
+                if b.get("id") in self.joined:
+                    b["chunk"] = cid
             for uid in self.loose:
                 self.units[uid]["chunk"] = cid
             self.chunk["units"].extend(self.loose)
@@ -305,9 +312,77 @@ def figure(el, doc):
         label = tag.get_text("", strip=True).rstrip(":").strip() if tag else ""
         if tag:  # the label is shown on its own at every level, so a caption cut to its key sentences keeps it
             tag.extract()
-        cap_uid = add_unit(doc, cap, "caption", uid=fid + ".cap", of=fid)
+        if id(el) not in doc.deferred:
+            cap_uid = add_unit(doc, cap, "caption", uid=fid + ".cap", of=fid)
         cap.extract()
-    doc.add({"k": "fig", "id": fid, "kind": kind, "label": label, "html": el.decode_contents(), "cap": cap_uid})
+    block = {"k": "fig", "id": fid, "kind": kind, "label": label, "html": el.decode_contents(), "cap": cap_uid}
+    doc.add(block)
+    if cap and id(el) in doc.deferred:
+        home = doc.home()
+        doc.captions.append((cap, block, home, len(home["units"]) if home else 0))
+
+
+def contents(el):
+    return [c for c in el.contents if not isinstance(c, Comment) and not (isinstance(c, NavigableString) and not c.strip())]
+
+
+def teaser_picture(el):
+    """A LaTeXML paragraph containing only one block picture, never an inline image or a line with words."""
+    if el is None or "ltx_para" not in el.get("class", []):
+        return False
+    nodes = contents(el)
+    return (len(nodes) == 1 and isinstance(nodes[0], Tag) and nodes[0].name == "img"
+            and "ltx_graphics" in nodes[0].get("class", []) and "pf-inline" not in nodes[0].get("class", []))
+
+
+def teasers(art):
+    """LaTeXML sometimes writes a teaser as a picture paragraph then a figure holding only its caption (VGGT,
+    StreamVGGT). Join that adjacent pair. A logical-block containing exactly the pair is transparent; other boxes,
+    intervening text and runs of pictures are ambiguous and stay as written. Return the newly exposed captions."""
+    joined, deferred = set(), set()
+    for fig in list(art.find_all("figure", class_="ltx_figure")):
+        nodes = contents(fig)
+        # An anonymous figure's generated id depends on preceding blocks; removing one would change that id.
+        if not fig.get("id") or len(nodes) != 1 or not isinstance(nodes[0], Tag) or nodes[0].name != "figcaption":
+            continue
+        pic = fig.find_previous_sibling()
+        if not teaser_picture(pic) or teaser_picture(pic.find_previous_sibling()):
+            continue
+        parent = fig.parent
+        wrapped = "ltx_logical-block" in parent.get("class", [])
+        if wrapped and (contents(parent) != [pic, fig] or parent.parent is not art):
+            continue
+        if not wrapped and parent is not art and not (parent.name == "section" or "ltx_para" in parent.get("class", [])):
+            continue
+        # A non-whitespace text node between the elements is content too, even though find_previous_sibling skips it.
+        gap = []
+        for node in fig.previous_siblings:
+            if node is pic:
+                break
+            gap.append(node)
+        if any(isinstance(n, NavigableString) and not isinstance(n, Comment) and n.strip() for n in gap):
+            continue
+        fig.insert(0, pic.extract())
+        joined.add(fig["id"])
+        if wrapped:
+            deferred.add(id(fig))
+            parent.unwrap()
+    return joined, deferred
+
+
+def finish_captions(doc):
+    """Newly exposed captions are tokenized last: old anonymous paragraph ids and atom ids must keep their values
+    so existing translations and notes still refer to the same text. The figure itself stays in source order."""
+    chunk, last = doc.chunk, doc.last
+    for cap, block, home, at in reversed(doc.captions):
+        home = home or (doc.chunks[0] if doc.chunks else None)
+        doc.chunk = doc.last = home
+        block["cap"] = add_unit(doc, cap, "caption", uid=block["id"] + ".cap", of=block["id"])
+        block["chunk"] = home["id"] if home else None
+        if home and block["cap"]:
+            home["units"].remove(block["cap"])
+            home["units"].insert(at, block["cap"])
+    doc.chunk, doc.last = chunk, last
 
 
 def block(ch, doc):
@@ -410,6 +485,7 @@ def parse(html, meta, made=None):
     if str(meta.get("id", "")).startswith("md-") and not art.find(class_=["pf-tex", "pf-grid"]):
         upgrade(soup, art)
     make_safe(art)   # arXiv's page reaches the reader as it is, so what could run script is taken out here (latexml_safe.py)
+    doc.joined, doc.deferred = teasers(art)
     doc.images = sorted({img["src"] for img in art.find_all("img") if img.get("src") and not img["src"].startswith("data:")})
     for ch in art.find_all(recursive=False):
         cls = ch.get("class", [])
@@ -423,6 +499,7 @@ def parse(html, meta, made=None):
             doc.chunk = None
             continue
         block(ch, doc)
+    finish_captions(doc)
     _check(doc)
     ref_edges(doc)
     return doc.json()
