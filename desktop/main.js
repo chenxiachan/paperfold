@@ -6,7 +6,7 @@
 // ~/.textfold. Pages on other sites open in the system browser, where the reader is already signed in.
 // Run from the repository without a payload (`npm start`), it uses the python3 on the PATH (python on Windows) and the
 // repository itself. textfold:// links open a document of the library in the window (links.js).
-const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, session, shell } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const net = require('net');
@@ -208,8 +208,9 @@ async function open() {
 }
 
 ipcMain.handle('open-external', (_e, url) => (/^https?:/.test(url) ? shell.openExternal(url) : null));
-// a file the reader saves (a page, its notes): where it goes, they choose in the system's own dialog; the path, or null
-const KINDS = { html: 'Web page', md: 'Markdown', json: 'JSON' };
+// a file the reader saves (a page, its notes, a figure's picture): where it goes, they choose in the system's own
+// dialog; the path, or null. A page is text, a picture its bytes
+const KINDS = { html: 'Web page', md: 'Markdown', json: 'JSON', png: 'PNG image', jpg: 'JPEG image', gif: 'GIF image', webp: 'WebP image', svg: 'SVG image' };
 ipcMain.handle('save-file', async (e, name, data) => {
   const ext = path.extname(String(name)).slice(1).toLowerCase();
   if (!KINDS[ext]) return null;
@@ -218,68 +219,8 @@ ipcMain.handle('save-file', async (e, name, data) => {
     filters: [{ name: KINDS[ext], extensions: [ext] }],
   });
   if (r.canceled || !r.filePath) return null;
-  await fs.promises.writeFile(r.filePath, String(data), 'utf8');
+  await fs.promises.writeFile(r.filePath, typeof data === 'string' ? data : Buffer.from(data));
   return r.filePath;
-});
-// Only the app's own reader may export. The renderer supplies bytes, never a source path or URL to open.
-function figureSender(e) {
-  if (!base || !win || e.sender !== win.webContents || e.senderFrame !== e.sender.mainFrame) throw new Error('Expected the reader');
-  const url = new URL(e.senderFrame.url);
-  if (url.origin !== base || !/^\/p\/[\w.-]+$/.test(url.pathname)) throw new Error('Expected the reader');
-}
-const FIGURE_FORMATS = {
-  png: /^89504e470d0a1a0a/, jpg: /^ffd8ff/, gif: /^474946383[79]61/, webp: /^52494646.{8}57454250/,
-  bmp: /^424d/, tiff: /^(49492a00|4d4d002a)/, avif: /^.{8}667479706176696[36]/,
-};
-function figureBytes(data, ext) {
-  if (!(data instanceof ArrayBuffer) || !data.byteLength || data.byteLength > 128 * 1024 * 1024) throw new Error('Invalid image size');
-  const bytes = Buffer.from(data);
-  const matches = ext === 'svg'
-    ? /^\s*(?:<\?xml[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*(?:<!DOCTYPE svg[^>]*>\s*)?<svg(?:\s|>)/i.test(bytes.subarray(0, 8192).toString())
-    : FIGURE_FORMATS[ext]?.test(bytes.subarray(0, 16).toString('hex'));
-  if (!matches) throw new Error('Invalid image format');
-  return bytes;
-}
-ipcMain.handle('figure:copy', (e, data) => {
-  figureSender(e);
-  const bytes = figureBytes(data, 'png');
-  if (bytes.length < 24 || bytes.toString('ascii', 12, 16) !== 'IHDR') throw new Error('Invalid PNG header');
-  const w = bytes.readUInt32BE(16), h = bytes.readUInt32BE(20);
-  if (w > 8192 || h > 8192 || w * h > 32 * 1024 * 1024) throw new Error('Invalid image size');
-  const image = nativeImage.createFromBuffer(bytes);
-  if (image.isEmpty()) throw new Error('Could not decode image');
-  clipboard.writeImage(image);
-});
-async function figureLibrary() {
-  const response = await fetch(`${base}/api/storage`);
-  const storage = await response.json();
-  if (!response.ok || !path.isAbsolute(storage.path || '')) throw new Error('Library location unavailable');
-  return fs.promises.realpath(path.join(storage.path, 'papers'));
-}
-ipcMain.handle('figure:save', async (e, name, data) => {
-  figureSender(e);
-  if (typeof name !== 'string' || !/^[\p{L}\p{N}_-][\p{L}\p{N}._-]{0,104}\.[a-z]{3,4}$/u.test(name)) throw new Error('Invalid file name');
-  const ext = path.extname(name).slice(1);
-  const bytes = figureBytes(data, ext);
-  const result = await dialog.showSaveDialog(win, {
-    defaultPath: path.join(app.getPath('downloads'), name),
-    filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
-  });
-  if (result.canceled || !result.filePath) return null;
-  const file = result.filePath;
-  if (path.extname(file).toLowerCase() !== `.${ext}`) throw new Error('The extension must match the image format');
-  // A selected destination can be a symlink, or in a library relocated through Settings.
-  const papers = await figureLibrary();
-  const parent = await fs.promises.realpath(path.dirname(file));
-  const rel = path.relative(papers, parent);
-  if (!rel || (!rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel))) throw new Error('Choose a folder outside the library');
-  const temp = await fs.promises.mkdtemp(path.join(parent, '.textfold-figure-'));
-  try {
-    const copy = path.join(temp, name);
-    await fs.promises.writeFile(copy, bytes, { flag: 'wx' });
-    await fs.promises.rename(copy, path.join(parent, path.basename(file)));
-  } finally { await fs.promises.rm(temp, { recursive: true, force: true }); }
-  return file;
 });
 // the folder the library is to go to, or the library to open (Settings: textfold/storage_settings.py), in the system's
 // own dialog: its path, or null
