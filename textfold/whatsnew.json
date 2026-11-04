@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.10.45",
+    "en": [
+      ["Wide content fits the column", "A wide picture, table, formula or long link no longer makes the page scroll sideways. Beside the PDF, the text no longer slides under it."],
+      ["DeepSeek thinks at the level set", "The argument links and your questions now ask DeepSeek to think briefly, as set. Before, once its thinking was on, it thought at its default, high, which took longer and cost more."]
+    ],
+    "zh": [
+      ["宽内容不再撑宽页面", "很宽的图片、表格、公式或长链接不再让整页左右滚动。和 PDF 并排时，正文也不会再滑到 PDF 底下。"],
+      ["DeepSeek 按设定的档位思考", "论证连线和提问现在让 DeepSeek 按设定的低档思考。以前它一开思考就用默认的高档，更慢，也更贵。"]
+    ]
+  },
+  {
     "version": "0.10.44",
     "en": [
       ["Edit the text of any document", "Edit text now works on every document: an arXiv paper, a web page, a file, not only a converted PDF. Undo every edit and the document is exactly as it came."],

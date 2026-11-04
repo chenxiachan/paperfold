@@ -744,23 +744,6 @@ window.DR_I18N = (() => {
     hi: rds(["रूप", "शैली", "सिस्टम जैसा", "हल्का", "गहरा", "सामान्य", "कागज़", "पंक्ति अंतर", "सघन", "खुला", "फ़ोकस मोड", "फ़ोकस मोड: बाहर निकलने के लिए F या Esc"]),
   };
   for (const [code, words] of Object.entries(RDS)) Object.assign(S[code], words);
-  const VIEWER_APPEARANCE = {
-    en: ["Figure viewer", "Match reader", "Always dark"],
-    zh: ["看图明暗", "跟随阅读", "始终深色"],
-    "zh-Hant": ["看圖明暗", "跟隨閱讀", "一律深色"],
-    ja: ["画像表示", "本文に合わせる", "常にダーク"],
-    ko: ["그림 보기", "본문과 동일", "항상 어둡게"],
-    es: ["Visor de figuras", "Como la lectura", "Siempre oscuro"],
-    fr: ["Vue des figures", "Comme la lecture", "Toujours sombre"],
-    de: ["Bildansicht", "Wie Lesemodus", "Immer dunkel"],
-    pt: ["Visualizador", "Como a leitura", "Sempre escuro"],
-    it: ["Vista figure", "Come la lettura", "Sempre scuro"],
-    ru: ["Просмотр фигур", "Как в тексте", "Всегда тёмный"],
-    hi: ["चित्र दृश्य", "पाठ जैसा", "हमेशा गहरा"],
-  };
-  for (const [code, [ty_viewer, ty_viewer_reader, ty_viewer_dark]] of Object.entries(VIEWER_APPEARANCE)) {
-    Object.assign(S[code], { ty_viewer, ty_viewer_reader, ty_viewer_dark });
-  }
   // the colour of the highlights made at each level (Aa), with a warning when two levels have one, and a highlight's
   // shade (the dots after Highlight, over a selection and in a note opened)
   const hls = (w) => ({ ty_hl: w[0], ty_same: w[1], n_shade: w[2], n_shades: w[3], n_hues: w[4] });
@@ -906,59 +889,6 @@ window.DR_I18N = (() => {
     hi: { n_tools: "वेब पर खोजें", n_tools_tip: "एजेंट को वेब पर खोजकर और पेज खोलकर जवाब देने दें", n_tools_on: "वेब पर खोज चालू: एजेंट अपने टूल से वेब पर खोजकर और पेज खोलकर जवाब देता है।" },
   };
   for (const [code, words] of Object.entries(TOOLS)) Object.assign(S[code], words);
-  // The image viewer's actions, including the two possible scopes of a grouped figure.
-  const lb = ([copy, save, allCopy, allSave, panel, oneCopy, oneSave, whole, working, copied, saved, error, size]) =>
-    ({ lb_copy: copy, lb_save: save, lb_copy_all: allCopy, lb_save_all: allSave, lb_panel: panel, lb_copy_panel: oneCopy,
-      lb_save_panel: oneSave, lb_whole: whole, lb_working: working, lb_copied: copied, lb_saved: saved,
-      lb_error: error, lb_size: size });
-  const LB = {
-    en: lb(["Copy image", "Save a copy…", "Copy whole figure", "Save whole figure…", "Panel", "Copy this panel", "Save this panel…", "Whole", "Preparing…", "Copied", "Save started", "Could not export. Check that the image is available and try again.", "The combined image is too large. Export a panel on its own."]),
-    zh: lb(["复制图片", "保存副本…", "复制整图", "保存整图…", "子图", "复制此子图", "保存此子图副本…", "整图", "正在准备…", "已复制", "已发起保存", "导出失败。请确认图片可用后重试。", "输出图片过大，请尝试单独导出子图。"]),
-    "zh-Hant": lb(["複製圖片", "儲存副本…", "複製整圖", "儲存整圖…", "子圖", "複製此子圖", "儲存此子圖副本…", "整圖", "準備中…", "已複製", "已開始儲存", "無法匯出。請確認圖片可用後再試。", "輸出圖片過大，請嘗試單獨匯出子圖。"]),
-    ja: lb(["画像をコピー", "コピーを保存…", "図全体をコピー", "図全体を保存…", "パネル", "このパネルをコピー", "このパネルを保存…", "全体", "準備中…", "コピーしました", "保存を開始しました", "書き出せません。画像を確認して再試行してください。", "画像が大きすぎます。パネルを個別に書き出してください。"]),
-    ko: lb(["이미지 복사", "사본 저장…", "그림 전체 복사", "그림 전체 저장…", "패널", "이 패널 복사", "이 패널 저장…", "전체", "준비 중…", "복사됨", "저장 시작", "내보내지 못했습니다. 이미지를 확인하고 다시 시도하세요.", "이미지가 너무 큽니다. 패널을 따로 내보내세요."]),
-    es: lb(["Copiar imagen", "Guardar una copia…", "Copiar figura completa", "Guardar figura completa…", "Panel", "Copiar este panel", "Guardar este panel…", "Completa", "Preparando…", "Copiado", "Guardado iniciado", "No se pudo exportar. Comprueba que la imagen esté disponible y vuelve a intentarlo.", "La imagen es demasiado grande. Exporta un panel por separado."]),
-    fr: lb(["Copier l’image", "Enregistrer une copie…", "Copier la figure entière", "Enregistrer la figure entière…", "Panneau", "Copier ce panneau", "Enregistrer ce panneau…", "Entière", "Préparation…", "Copié", "Enregistrement lancé", "Échec de l’exportation. Vérifiez que l’image est disponible et réessayez.", "L’image est trop grande. Exportez un panneau séparément."]),
-    de: lb(["Bild kopieren", "Kopie speichern…", "Ganze Abbildung kopieren", "Ganze Abbildung speichern…", "Teilbild", "Dieses Teilbild kopieren", "Dieses Teilbild speichern…", "Ganz", "Wird vorbereitet…", "Kopiert", "Speichern gestartet", "Export fehlgeschlagen. Prüfe, ob das Bild verfügbar ist, und versuche es erneut.", "Das Bild ist zu groß. Exportiere ein Teilbild einzeln."]),
-    pt: lb(["Copiar imagem", "Salvar uma cópia…", "Copiar figura inteira", "Salvar figura inteira…", "Painel", "Copiar este painel", "Salvar este painel…", "Inteira", "Preparando…", "Copiado", "Salvamento iniciado", "Não foi possível exportar. Verifique a imagem e tente novamente.", "A imagem é grande demais. Exporte um painel separadamente."]),
-    it: lb(["Copia immagine", "Salva una copia…", "Copia l’intera figura", "Salva l’intera figura…", "Pannello", "Copia questo pannello", "Salva questo pannello…", "Intera", "Preparazione…", "Copiato", "Salvataggio avviato", "Impossibile esportare. Verifica che l’immagine sia disponibile e riprova.", "L’immagine è troppo grande. Esporta un pannello separatamente."]),
-    ru: lb(["Копировать изображение", "Сохранить копию…", "Копировать весь рисунок", "Сохранить весь рисунок…", "Панель", "Копировать эту панель", "Сохранить эту панель…", "Целиком", "Подготовка…", "Скопировано", "Сохранение начато", "Не удалось экспортировать. Проверьте, доступно ли изображение, и повторите попытку.", "Изображение слишком велико. Экспортируйте панель отдельно."]),
-    hi: lb(["चित्र कॉपी करें", "प्रति सहेजें…", "पूरा चित्र कॉपी करें", "पूरा चित्र सहेजें…", "पैनल", "यह पैनल कॉपी करें", "यह पैनल सहेजें…", "पूरी", "तैयारी हो रही है…", "कॉपी हुआ", "सहेजना शुरू हुआ", "निर्यात विफल। चित्र की उपलब्धता जाँचें और फिर कोशिश करें।", "चित्र बहुत बड़ा है। एक पैनल अलग से निर्यात करें।"]),
-  };
-  for (const [code, words] of Object.entries(LB)) Object.assign(S[code], words);
-
-  const LB_ZOOM = {
-    en: ["Image zoom", "Fit to window"],
-    zh: ["图片缩放", "缩放至适合窗口"],
-    "zh-Hant": ["圖片縮放", "縮放至符合視窗"],
-    ja: ["画像のズーム", "ウィンドウに合わせる"],
-    ko: ["이미지 확대/축소", "창에 맞추기"],
-    es: ["Zoom de imagen", "Ajustar a la ventana"],
-    fr: ["Zoom de l’image", "Adapter à la fenêtre"],
-    de: ["Bildzoom", "An Fenster anpassen"],
-    pt: ["Zoom da imagem", "Ajustar à janela"],
-    it: ["Zoom immagine", "Adatta alla finestra"],
-    ru: ["Масштаб изображения", "По размеру окна"],
-    hi: ["चित्र ज़ूम", "विंडो में फ़िट करें"],
-  };
-  for (const [code, [lb_zoom, lb_fit]] of Object.entries(LB_ZOOM)) Object.assign(S[code], { lb_zoom, lb_fit });
-  const LB_GALLERY = {
-    en: ["Previous figure", "Next figure", "Retry", "The image could not be loaded."],
-    zh: ["上一幅图", "下一幅图", "重试", "图片未能加载。"],
-    "zh-Hant": ["上一幅圖", "下一幅圖", "重試", "無法載入圖片。"],
-    ja: ["前の図", "次の図", "再試行", "画像を読み込めませんでした。"],
-    ko: ["이전 그림", "다음 그림", "다시 시도", "이미지를 불러올 수 없습니다."],
-    es: ["Figura anterior", "Figura siguiente", "Reintentar", "No se pudo cargar la imagen."],
-    fr: ["Figure précédente", "Figure suivante", "Réessayer", "Impossible de charger l’image."],
-    de: ["Vorherige Abbildung", "Nächste Abbildung", "Erneut versuchen", "Das Bild konnte nicht geladen werden."],
-    pt: ["Figura anterior", "Próxima figura", "Tentar novamente", "Não foi possível carregar a imagem."],
-    it: ["Figura precedente", "Figura successiva", "Riprova", "Impossibile caricare l’immagine."],
-    ru: ["Предыдущий рисунок", "Следующий рисунок", "Повторить", "Не удалось загрузить изображение."],
-    hi: ["पिछला चित्र", "अगला चित्र", "फिर कोशिश करें", "चित्र लोड नहीं हुआ।"],
-  };
-  for (const [code, [lb_prev, lb_next, lb_retry, lb_unavailable]] of Object.entries(LB_GALLERY)) {
-    Object.assign(S[code], { lb_prev, lb_next, lb_retry, lb_unavailable });
-  }
   // text: the document is not a paper, and the questions about it say so
   const t = (lang, text) => ({ ...S.en, ...(S[lang] || {}), ...(text ? { ...DOCS.en, ...(DOCS[lang] || {}) } : {}) });
   // the language a visitor most likely reads, among the ones offered: the interface's, or `among` (a text's, by name)
@@ -971,6 +901,26 @@ window.DR_I18N = (() => {
     }
     return 'en';
   }
+  // The image viewer's actions, including the two possible scopes of a grouped figure.
+  const lb = ([copy, save, allCopy, allSave, oneCopy, oneSave, working, copied, saved, error]) =>
+    ({ lb_copy: copy, lb_save: save, lb_copy_all: allCopy, lb_save_all: allSave, lb_copy_panel: oneCopy,
+      lb_save_panel: oneSave, lb_working: working, lb_copied: copied, lb_saved: saved, lb_error: error });
+  const LB = {
+    en: lb(["Copy image", "Save a copy…", "Copy whole figure", "Save whole figure…", "Copy this panel", "Save this panel…", "Preparing…", "Copied", "Save started", "Could not export. Check that the image is available and try again."]),
+    zh: lb(["复制图片", "保存副本…", "复制整图", "保存整图…", "复制此子图", "保存此子图副本…", "正在准备…", "已复制", "已发起保存", "导出失败。请确认图片可用后重试。"]),
+    "zh-Hant": lb(["複製圖片", "儲存副本…", "複製整圖", "儲存整圖…", "複製此子圖", "儲存此子圖副本…", "準備中…", "已複製", "已開始儲存", "無法匯出。請確認圖片可用後再試。"]),
+    ja: lb(["画像をコピー", "コピーを保存…", "図全体をコピー", "図全体を保存…", "このパネルをコピー", "このパネルを保存…", "準備中…", "コピーしました", "保存を開始しました", "書き出せません。画像を確認して再試行してください。"]),
+    ko: lb(["이미지 복사", "사본 저장…", "그림 전체 복사", "그림 전체 저장…", "이 패널 복사", "이 패널 저장…", "준비 중…", "복사됨", "저장 시작", "내보내지 못했습니다. 이미지를 확인하고 다시 시도하세요."]),
+    es: lb(["Copiar imagen", "Guardar una copia…", "Copiar figura completa", "Guardar figura completa…", "Copiar este panel", "Guardar este panel…", "Preparando…", "Copiado", "Guardado iniciado", "No se pudo exportar. Comprueba que la imagen esté disponible y vuelve a intentarlo."]),
+    fr: lb(["Copier l’image", "Enregistrer une copie…", "Copier la figure entière", "Enregistrer la figure entière…", "Copier ce panneau", "Enregistrer ce panneau…", "Préparation…", "Copié", "Enregistrement lancé", "Échec de l’exportation. Vérifiez que l’image est disponible et réessayez."]),
+    de: lb(["Bild kopieren", "Kopie speichern…", "Ganze Abbildung kopieren", "Ganze Abbildung speichern…", "Dieses Teilbild kopieren", "Dieses Teilbild speichern…", "Wird vorbereitet…", "Kopiert", "Speichern gestartet", "Export fehlgeschlagen. Prüfe, ob das Bild verfügbar ist, und versuche es erneut."]),
+    pt: lb(["Copiar imagem", "Salvar uma cópia…", "Copiar figura inteira", "Salvar figura inteira…", "Copiar este painel", "Salvar este painel…", "Preparando…", "Copiado", "Salvamento iniciado", "Não foi possível exportar. Verifique a imagem e tente novamente."]),
+    it: lb(["Copia immagine", "Salva una copia…", "Copia l’intera figura", "Salva l’intera figura…", "Copia questo pannello", "Salva questo pannello…", "Preparazione…", "Copiato", "Salvataggio avviato", "Impossibile esportare. Verifica che l’immagine sia disponibile e riprova."]),
+    ru: lb(["Копировать изображение", "Сохранить копию…", "Копировать весь рисунок", "Сохранить весь рисунок…", "Копировать эту панель", "Сохранить эту панель…", "Подготовка…", "Скопировано", "Сохранение начато", "Не удалось экспортировать. Проверьте, доступно ли изображение, и повторите попытку."]),
+    hi: lb(["चित्र कॉपी करें", "प्रति सहेजें…", "पूरा चित्र कॉपी करें", "पूरा चित्र सहेजें…", "यह पैनल कॉपी करें", "यह पैनल सहेजें…", "तैयारी हो रही है…", "कॉपी हुआ", "सहेजना शुरू हुआ", "निर्यात विफल। चित्र की उपलब्धता जाँचें और फिर कोशिश करें।"]),
+  };
+  for (const [code, words] of Object.entries(LB)) Object.assign(S[code], words);
+
   // the interface for a text read in `code`: in that language when it has the words, else in English
   const uiFor = (code) => (NATIVE[code] ? code : 'en');
   return { t, NATIVE, CODES: Object.keys(NATIVE), htmlLang: (l) => HTML_LANG[l] || l, guess, uiFor };

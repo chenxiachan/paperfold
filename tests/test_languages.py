@@ -51,7 +51,7 @@ class LanguagesTest(unittest.TestCase):
                 self.assertEqual(native, langs.LANGS[code][1])
 
     def test_every_table_of_the_interface(self):
-        for name in ("S", "Z", "U", "F", "BY", "MV", "Q", "M", "DOCS", "LB", "LB_ZOOM", "LB_GALLERY"):
+        for name in ("S", "Z", "U", "F", "BY", "MV", "Q", "M", "DOCS"):
             with self.subTest(table=name):
                 self.assertEqual(rows(WEB / "i18n.js", name), set(INTERFACE))
 

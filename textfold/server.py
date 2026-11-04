@@ -101,7 +101,7 @@ STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
-                ".txt": "text/plain; charset=utf-8"}
+                ".txt": "text/plain; charset=utf-8", ".wasm": "application/wasm"}
 
 
 def vendor_file(rel):
@@ -849,7 +849,10 @@ def make_handler(jobs):
                         if f:
                             saved["pdf"] = base64.b64encode(f.read_bytes()).decode()
                             saved["pdfjs"] = {"lib": (build.VENDOR / "pdfjs" / "pdf.min.mjs").read_text(encoding="utf-8"),
-                                              "worker": (build.VENDOR / "pdfjs" / "pdf.worker.min.mjs").read_text(encoding="utf-8")}
+                                              "worker": (build.VENDOR / "pdfjs" / "pdf.worker.min.mjs").read_text(encoding="utf-8"),
+                                              # its decoders (a scanned page's pictures), by the names PDF.js asks for
+                                              "wasm": {w.name: base64.b64encode(w.read_bytes()).decode()
+                                                       for w in sorted((build.VENDOR / "pdfjs" / "wasm").glob("*.wasm"))}}
                             if pid.startswith("pdf-"):   # a converted PDF: its paragraphs' places on the pages
                                 with RELAYOUT:
                                     try:
