@@ -3749,27 +3749,37 @@ math { font-size: 1.05em; }
     msg.textContent = T[ui].pdf_loading;
     cmp.scroller.replaceChildren(msg);
     try {
-      let lib, data;
-      if (D.pdf && D.pdfjs) {   // a saved page: PDF.js and the file from inside it
+      // wasm: where PDF.js finds its decoders (pdfjs/wasm/: JBIG2 and CCITT, the pictures of scanned pages; JPEG 2000;
+      // colour profiles). Without them those pictures are left out of the page, which then shows blank (#108)
+      let lib, data, wasm;
+      const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      if (D.pdf && D.pdfjs) {   // a saved page: PDF.js, its decoders and the file from inside it
         const js = (text) => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
         lib = await import(js(D.pdfjs.lib));
         lib.GlobalWorkerOptions.workerSrc = js(D.pdfjs.worker);
-        data = Uint8Array.from(atob(D.pdf), (c) => c.charCodeAt(0));
+        data = bytes(D.pdf);
+        const inPage = D.pdfjs.wasm || {};
+        wasm = { BinaryDataFactory: class { async fetch({ kind, filename }) {   // (PDF.js asks for each by its name)
+          if (kind !== 'wasmUrl' || !inPage[filename]) throw new Error(`not in this page: ${filename}`);
+          return bytes(inPage[filename]);
+        } } };
       } else if (D.pdfAt) {   // a gallery's page: the file and PDF.js next to it
         const at = (p) => new URL(p, location.href).href;
         lib = await import(at(`${D.pdfAt.pdfjs}pdf.min.mjs`));
         lib.GlobalWorkerOptions.workerSrc = at(`${D.pdfAt.pdfjs}pdf.worker.min.mjs`);
+        wasm = { wasmUrl: at(`${D.pdfAt.pdfjs}wasm/`) };
         const r = await fetch(at(D.pdfAt.file));
         if (!r.ok) throw Object.assign(new Error('no pdf'), { open: D.meta.abs_url });
         data = new Uint8Array(await r.arrayBuffer());
       } else {
         lib = await import('/static/vendor/pdfjs/pdf.min.mjs');
         lib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
+        wasm = { wasmUrl: new URL('/static/vendor/pdfjs/wasm/', location.href).href };
         const r = await fetch(`/api/pdf/${encodeURIComponent(D.meta.id)}`);
         if (!r.ok) throw Object.assign(new Error('no pdf'), { open: (await r.json().catch(() => ({}))).open });
         data = new Uint8Array(await r.arrayBuffer());
       }
-      const loading = lib.getDocument({ data, isEvalSupported: false });
+      const loading = lib.getDocument({ data, isEvalSupported: false, ...wasm });
       const doc = await loading.promise;
       if (!cmp || cmp.pane !== pane) { loading.destroy(); return; }
       Object.assign(cmp, { lib, doc, loading, pages: [], spans: new Map() });
