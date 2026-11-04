@@ -149,7 +149,7 @@ def page(doc, app=False, assets=None, saved=None, pdf=None):
     t = (WEB / "template.html").read_text(encoding="utf-8")
     if app:
         head = fonts_head(APP_ASSETS) + '<link rel="stylesheet" href="/static/reader.css"><link rel="stylesheet" href="/static/app.css">'
-        scripts = ('<script src="/static/i18n.js"></script><script src="/static/tutorial.js"></script><script src="/static/reader.js"></script>'
+        scripts = ('<script src="/static/i18n.js"></script><script src="/static/tutorial.js"></script><script src="/static/figure-image.js"></script><script src="/static/reader.js"></script>'
                    '<script src="/static/app.js"></script><script src="/static/webmcp.js"></script>')
         head, scripts = app_assets(head), app_assets(scripts)
         side, cls, katex = '<aside id="sidebar" class="collapsed"></aside>', "app", APP_ASSETS + "katex/"
@@ -158,7 +158,7 @@ def page(doc, app=False, assets=None, saved=None, pdf=None):
             head += _katex_beside(katex)
     else:
         head = fonts_head(assets, _mathml(doc)) + f"<style>{(WEB / 'reader.css').read_text(encoding='utf-8')}</style>"
-        scripts = f"<script>{(WEB / 'i18n.js').read_text(encoding='utf-8')}</script><script>{(WEB / 'reader.js').read_text(encoding='utf-8')}</script>"
+        scripts = f"<script>{(WEB / 'i18n.js').read_text(encoding='utf-8')}</script><script>{(WEB / 'figure-image.js').read_text(encoding='utf-8')}</script><script>{(WEB / 'reader.js').read_text(encoding='utf-8')}</script>"
         side, cls, katex = "", "static", (assets + "katex/") if assets else None
         mermaid = (assets + "mermaid/") if assets else None
         if not assets and (_has_tex(doc) or _drawn_tex(doc) or (saved and saved.get("notes"))):   # (an answer's formulas need it too)

@@ -62,6 +62,7 @@
   const unitEl = new Map();               // uid -> element
   const spans = new Map();                // uid -> Map(piece id -> span)
   const figOf = new Map();                // caption uid -> figure element
+  const figureBodies = [];               // semantic figures in source order, including the bodies hidden at Topic
   const bareFigs = [];                    // figures without a caption follow the global level
   const lvBlocks = [];                    // blocks that show or hide by level: equations, raw blocks, title-page leftovers, bare figures
   const chunkOf = {};                     // uid -> chunk
@@ -73,11 +74,11 @@
   // of the author's words, the margins hidden, the colours, the line spacing and the colour of the highlights made at
   // each level (reader.css: --fs, html[data-width], html[data-font], html[data-hide]: the links and the conversations
   // on the right, the reader's notes on the left; html[data-theme]: light or dark, the system's when none, and
-  // html[data-style]: the colours of either, the default's when none; --lh; --lv-*); set before anything is drawn, and
-  // changed from the Aa menu beside the language's
+  // html[data-style]: the colours of either; html[data-viewer-mode]: the figure viewer's brightness; --lh; --lv-*).
+  // Set before anything is drawn and changed from the Aa menu beside the language's.
   const TYPE_KEY = 'textfold.type';
   const SIZES = [0.86, 0.93, 1, 1.08, 1.16, 1.25, 1.35], WIDTHS = ['narrow', 'standard', 'wide'], MARGINS = ['links', 'asks', 'notes'];
-  const MODES = ['auto', 'light', 'dark'], STYLES = ['default', 'paper'], LEADS = { tight: 0.9, standard: 1, loose: 1.15 };
+  const MODES = ['auto', 'light', 'dark'], VIEWER_MODES = ['reader', 'dark'], STYLES = ['default', 'paper'], LEADS = { tight: 0.9, standard: 1, loose: 1.15 };
   // the colours a level's highlights may be given (reader.css, --c-*: the same), a fill and an ink in the light, then in
   // the dark; and each level's (Full and Brief, the author's words; the written line at Key, at Takeaway) at first
   const HUES = {
@@ -87,7 +88,7 @@
     teal: ['#B8E6E1', '#2A9187', '#2E615C', '#7FD3C8'], green: ['#BDE8A8', '#4E9A3A', '#3E6B33', '#8FD27A'],
   };
   const HL0 = { src: 'yellow', key: 'purple', take: 'blue' };
-  const TYPE0 = { size: 1, width: 'standard', font: 'serif', hide: [], mode: 'auto', style: 'default', lead: 'standard', hl: HL0 };
+  const TYPE0 = { size: 1, width: 'standard', font: 'serif', hide: [], mode: 'auto', style: 'default', viewer: 'reader', lead: 'standard', hl: HL0 };
   let type = (() => {
     let v = null;
     try { v = JSON.parse(store.get(TYPE_KEY) || 'null'); } catch { /* (written by hand) */ }
@@ -95,7 +96,8 @@
     return { size: SIZES.includes(v.size) ? v.size : 1, width: WIDTHS.includes(v.width) ? v.width : 'standard', font: v.font === 'sans' ? 'sans' : 'serif',
       hide: Array.isArray(v.hide) ? MARGINS.filter((k) => v.hide.includes(k)) : [],
       mode: MODES.includes(v.mode) ? v.mode : MODES.includes(v.theme) ? v.theme : 'auto',   // (theme: a demo's name for it)
-      style: STYLES.includes(v.style) ? v.style : v.theme === 'paper' ? 'paper' : 'default', lead: LEADS[v.lead] ? v.lead : 'standard',
+      style: STYLES.includes(v.style) ? v.style : v.theme === 'paper' ? 'paper' : 'default',
+      viewer: VIEWER_MODES.includes(v.viewer) ? v.viewer : TYPE0.viewer, lead: LEADS[v.lead] ? v.lead : 'standard',
       hl: Object.fromEntries(Object.keys(HL0).map((g) => [g, v.hl && HUES[v.hl[g]] ? v.hl[g] : HL0[g]])) };
   })();
   function applyType() {
@@ -106,6 +108,7 @@
     if (type.hide.length) r.dataset.hide = type.hide.join(' '); else delete r.dataset.hide;
     if (type.mode === 'auto') delete r.dataset.theme; else r.dataset.theme = type.mode;
     if (type.style === 'default') delete r.dataset.style; else r.dataset.style = type.style;
+    if (type.viewer === 'reader') delete r.dataset.viewerMode; else r.dataset.viewerMode = type.viewer;
     if (type.lead === 'standard') r.style.removeProperty('--lh'); else r.style.setProperty('--lh', String(LEADS[type.lead]));
     for (const g of Object.keys(HL0)) {   // (reader.css: --lv-*, the level's colour, and its ink)
       if (type.hl[g] === HL0[g]) { r.style.removeProperty(`--lv-${g}`); r.style.removeProperty(`--lv-${g}-ink`); }
@@ -579,6 +582,11 @@
         if (!b.cap) { bareFigs.push(f); lvBlocks.push(f); }
         const fb = h('div', 'fbody', b.html); fb.dataset.id = `fb:${b.id}`;
         f.append(fb);
+        if (b.kind === 'figure' && FigureImage.resources(fb).length) {
+          figureBodies.push(fb);
+          fb.tabIndex = 0;
+          if (b.label) fb.setAttribute('aria-label', b.label);
+        }
         if (b.pdf && D.app) f.append(pdfOffer(b.pdf === 'cut'));
         if (b.cap) {
           const cap = unitNode(b.cap, 'figcaption');
@@ -3006,7 +3014,8 @@
   typeMenu.setAttribute('role', 'dialog');
   typePick.append(typeBtn, typeMenu);
   const isType0 = () => type.size === TYPE0.size && type.width === TYPE0.width && type.font === TYPE0.font && !type.hide.length
-    && type.mode === TYPE0.mode && type.style === TYPE0.style && type.lead === TYPE0.lead && Object.keys(HL0).every((g) => type.hl[g] === HL0[g]);
+    && type.mode === TYPE0.mode && type.style === TYPE0.style && type.viewer === TYPE0.viewer && type.lead === TYPE0.lead
+    && Object.keys(HL0).every((g) => type.hl[g] === HL0[g]);
   function renderTypeMenu() {
     const t = T[ui], k = SIZES.indexOf(type.size);
     const seg = (key, vals, names) => `<div class="ty-seg" role="radiogroup" aria-label="${esc(t[`ty_${key}`])}">` +
@@ -3014,6 +3023,7 @@
     typeMenu.setAttribute('aria-label', t.ty_title);
     typeMenu.innerHTML = `<div class="ty-row"><span class="ty-l">${esc(t.ty_mode)}</span>${seg('mode', MODES, [t.ty_auto, t.ty_light, t.ty_dark])}</div>` +
       `<div class="ty-row"><span class="ty-l">${esc(t.ty_style)}</span>${seg('style', STYLES, [t.ty_default, t.ty_paper])}</div>` +
+      `<div class="ty-row"><span class="ty-l">${esc(t.ty_viewer)}</span>${seg('viewer', VIEWER_MODES, [t.ty_viewer_reader, t.ty_viewer_dark])}</div>` +
       `<div class="ty-row"><span class="ty-l">${esc(t.ty_size)}</span><div class="ty-size">` +
       `<button type="button" class="ty-a sm" data-step="-1" aria-label="${esc(t.ty_smaller)}" title="${esc(t.ty_smaller)}"${k === 0 ? ' disabled' : ''}>A</button>` +
       `<button type="button" class="ty-pct" data-step="0" title="${esc(t.ty_usual)}">${Math.round(type.size * 100)}%</button>` +
@@ -3084,7 +3094,11 @@
     else if (b.dataset.font) setType({ font: b.dataset.font });
     else if (b.dataset.mode) setType({ mode: b.dataset.mode });
     else if (b.dataset.style) setType({ style: b.dataset.style });
-    else if (b.dataset.lead) setType({ lead: b.dataset.lead });
+    else if (b.dataset.viewer) {
+      type = { ...type, viewer: b.dataset.viewer };
+      store.set(TYPE_KEY, JSON.stringify(type));
+      applyType();
+    } else if (b.dataset.lead) setType({ lead: b.dataset.lead });
     else if (b.dataset.hl) setHue(b.dataset.hl, b.dataset.hue);
     else if (b.dataset.focus) { closeTypeMenu(); setFocus(!focusOn); return; }
     else if (b.dataset.full) { closeTypeMenu(); setFull(!fullOn); return; }
@@ -3093,7 +3107,7 @@
     // drawn anew: the key that was pressed keeps the focus (the reset, gone: the first)
     const sel = b.dataset.step ? `[data-step="${b.dataset.step}"]` : b.dataset.width ? `[data-width="${b.dataset.width}"]` : b.dataset.font ? `[data-font="${b.dataset.font}"]`
       : b.dataset.margin ? `[data-margin="${b.dataset.margin}"]` : b.dataset.mode ? `[data-mode="${b.dataset.mode}"]` : b.dataset.style ? `[data-style="${b.dataset.style}"]` : b.dataset.lead ? `[data-lead="${b.dataset.lead}"]`
-      : b.dataset.hl ? `[data-hl="${b.dataset.hl}"][data-hue="${b.dataset.hue}"]` : null;
+      : b.dataset.viewer ? `[data-viewer="${b.dataset.viewer}"]` : b.dataset.hl ? `[data-hl="${b.dataset.hl}"][data-hue="${b.dataset.hue}"]` : null;
     renderTypeMenu();
     const again = (sel && typeMenu.querySelector(sel)) || typeMenu.querySelector('button');
     if (again && !again.disabled) again.focus(); else typeMenu.querySelector('.ty-pct').focus();
@@ -4206,53 +4220,526 @@ math { font-size: 1.05em; }
   addEventListener('click', (e) => { if (!langMenu.hidden && !e.target.closest('.langpick')) closeLangMenu(); });
   if (!D.app && AVAIL.length < 2) document.querySelector('.langpick').remove();
 
-  // ── a figure, enlarged: a click on its picture opens it over the page with its caption (as the reader sees it now:
-  //    this language, this level); Esc, a click beside it or × closes it. A picture larger than the screen opens to
-  //    fit, and a click on it shows it at full size, to scroll ──
+  // A figure enlarged over the paper, with its caption at the reader's language and level.
   const lightbox = h('div', 'lightbox');
   lightbox.hidden = true;
   lightbox.setAttribute('role', 'dialog');
   lightbox.setAttribute('aria-modal', 'true');
   document.body.append(lightbox);
-  let lightboxFrom = null;
-  function openLightbox(pic) {
-    const fig = pic.closest('figure.fig'), cap = fig && fig.querySelector('figcaption');
-    const shown = pic.cloneNode(true);
-    shown.removeAttribute('style');
-    shown.classList.add('lb-pic');
-    if (shown.tagName.toLowerCase() === 'svg') { shown.removeAttribute('width'); shown.removeAttribute('height'); }
-    const stage = h('div', 'lb-stage');
-    stage.append(shown);
-    const x = h('button', 'lb-x', '×');
-    x.type = 'button';
-    x.setAttribute('aria-label', T[ui].close);
-    lightbox.replaceChildren(stage, x);
-    if (cap) {
-      const label = cap.querySelector('.flabel'), text = cap._tx ? cap._tx.innerText.trim() : '';
-      const c = h('div', 'lb-cap');
-      c.textContent = [label && label.textContent.trim(), text].filter(Boolean).join(' ');
-      if (c.textContent) lightbox.append(c);
-      lightbox.setAttribute('aria-label', c.textContent || 'Figure');
+  let viewer = null, lightboxFrom = null;
+  const lbButton = (words, action, cls) => {
+    const button = h('button', cls);
+    button.type = 'button';
+    button.textContent = words;
+    button.addEventListener('click', () => {
+      if (viewer && !viewer.panel.hidden && !viewer.panel.contains(button) && viewer.panelFrom !== button) closeFigurePanel(viewer, false);
+      action();
+    });
+    return button;
+  };
+
+  const figureIcons = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    save: '<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
+    close: '<path d="m7 7 10 10M17 7 7 17"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    prev: '<path d="m15 5-7 7 7 7"/>',
+    next: '<path d="m9 5 7 7-7 7"/>',
+  };
+  function figureIcon(name) {
+    return h('span', 'lb-icon', `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${figureIcons[name]}</svg>`);
+  }
+  function figureButton(icon, label, action, cls, visible = '') {
+    const button = lbButton(visible, action, cls);
+    button.setAttribute('aria-label', label);
+    button.dataset.tip = label;
+    button.prepend(figureIcon(icon));
+    return button;
+  }
+
+  function positionFigurePanel(v) {
+    if (v.panel.hidden || !v.panelFrom) return;
+    const r = v.panelFrom.getBoundingClientRect(), { offsetWidth: w, offsetHeight: ht } = v.panel;
+    const x = v.panelPoint?.clientX ?? r.right - w;
+    const y = v.panelPoint?.clientY ?? (r.bottom + 5 + ht <= innerHeight - 8 || r.top < ht + 13 ? r.bottom + 5 : r.top - ht - 5);
+    v.panel.style.left = `${Math.max(8, Math.min(x, innerWidth - w - 8))}px`;
+    v.panel.style.top = `${Math.max(8, Math.min(y, innerHeight - ht - 8))}px`;
+  }
+  function focusFigurePanel(v, preferred) {
+    for (const row of v.panel.querySelectorAll('button:not([role])')) row.setAttribute('role', 'menuitem');
+    positionFigurePanel(v);
+    (preferred || v.panel.querySelector('button:not(:disabled)') || v.panel).focus({ preventScroll: true });
+  }
+
+  function closeFigurePanel(v, restore = true) {
+    const from = v.panelFrom;
+    v.panel.hidden = true;
+    for (const pic of v.pics) pic.classList.remove('lb-selected');
+    v.panel.replaceChildren();
+    v.panel.className = 'lb-panel';
+    v.panel.style.cssText = '';
+    if (from) {
+      from.removeAttribute('aria-expanded');
+      if (restore) from.focus({ preventScroll: true });
     }
-    lightbox.classList.remove('lb-full');
+    v.panelFrom = v.panelPoint = null;
+  }
+
+  function showFigurePanel(v, from, point) {
+    closeFigurePanel(v, false);
+    v.panelFrom = from;
+    if (from !== v.surface) from.setAttribute('aria-expanded', 'true');
+    v.panel.hidden = false;
+    v.panel.setAttribute('aria-label', from.getAttribute('aria-label') || from.textContent || T[ui].lb_copy);
+    v.panelPoint = point && { clientX: point.clientX, clientY: point.clientY };
+  }
+
+  function fitFigure(v, point) {
+    const { stage, frame, surface } = v;
+    const box = stage.getBoundingClientRect(), old = frame.getBoundingClientRect();
+    const x = point?.x ?? (box.left + box.width / 2);
+    const y = point?.y ?? (box.top + box.height / 2);
+    const u = old.width ? (x - old.left) / old.width : .5;
+    const t = old.height ? (y - old.top) / old.height : .5;
+    if (!v.group) {
+      const [w, ht] = FigureImage.size(v.pics[0]);
+      if (!(w && ht)) return;
+      surface.style.width = `${w}px`;
+      surface.style.height = `${ht}px`;
+    }
+    const w = surface.offsetWidth, ht = surface.offsetHeight;
+    if (!(w && ht)) return;
+    const available = stage.clientHeight - (v.cap ? v.cap.offsetHeight + 12 : 0);
+    v.fit = Math.min(1, stage.clientWidth / w, Math.max(1, available) / ht);
+    const scale = v.zoom ?? v.fit;
+    frame.style.width = `${w * scale}px`;
+    frame.style.height = `${ht * scale}px`;
+    surface.style.transform = `scale(${scale})`;
+    const after = frame.getBoundingClientRect();
+    if (v.zoom == null) stage.scrollTo(0, 0);
+    else {
+      stage.scrollLeft += after.left + u * after.width - x;
+      stage.scrollTop += after.top + t * after.height - y;
+    }
+    const pct = v.percent.format(scale);
+    if (v.zoomLabel.textContent !== pct) v.zoomLabel.textContent = pct;
+    v.zoomButton.setAttribute('aria-label', `${T[ui].lb_zoom}: ${pct}${v.zoom == null ? ` · ${T[ui].lb_fit}` : ''}`);
+    stage.classList.toggle('lb-pannable', frame.offsetWidth > stage.clientWidth || frame.offsetHeight > available);
+    surface.classList.toggle('lb-enlarged', v.zoom != null);
+  }
+
+  function zoomFigure(v, scale, point) {
+    v.zoom = scale == null ? null : Math.max(.1, Math.min(8, scale));
+    fitFigure(v, point);
+  }
+
+  function figureZoomButton(v) {
+    const open = () => {
+      if (v.panelFrom === button) return closeFigurePanel(v);
+      showFigurePanel(v, button);
+      for (const scale of [.25, .5, 1, 1.5, 2, null]) {
+        if (scale == null) v.panel.append(h('hr'));
+        const row = lbButton(scale == null ? T[ui].lb_fit : v.percent.format(scale), () => {
+          closeFigurePanel(v);
+          zoomFigure(v, scale);
+        });
+        row.setAttribute('role', 'menuitemradio');
+        row.setAttribute('aria-checked', String(scale === v.zoom));
+        v.panel.append(row);
+      }
+      focusFigurePanel(v, v.panel.querySelector('[aria-checked=true]'));
+    };
+    const button = lbButton('', open, 'lb-zoom');
+    v.zoomLabel = h('span');
+    button.setAttribute('aria-haspopup', 'menu');
+    button.append(v.zoomLabel, figureIcon('down'));
+    return button;
+  }
+
+  function bindFigureGestures(v) {
+    const { stage } = v, pointers = new Map();
+    let dragging = false, safariScale = 1;
+    stage.addEventListener('pointerdown', (e) => {
+      if (!v.panel.hidden || e.button !== 0 || !e.target.closest('.lb-surface')) return;
+      if (!pointers.size) { dragging = false; v.dragClick = false; }
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    });
+    stage.addEventListener('pointermove', (e) => {
+      const before = pointers.get(e.pointerId);
+      if (!before) return;
+      const point = { x: e.clientX, y: e.clientY };
+      const dx = point.x - before.x, dy = point.y - before.y;
+      const other = [...pointers.entries()].find(([id]) => id !== e.pointerId)?.[1];
+      if (other) {
+        const d = Math.hypot(before.x - other.x, before.y - other.y);
+        const next = Math.hypot(point.x - other.x, point.y - other.y);
+        if (d > 0) zoomFigure(v, (v.zoom ?? v.fit) * next / d, { x: (before.x + other.x) / 2, y: (before.y + other.y) / 2 });
+        stage.scrollLeft -= dx / 2;
+        stage.scrollTop -= dy / 2;
+      } else {
+        if (!dragging && (Math.hypot(dx, dy) < 5 || !stage.classList.contains('lb-pannable'))) return;
+        stage.scrollLeft -= dx;
+        stage.scrollTop -= dy;
+      }
+      pointers.set(e.pointerId, point);
+      if (!stage.hasPointerCapture(e.pointerId)) stage.setPointerCapture(e.pointerId);
+      dragging = v.dragClick = true;
+      stage.classList.add('lb-dragging');
+    });
+    const end = (e) => {
+      pointers.delete(e.pointerId);
+      if (!pointers.size) stage.classList.remove('lb-dragging');
+    };
+    stage.addEventListener('pointerup', end);
+    stage.addEventListener('pointercancel', end);
+    stage.addEventListener('lostpointercapture', end);
+    stage.addEventListener('pointerleave', (e) => { if (!stage.hasPointerCapture(e.pointerId)) end(e); });
+    stage.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      if (!v.panel.hidden) return;
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stage.clientHeight : 1;
+      zoomFigure(v, (v.zoom ?? v.fit) * Math.exp(-e.deltaY * unit / 400), { x: e.clientX, y: e.clientY });
+    }, { passive: false });
+    stage.addEventListener('gesturestart', (e) => {
+      e.preventDefault();
+      safariScale = v.zoom ?? v.fit;
+    });
+    stage.addEventListener('gesturechange', (e) => {
+      e.preventDefault();
+      if (v.panel.hidden) zoomFigure(v, safariScale * e.scale, { x: e.clientX, y: e.clientY });
+    });
+  }
+
+  function stepFigure(v, delta) {
+    const at = v.at + delta;
+    if (at >= 0 && at < v.gallery.length) showFigure(v.gallery[at], v.gallery, at);
+  }
+
+  function figureNavigation(v) {
+    const nav = h('div', 'lb-nav');
+    for (const [delta, key] of [[-1, 'prev'], [1, 'next']]) {
+      if (v.at + delta >= 0 && v.at + delta < v.gallery.length)
+        nav.append(figureButton(key, T[ui][`lb_${key}`], () => stepFigure(v, delta), `lb-circle lb-${key}`));
+    }
+    return nav;
+  }
+
+  function loadFigure(v, retry) {
+    const words = T[ui], token = v.load = {};
+    v.retry.hidden = true;
+    v.loading = true;
+    const unavailable = v.unavailable = new Set();
+    for (const button of v.mainActions) button.disabled = true;
+    const ready = v.pics.map(async (pic) => {
+      if (!(pic instanceof HTMLImageElement)) return;
+      if (retry && !pic.naturalWidth) {
+        const url = new URL(pic.currentSrc || pic.src, location.href);
+        if (/^https?:$/.test(url.protocol) && url.origin === location.origin) {
+          url.searchParams.set('retry', Date.now());
+          pic.src = url.href;
+        } else pic.src = pic.src;
+      }
+      try { await pic.decode(); }
+      catch { unavailable.add(pic); }
+      if (viewer === v && v.load === token) fitFigure(v);
+    });
+    v.status.textContent = '';
+    v.ready = Promise.all(ready).then(() => {
+      if (viewer !== v || v.load !== token) return;
+      v.loading = false;
+      const failed = unavailable.size > 0;
+      for (const button of v.mainActions) button.disabled = failed;
+      v.retry.hidden = !failed;
+      if (failed) figureStatus(v, words.lb_unavailable);
+      fitFigure(v);
+    });
+  }
+
+  function openLightbox(pic) {
+    const source = pic.closest('.fbody');
+    lightboxFrom = source.matches('[tabindex]') ? source : pic.closest('a[href], [tabindex]') || pic;
+    if (!lightboxFrom.matches('a[href], [tabindex]')) lightboxFrom.setAttribute('tabindex', '-1');
+    const at = figureBodies.indexOf(source);
+    showFigure(pic, at < 0 || !FigureImage.resources(source).includes(pic) ? [] : figureBodies, at);
+  }
+
+  function showFigure(target, gallery, at) {
+    if (viewer) { viewer.resize.disconnect(); clearTimeout(viewer.statusTimer); }
+    const pic = target.classList.contains('fbody') ? FigureImage.resources(target)[0] : target;
+    const fig = pic.closest('figure.fig'), source = pic.closest('.fbody');
+    const cap = fig.querySelector(':scope > figcaption');
+    const originals = fig.classList.contains('fig-table') ? [] : FigureImage.resources(source);
+    const group = originals.includes(pic) && originals.length > 1;
+    const surface = group ? source.cloneNode(true) : h('div');
+    if (!group) {
+      const shown = pic.cloneNode(true);
+      shown.removeAttribute('style');
+      surface.append(shown);
+    }
+    surface.classList.add('lb-surface');
+    if (group) surface.classList.add('lb-group');
+    surface.tabIndex = -1;
+    for (const el of surface.querySelectorAll('[tabindex], a, button')) el.tabIndex = -1;
+    const pics = group ? FigureImage.resources(surface) : [surface.firstElementChild];
+    for (const shown of pics) {
+      shown.removeAttribute('loading');
+      shown.setAttribute('draggable', 'false');
+    }
+    const tags = pics.map((shown) => FigureImage.panelLabel(shown, surface));
+    const label = cap && cap.querySelector('.flabel');
+    const caption = [label && label.textContent.trim(), cap && cap._tx && cap._tx.innerText.trim()].filter(Boolean).join(' ');
+    const stage = h('div', 'lb-stage'), frame = h('div', 'lb-frame'), toolbar = h('div', 'lb-toolbar');
+    const panel = h('div', 'lb-panel'), status = h('div', 'lb-status'), content = h('div', 'lb-content');
+    panel.tabIndex = -1;
+    panel.setAttribute('role', 'menu');
+    status.setAttribute('role', 'status');
+    panel.hidden = true;
+    frame.append(surface);
+    content.append(frame);
+    stage.append(content);
+    const v = viewer = { fig, surface, pics, tags, group, caption, stage, frame, panel, status, gallery, at, mainActions: [], zoom: null, fit: 1, dragClick: false };
+    const words = T[ui];
+    const addAction = (action) => {
+      const label = figureActionLabel(v, action);
+      const main = figureButton(action, label, () => exportFigure(v, action), 'lb-primary lb-circle');
+      v.mainActions.push(main);
+      if (!group) { toolbar.append(main); return; }
+      const split = h('div', 'lb-split');
+      main.className = 'lb-primary lb-main';
+      main.append(h('span', '', words.lb_whole));
+      const more = figureButton('down', figureActionLabel(v, action, 0), () => {
+        if (v.panelFrom === more) return closeFigurePanel(v);
+        chooseFigurePanel(v, action, more);
+      }, 'lb-more');
+      more.setAttribute('aria-haspopup', 'menu');
+      split.append(main, more);
+      toolbar.append(split);
+    };
+    v.percent = new Intl.NumberFormat(ui, { style: 'percent', maximumFractionDigits: 0 });
+    v.zoomButton = figureZoomButton(v);
+    const nav = gallery.length > 1 ? figureNavigation(v) : null;
+    stage.classList.toggle('lb-with-nav', !!nav);
+    toolbar.append(v.zoomButton);
+    bindFigureGestures(v);
+    addAction('copy');
+    addAction('save');
+    const x = figureButton('close', words.close, closeLightbox, 'lb-circle lb-x');
+    toolbar.append(x);
+    if (caption) {
+      const c = h('div', 'lb-cap');
+      c.textContent = caption;
+      c.tabIndex = 0;
+      v.cap = c;
+      content.append(c);
+    }
+    v.retry = lbButton(words.lb_retry, () => {
+      loadFigure(v, true);
+      x.focus({ preventScroll: true });
+    });
+    lightbox.replaceChildren(toolbar, stage, ...(nav ? [nav] : []), status, v.retry, panel);
+    v.retry.classList.add('lb-retry');
+    lightbox.setAttribute('aria-label', caption || words.lb_copy);
     lightbox.hidden = false;
     document.documentElement.classList.add('lb-open');
-    lightboxFrom = document.activeElement;
     x.focus({ preventScroll: true });
+    const resize = () => {
+      if (viewer !== v) return;
+      if (nav) nav.style.top = `${stage.getBoundingClientRect().top}px`;
+      fitFigure(v);
+      positionFigurePanel(v);
+    };
+    v.resize = new ResizeObserver(resize);
+    v.resize.observe(stage);
+    if (v.cap) v.resize.observe(v.cap);
+    loadFigure(v, false);
+    resize();
   }
+
   function closeLightbox() {
+    if (!viewer) return;
+    viewer.resize.disconnect();
+    clearTimeout(viewer.statusTimer);
+    viewer = null;
     lightbox.hidden = true;
     lightbox.replaceChildren();
     document.documentElement.classList.remove('lb-open');
-    if (lightboxFrom && lightboxFrom.focus) lightboxFrom.focus({ preventScroll: true });
+    const from = lightboxFrom?.isConnected && lightboxFrom.getClientRects().length ? lightboxFrom : docEl;
+    if (from === docEl && !docEl.hasAttribute('tabindex')) docEl.tabIndex = -1;
+    from.focus({ preventScroll: true });
+    lightboxFrom = null;
   }
+
+  function figureActionLabel(v, action, i) {
+    const words = T[ui];
+    if (i != null) return action === 'copy' ? words.lb_copy_panel : words.lb_save_panel;
+    if (v.group) return action === 'copy' ? words.lb_copy_all : words.lb_save_all;
+    return action === 'copy' ? words.lb_copy : words.lb_save;
+  }
+
+  function chooseFigurePanel(v, action, from) {
+    showFigurePanel(v, from);
+    const list = h('div', 'lb-panels');
+    list.setAttribute('role', 'presentation');
+    v.pics.forEach((pic, i) => {
+      const label = v.tags[i]?.textContent.trim() || `${T[ui].lb_panel} ${i + 1}`;
+      const row = lbButton(label, () => {
+        closeFigurePanel(v);
+        exportFigure(v, action, i);
+      });
+      row.setAttribute('aria-label', `${figureActionLabel(v, action, i)} · ${label}`);
+      const preview = () => v.pics.forEach((node, at) => node.classList.toggle('lb-selected', at === i));
+      row.addEventListener('mouseenter', preview);
+      row.addEventListener('focus', preview);
+      row.addEventListener('mouseleave', () => { if (document.activeElement !== row) pic.classList.remove('lb-selected'); });
+      row.addEventListener('blur', () => pic.classList.remove('lb-selected'));
+      // Use a raster thumbnail of an inline drawing so IDs in its defs are never duplicated.
+      const thumb = pic instanceof HTMLImageElement ? pic.cloneNode(false) : h('img');
+      thumb.removeAttribute('style');
+      thumb.removeAttribute('id');
+      thumb.setAttribute('aria-hidden', 'true');
+      if (!(pic instanceof HTMLImageElement)) {
+        FigureImage.single(pic, true).then((blob) => {
+          if (!thumb.isConnected) return;
+          const url = URL.createObjectURL(blob);
+          thumb.onload = thumb.onerror = () => URL.revokeObjectURL(url);
+          thumb.src = url;
+        }).catch(() => {});
+      }
+      row.prepend(thumb);
+      row.disabled = v.loading || v.unavailable.has(pic);
+      list.append(row);
+    });
+    v.panel.append(list);
+    focusFigurePanel(v);
+  }
+
+  function figureStatus(v, message, brief = false) {
+    clearTimeout(v.statusTimer);
+    v.status.textContent = message;
+    if (brief) v.statusTimer = setTimeout(() => { v.status.textContent = ''; }, 2200);
+  }
+
+  async function exportFigure(v, action, index) {
+    if (v.pending || v.loading || (index == null ? v.unavailable.size : v.unavailable.has(v.pics[index]))) return;
+    const words = T[ui], desktop = D.app && window.desktop;
+    v.pending = true;
+    figureStatus(v, words.lb_working);
+    try {
+      let status = '';
+      const copy = action === 'copy';
+      const pic = v.pics[index ?? 0];
+      const data = v.group && index == null ? FigureImage.group(v.pics, v.tags, v.surface) : FigureImage.single(pic, copy);
+      if (copy) {
+        if (desktop?.copyFigure) await desktop.copyFigure(await (await data).arrayBuffer());
+        // Passing the promise keeps the initiating click's clipboard permission in Safari.
+        else if (typeof ClipboardItem !== 'undefined' && navigator.clipboard) {
+          await Promise.all([navigator.clipboard.write([new ClipboardItem({ 'image/png': data })]), data]);
+        } else { await data; throw new Error('clipboard'); }
+        status = words.lb_copied;
+      } else {
+        const blob = await data, ext = FigureImage.extension(blob);
+        const title = v.fig.querySelector(':scope > figcaption .flabel')?.textContent.trim() || v.fig.id || 'figure';
+        const name = [D.meta.id, title, index == null ? '' : index + 1].filter(Boolean).join('-')
+          .replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^[.]+|[. -]+$/g, '').slice(0, 100) + '.' + ext;
+        if (desktop?.saveFigure) {
+          if (await desktop.saveFigure(name, await blob.arrayBuffer())) status = words.lb_saved;
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = h('a');
+          a.href = url; a.download = name;
+          document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 30_000);
+          status = words.lb_saved;
+        }
+      }
+      if (viewer === v) figureStatus(v, status, true);
+    } catch (err) {
+      if (viewer === v) v.status.textContent = err.message === 'size' ? words.lb_size : words.lb_error;
+    } finally { v.pending = false; }
+  }
+
+  const figureChrome = '.lb-toolbar, .lb-cap, .lb-nav, .lb-status, .lb-retry, .lb-panel';
+  lightbox.addEventListener('pointerdown', (e) => {
+    if (!viewer || !e.isPrimary) return;
+    viewer.down = { x: e.clientX, y: e.clientY, blank: !e.target.closest(figureChrome + ', .lb-surface'),
+      panel: !viewer.panel.hidden && !viewer.panel.contains(e.target) };
+  });
   lightbox.addEventListener('click', (e) => {
-    const pic = e.target.closest('.lb-pic');
-    if (pic && pic.tagName.toLowerCase() === 'img') {   // larger than the screen: full size, to scroll; and back
-      const fits = pic.naturalWidth <= pic.clientWidth + 2 && pic.naturalHeight <= pic.clientHeight + 2;
-      if (!fits || lightbox.classList.contains('lb-full')) { lightbox.classList.toggle('lb-full'); return; }
+    const v = viewer;
+    if (!v) return;
+    const down = v.down;
+    v.down = null;
+    if (e.composedPath().includes(v.panel) || e.target.closest('button')) return;
+    if (down?.panel || !v.panel.hidden) { closeFigurePanel(v); return; }
+    if (v.dragClick) { v.dragClick = false; return; }
+    if (e.target.closest(figureChrome) || !down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+    if (e.target.closest('.lb-surface')) {
+      e.preventDefault();
+      if (v.zoom != null || v.fit < 1) zoomFigure(v, v.zoom == null ? 1 : null, { x: e.clientX, y: e.clientY });
+    } else if (down.blank && !String(getSelection())) closeLightbox();
+  });
+  lightbox.addEventListener('contextmenu', (e) => {
+    const v = viewer;
+    if (!e.target.closest('.lb-surface')) return;
+    e.preventDefault();
+    const at = v.pics.indexOf(FigureImage.at(e.target));
+    showFigurePanel(v, v.surface, e);
+    const add = (i) => {
+      for (const action of ['copy', 'save']) {
+        const button = lbButton(figureActionLabel(v, action, i), () => {
+          closeFigurePanel(v);
+          exportFigure(v, action, i);
+        });
+        button.disabled = v.loading || (i == null ? v.unavailable.size > 0 : v.unavailable.has(v.pics[i]));
+        v.panel.append(button);
+      }
+    };
+    if (v.group && at >= 0) { add(at); v.panel.append(h('hr')); }
+    add();
+    if (v.group && at < 0) {
+      for (const action of ['copy', 'save']) v.panel.append(lbButton(`${figureActionLabel(v, action)} · ${T[ui].lb_panel}`, () => chooseFigurePanel(v, action, v.surface)));
     }
-    if (!pic) closeLightbox();
+    focusFigurePanel(v);
+  });
+
+  addEventListener('keydown', (e) => {
+    if (!viewer) return;
+    const v = viewer;
+    const key = e.key.toLowerCase(), mod = e.metaKey || e.ctrlKey;
+    if (key === 'escape') {
+      if (!v.panel.hidden) closeFigurePanel(v); else closeLightbox();
+    } else if (!v.panel.hidden && ['arrowdown', 'arrowup', 'home', 'end'].includes(key)) {
+      const rows = [...v.panel.querySelectorAll('button:not(:disabled)')];
+      const i = rows.indexOf(document.activeElement);
+      rows[key === 'home' ? 0 : key === 'end' ? rows.length - 1 : (i + rows.length + (key === 'arrowdown' ? 1 : -1)) % rows.length]?.focus();
+    } else if (key === 'tab') {
+      const scope = v.panel.hidden ? lightbox : v.panel;
+      const buttons = [...scope.querySelectorAll('button, .lb-cap[tabindex]')].filter((b) => !b.disabled && b.offsetWidth);
+      const i = buttons.indexOf(document.activeElement);
+      buttons[(i < 0 ? (e.shiftKey ? buttons.length - 1 : 0) : (i + buttons.length + (e.shiftKey ? -1 : 1)) % buttons.length)]?.focus();
+    } else if ((v.cap?.contains(e.target) && e.shiftKey && key.startsWith('arrow')) || (v.cap && v.cap.contains(getSelection()?.anchorNode) && String(getSelection()))) {
+      e.stopImmediatePropagation(); return;
+    } else if (mod && !e.altKey && !e.shiftKey && key === 'c' && !String(getSelection())) exportFigure(v, 'copy');
+    else if (mod && !e.altKey && !e.shiftKey && key === 's') exportFigure(v, 'save');
+    else if (!mod && !e.altKey && v.panel.hidden && ['+', '=', '-', '_', '0', '1'].includes(key)) {
+      const scale = v.zoom ?? v.fit;
+      zoomFigure(v, key === '0' ? null : key === '1' ? 1 : scale * ('+='.includes(key) ? 1.25 : .8));
+    } else if (e.shiftKey && !mod && !e.altKey && v.panel.hidden && key.startsWith('arrow')) {
+      v.stage.scrollBy(key === 'arrowleft' ? -60 : key === 'arrowright' ? 60 : 0,
+        key === 'arrowup' ? -60 : key === 'arrowdown' ? 60 : 0);
+    } else if (!mod && !e.altKey && v.panel.hidden && v.gallery.length > 1 && ['arrowleft', 'arrowright'].includes(key)) {
+      stepFigure(v, key === 'arrowleft' ? -1 : 1);
+    } else { e.stopImmediatePropagation(); return; }
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+
+  docEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!e.target.matches('figure.fig-figure > .fbody[tabindex]')) return;
+    const pic = FigureImage.resources(e.target)[0];
+    if (pic) { e.preventDefault(); openLightbox(pic); }
   });
 
   // ── where this text was being read (kept in this browser, the last 300 texts): its level and the paragraph at the
@@ -4503,6 +4990,7 @@ math { font-size: 1.05em; }
   // ── input ────────────────────────────────────────────────────────────
   // ⌘/Ctrl + wheel and a trackpad pinch zoom around the pointer; over the slider, the plain wheel zooms
   addEventListener('wheel', (e) => {
+    if (viewer) { if (e.ctrlKey || e.metaKey) e.preventDefault(); return; }
     const overBar = !!(e.target.closest && e.target.closest('#zoombar'));
     if (!e.ctrlKey && !e.metaKey && !overBar) { snapNow(); return; }
     e.preventDefault();
@@ -4511,14 +4999,14 @@ math { font-size: 1.05em; }
     zoomBy(-d / 240, overBar ? null : { x: e.clientX, y: e.clientY });
   }, { passive: false });
   let g0 = 0;     // Safari's pinch
-  addEventListener('gesturestart', (e) => { e.preventDefault(); g0 = goal; if (!tr && !stage) gesturePoint = { x: e.clientX, y: e.clientY }; holding = true; });
+  addEventListener('gesturestart', (e) => { e.preventDefault(); if (viewer) return; g0 = goal; if (!tr && !stage) gesturePoint = { x: e.clientX, y: e.clientY }; holding = true; });
   addEventListener('gesturechange', (e) => {
     e.preventDefault();
-    if (busy && !tr && !stage) return;
+    if (viewer || (busy && !tr && !stage)) return;
     goal = Math.max(0, Math.min(4, g0 + Math.log(e.scale) * 2.4));
     kick();
   });
-  addEventListener('gestureend', (e) => { e.preventDefault(); release(); });
+  addEventListener('gestureend', (e) => { e.preventDefault(); if (!viewer) release(); });
   // ── find in the text (⌘F, Ctrl+F) ────────────────────────────────────
   // The words as the page reads them, each paragraph at its level (the model's line at Key, Takeaway and Topic), and
   // the author's words that level leaves out: a step to one of those opens its paragraph at Full in place, as a note's
@@ -4682,10 +5170,6 @@ math { font-size: 1.05em; }
   });
 
   addEventListener('keydown', (e) => {
-    if (!lightbox.hidden) {   // an enlarged figure takes the keys: Esc closes it, the rest do nothing behind it
-      if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); }
-      return;
-    }
     if (e.target.closest && e.target.closest('input, textarea, [contenteditable]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Escape' && (popNote || !selbar.hidden)) { closeNote(); hideSelbar(); e.preventDefault(); return; }
@@ -4704,7 +5188,7 @@ math { font-size: 1.05em; }
   });
   docEl.addEventListener('click', (e) => {
     const pic = e.target.closest('figure.fig .fbody img, figure.fig .fbody svg');
-    if (pic && !String(getSelection()).length) { e.preventDefault(); openLightbox(pic.closest('svg') || pic); return; }
+    if (pic && !String(getSelection()).length) { e.preventDefault(); openLightbox(FigureImage.at(pic)); return; }
     const card = e.target.closest('.ncard');
     if (card) { e.preventDefault(); const n = notes.find((x) => x.id === card.dataset.note); if (n) openNote(n); return; }
     const mark = e.target.closest('.hl, .hlsp');
