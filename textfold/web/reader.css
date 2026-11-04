@@ -475,6 +475,7 @@ math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em
 .eq .katex-display { margin: 0; }
 .ltx_tabular { border-collapse: collapse; display: inline-table; font-family: var(--sans); font-size: calc(13px * var(--fs)); line-height: 1.4; }
 .ltx_tabular.ltx_centering { display: table; margin-inline: auto; }
+.ltx_tabular .ltx_underline { text-decoration: underline; }
 .ltx_thead, .ltx_tbody, .ltx_tfoot { display: table-row-group; }
 .ltx_tr { display: table-row; }
 .ltx_td, .ltx_th { display: table-cell; padding: .2em .6em; }
