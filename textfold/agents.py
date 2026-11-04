@@ -758,14 +758,19 @@ def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=N
                 "-m", model, "--output-schema", str(sf), "-o", str(of)]
         # off is "none" (gpt-5.5 takes it, and refuses "minimal"); a model that refuses "none" runs at "low"
         for level in (["none", "low"] if effort == "off" else [effort]):
-            r = subprocess.run(args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"], input=f"{system}\n\n{prompt}",
-                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=timeout, env=child_env(), cwd=tmp)
-            if not r.returncode and of.exists():
-                break
-        if r.returncode or not of.exists():
-            raise RuntimeError(f"codex exec exited {r.returncode}: {(r.stderr or r.stdout)[-800:]}")
-        return parse_json(of.read_text(encoding="utf-8")), None
+            of.unlink(missing_ok=True)
+            # Codex can panic when its CLI writes to a full nonblocking pipe. Regular files avoid pipe backpressure.
+            with tempfile.TemporaryFile(dir=tmp) as stdout, tempfile.TemporaryFile(dir=tmp) as stderr:
+                r = subprocess.run(args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"], input=f"{system}\n\n{prompt}",
+                                   stdout=stdout, stderr=stderr, text=True, encoding="utf-8", errors="replace",
+                                   timeout=timeout, env=child_env(), cwd=tmp)
+                if not r.returncode and of.exists():
+                    return parse_json(of.read_text(encoding="utf-8")), None
+                stream = stderr if stderr.seek(0, os.SEEK_END) else stdout
+                size = stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, size - 3200))
+                detail = stream.read().decode("utf-8", errors="replace")[-800:]
+        raise RuntimeError(f"codex exec exited {r.returncode}: {detail}")
 
 
 def run_pi(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
