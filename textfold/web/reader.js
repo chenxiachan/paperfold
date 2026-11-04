@@ -4224,45 +4224,211 @@ math { font-size: 1.05em; }
   lightbox.setAttribute('role', 'dialog');
   lightbox.setAttribute('aria-modal', 'true');
   document.body.append(lightbox);
-  let lightboxFrom = null;
+  let lightboxFrom = null, figureExport = null;
+  const figureIcons = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    save: '<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
+  };
+  function figureButton(action, label, run) {
+    const b = h('button', 'lb-action', figureIcons[action]
+      ? `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${figureIcons[action]}</svg>`
+      : null);
+    if (!figureIcons[action]) b.textContent = label;
+    b.type = 'button';
+    b.setAttribute('aria-label', label);
+    if (figureIcons[action]) b.title = label;
+    b.addEventListener('click', (e) => { e.stopPropagation(); run(); });
+    return b;
+  }
+  function fitFigureGroup(v) {
+    const w = v.group.offsetWidth, ht = v.group.offsetHeight;
+    if (!w || !ht) return;
+    const maxHeight = lightbox.clientHeight * (lightbox.querySelector('.lb-cap') ? .74 : .80);
+    const scale = lightbox.classList.contains('lb-full') ? 1
+      : Math.min(1, (lightbox.clientWidth - 48) / w, maxHeight / ht);
+    v.frame.style.width = `${w * scale}px`;
+    v.frame.style.height = `${ht * scale}px`;
+    v.group.style.transform = `scale(${scale})`;
+  }
   function openLightbox(pic) {
-    const fig = pic.closest('figure.fig'), cap = fig && fig.querySelector('figcaption');
-    const shown = pic.cloneNode(true);
-    shown.removeAttribute('style');
-    shown.classList.add('lb-pic');
-    if (shown.tagName.toLowerCase() === 'svg') { shown.removeAttribute('width'); shown.removeAttribute('height'); }
+    const fig = pic.closest('figure.fig'), cap = fig.querySelector('figcaption'), source = pic.closest('.fbody');
+    const resources = fig.matches('.fig-figure') ? FigureImage.resources(source) : [];
+    const grouped = resources.length > 1 && resources.includes(pic);
     const stage = h('div', 'lb-stage');
-    stage.append(shown);
-    const x = h('button', 'lb-x', '×');
-    x.type = 'button';
-    x.setAttribute('aria-label', T[ui].close);
-    lightbox.replaceChildren(stage, x);
-    if (cap) {
-      const label = cap.querySelector('.flabel'), text = cap._tx ? cap._tx.innerText.trim() : '';
-      const c = h('div', 'lb-cap');
-      c.textContent = [label && label.textContent.trim(), text].filter(Boolean).join(' ');
-      if (c.textContent) lightbox.append(c);
-      lightbox.setAttribute('aria-label', c.textContent || 'Figure');
+    let group = null, frame = null, shown;
+    if (grouped) {
+      group = source.cloneNode(true);
+      group.removeAttribute('data-id');
+      group.classList.add('lb-group');
+      frame = h('div', 'lb-group-frame');
+      frame.append(group);
+      stage.append(frame);
+    } else {
+      shown = pic.cloneNode(true);
+      shown.removeAttribute('style');
+      shown.classList.add('lb-pic');
+      if (shown.tagName.toLowerCase() === 'svg') { shown.removeAttribute('width'); shown.removeAttribute('height'); }
+      stage.append(shown);
     }
+    const toolbar = h('div', 'lb-actions'), menu = h('div', 'lb-export-menu'), status = h('div', 'lb-export-status');
+    const pics = grouped ? FigureImage.resources(group) : [shown];
+    for (const image of pics) image.removeAttribute('loading');
+    menu.hidden = true;
+    status.setAttribute('role', 'status');
+    const v = figureExport = { fig, group, frame, pics, menu, status, pending: false };
+    for (const action of ['copy', 'save']) {
+      const label = T[ui][grouped ? `lb_${action}_all` : `lb_${action}`];
+      toolbar.append(figureButton(action, label, () => exportFigure(v, action)));
+    }
+    const x = figureButton('close', T[ui].close, closeLightbox);
+    x.className = 'lb-x';
+    x.textContent = '×';
+    toolbar.append(x);
+    lightbox.replaceChildren(stage, toolbar, menu, status);
+    const label = cap?.querySelector('.flabel'), text = cap?._tx?.innerText.trim();
+    const caption = [label?.textContent.trim(), text].filter(Boolean).join(' ');
+    if (caption) {
+      const c = h('div', 'lb-cap');
+      c.textContent = caption;
+      lightbox.append(c);
+    }
+    lightbox.setAttribute('aria-label', caption || T[ui].lb_copy);
     lightbox.classList.remove('lb-full');
     lightbox.hidden = false;
     document.documentElement.classList.add('lb-open');
     lightboxFrom = document.activeElement;
     x.focus({ preventScroll: true });
+    if (grouped) {
+      v.resize = new ResizeObserver(() => fitFigureGroup(v));
+      v.resize.observe(group);
+      v.resize.observe(lightbox);
+      fitFigureGroup(v);
+    }
   }
   function closeLightbox() {
+    figureExport?.resize?.disconnect();
+    clearTimeout(figureExport?.statusTimer);
+    figureExport = null;
     lightbox.hidden = true;
     lightbox.replaceChildren();
     document.documentElement.classList.remove('lb-open');
     if (lightboxFrom && lightboxFrom.focus) lightboxFrom.focus({ preventScroll: true });
   }
+  async function exportFigure(v, action, index) {
+    if (v.pending) return;
+    v.pending = true;
+    const words = T[ui], copy = action === 'copy', desktop = D.app && window.desktop;
+    clearTimeout(v.statusTimer);
+    v.status.textContent = words.lb_working;
+    try {
+      const data = v.group && index == null
+        ? FigureImage.group(v.pics, v.pics.map(pic => FigureImage.panelLabel(pic, v.group)), v.group)
+        : FigureImage.single(v.pics[index ?? 0], copy);
+      if (copy && !desktop?.copyFigure && typeof ClipboardItem !== 'undefined' && navigator.clipboard) {
+        // Keep the initiating click's clipboard permission while the image is prepared.
+        await Promise.all([navigator.clipboard.write([new ClipboardItem({ 'image/png': data })]), data]);
+      } else {
+        const blob = await data;
+        if (copy) {
+          if (!desktop?.copyFigure) throw new Error('clipboard');
+          await desktop.copyFigure(await blob.arrayBuffer());
+        } else {
+          const title = v.fig.querySelector('figcaption .flabel')?.textContent.trim() || v.fig.id || 'figure';
+          const stem = [D.meta.id, title, index == null ? '' : index + 1].filter(Boolean).join('-')
+            .replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^[.]+|[. -]+$/g, '').slice(0, 100);
+          const name = `${stem || 'figure'}.${FigureImage.extension(blob)}`;
+          if (desktop?.saveFigure) {
+            if (!await desktop.saveFigure(name, await blob.arrayBuffer())) {
+              v.status.textContent = '';
+              return;
+            }
+          } else {
+            const url = URL.createObjectURL(blob), a = h('a');
+            a.href = url;
+            a.download = name;
+            document.body.append(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 30_000);
+          }
+        }
+      }
+      if (figureExport === v) {
+        v.status.textContent = copy ? words.lb_copied : words.lb_saved;
+        v.statusTimer = setTimeout(() => { v.status.textContent = ''; }, 2200);
+      }
+    } catch {
+      if (figureExport === v) v.status.textContent = words.lb_error;
+    } finally {
+      v.pending = false;
+    }
+  }
+  lightbox.addEventListener('contextmenu', (e) => {
+    const v = figureExport;
+    if (!v || !e.target.closest('.lb-pic, .lb-group')) return;
+    e.preventDefault();
+    const menu = v.menu;
+    const index = v.pics.indexOf(FigureImage.at(e.target));
+    menu.replaceChildren();
+    const add = (which) => {
+      for (const action of ['copy', 'save']) {
+        const suffix = which != null ? '_panel' : v.group ? '_all' : '';
+        menu.append(figureButton(null, T[ui][`lb_${action}${suffix}`], () => {
+          menu.hidden = true;
+          lightbox.querySelector('.lb-x').focus({ preventScroll: true });
+          exportFigure(v, action, which);
+        }));
+      }
+    };
+    add();
+    if (v.group && index >= 0) { menu.append(h('hr')); add(index); }
+    menu.hidden = false;
+    menu.style.left = `${Math.max(8, Math.min(e.clientX, innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(e.clientY, innerHeight - menu.offsetHeight - 8))}px`;
+    menu.firstElementChild.focus({ preventScroll: true });
+  });
   lightbox.addEventListener('click', (e) => {
+    const v = figureExport;
+    if (!v || e.target.closest('.lb-export-menu, .lb-actions')) return;
+    if (!v.menu.hidden) {
+      v.menu.hidden = true;
+      lightbox.querySelector('.lb-x').focus({ preventScroll: true });
+      return;
+    }
     const pic = e.target.closest('.lb-pic');
-    if (pic && pic.tagName.toLowerCase() === 'img') {   // larger than the screen: full size, to scroll; and back
+    if (v.group && e.target.closest('.lb-group')) {
+      e.preventDefault();
+      if (v.frame.offsetWidth < v.group.offsetWidth || v.frame.offsetHeight < v.group.offsetHeight || lightbox.classList.contains('lb-full')) {
+        lightbox.classList.toggle('lb-full');
+        fitFigureGroup(v);
+      }
+      return;
+    }
+    if (pic && pic.tagName.toLowerCase() === 'img') {
       const fits = pic.naturalWidth <= pic.clientWidth + 2 && pic.naturalHeight <= pic.clientHeight + 2;
-      if (!fits || lightbox.classList.contains('lb-full')) { lightbox.classList.toggle('lb-full'); return; }
+      if (!fits || lightbox.classList.contains('lb-full')) lightbox.classList.toggle('lb-full');
     }
     if (!pic) closeLightbox();
+  });
+  lightbox.addEventListener('keydown', (e) => {
+    const v = figureExport;
+    if (!v) return;
+    const key = e.key.toLowerCase(), mod = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey;
+    if (key === 'escape') {
+      if (v.menu.hidden) closeLightbox();
+      else {
+        v.menu.hidden = true;
+        lightbox.querySelector('.lb-x').focus({ preventScroll: true });
+      }
+    } else if (key === 'tab' || (!v.menu.hidden && ['arrowup', 'arrowdown'].includes(key))) {
+      const buttons = [...(v.menu.hidden ? lightbox.querySelector('.lb-actions') : v.menu).querySelectorAll('button')];
+      const delta = e.shiftKey || key === 'arrowup' ? -1 : 1, at = buttons.indexOf(document.activeElement);
+      buttons[(at + delta + buttons.length) % buttons.length]?.focus();
+    } else if (mod && key === 'c' && !String(getSelection())) exportFigure(v, 'copy');
+    else if (mod && key === 's') exportFigure(v, 'save');
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
   });
 
   // ── where this text was being read (kept in this browser, the last 300 texts): its level and the paragraph at the
@@ -4714,7 +4880,7 @@ math { font-size: 1.05em; }
   });
   docEl.addEventListener('click', (e) => {
     const pic = e.target.closest('figure.fig .fbody img, figure.fig .fbody svg');
-    if (pic && !String(getSelection()).length) { e.preventDefault(); openLightbox(pic.closest('svg') || pic); return; }
+    if (pic && !String(getSelection()).length) { e.preventDefault(); openLightbox(FigureImage.at(pic)); return; }
     const card = e.target.closest('.ncard');
     if (card) { e.preventDefault(); const n = notes.find((x) => x.id === card.dataset.note); if (n) openNote(n); return; }
     const mark = e.target.closest('.hl, .hlsp');
