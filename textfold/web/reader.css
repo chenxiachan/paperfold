@@ -374,7 +374,7 @@ figure.fig:not([data-l="4"]):not([data-l="3"]) .fig-pdf { display: none; }
 .lightbox svg.lb-pic { width: min(94vw, 1200px); height: 76vh; }
 .lightbox.lb-full .lb-stage { overflow: auto; align-self: stretch; justify-content: flex-start; align-items: flex-start; flex: 1; }
 .lightbox.lb-full .lb-pic { max-width: none; max-height: none; margin: auto; cursor: zoom-out; }
-.lightbox .lb-cap { max-width: min(760px, 92vw); max-height: 16vh; overflow-y: auto; color: #EDE9E3; font: 14px/1.5 var(--sans); text-align: center; }
+.lightbox .lb-cap { max-width: min(760px, 92vw); max-height: 16vh; overflow-y: auto; color: #EDE9E3; font: 14px/1.5 var(--sans); text-align: center; user-select: text; cursor: text; }
 .lightbox .lb-x { position: absolute; top: 12px; right: 14px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .12);
   color: #fff; font: 400 24px/1 var(--sans); cursor: pointer; }
 .lightbox .lb-x:hover, .lightbox .lb-x:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }

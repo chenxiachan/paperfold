@@ -4228,7 +4228,7 @@ math { font-size: 1.05em; }
   lightbox.setAttribute('role', 'dialog');
   lightbox.setAttribute('aria-modal', 'true');
   document.body.append(lightbox);
-  let lightboxFrom = null;
+  let lightboxFrom = null, captionPress = false;
   const LB_ICONS = {
     copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
     save: '<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
@@ -4306,10 +4306,14 @@ math { font-size: 1.05em; }
       const label = cap.querySelector('.flabel'), text = cap._tx ? cap._tx.innerText.trim() : '';
       const c = h('div', 'lb-cap');
       c.textContent = [label && label.textContent.trim(), text].filter(Boolean).join(' ');
-      if (c.textContent) lightbox.append(c);
+      if (c.textContent) {
+        c.tabIndex = 0;
+        lightbox.append(c);
+      }
       lightbox.setAttribute('aria-label', c.textContent || 'Figure');
     }
     lightbox.classList.remove('lb-full');
+    captionPress = false;
     lightbox.hidden = false;
     document.documentElement.classList.add('lb-open');
     lightboxFrom = document.activeElement;
@@ -4321,7 +4325,15 @@ math { font-size: 1.05em; }
     document.documentElement.classList.remove('lb-open');
     if (lightboxFrom && lightboxFrom.focus) lightboxFrom.focus({ preventScroll: true });
   }
+  lightbox.addEventListener('pointerdown', (e) => {
+    if (e.isPrimary) captionPress = !!e.target.closest('.lb-cap');
+  });
+  lightbox.addEventListener('pointercancel', (e) => { if (e.isPrimary) captionPress = false; });
   lightbox.addEventListener('click', (e) => {
+    // A selection can start on the caption and end on the backdrop.
+    const fromCaption = e.detail > 0 && captionPress;
+    captionPress = false;
+    if (fromCaption || e.target.closest('.lb-cap')) return;
     const pic = e.target.closest('.lb-pic');
     if (pic && pic.tagName.toLowerCase() === 'img') {   // larger than the screen: full size, to scroll; and back
       const fits = pic.naturalWidth <= pic.clientWidth + 2 && pic.naturalHeight <= pic.clientHeight + 2;
