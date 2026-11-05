@@ -43,11 +43,11 @@ def get(a):
     if ext:
         data = f.read_bytes()
         pid = pdfdoc.pid_of(data, ext)
-        if not (store.pdir(pid) / "meta.json").exists() and not engine.where() and ext != "pdf" and office.reads(ext):
+        if not store.has(pid) and not engine.where() and ext != "pdf" and office.reads(ext):
             office.save(pid, f, f.name)   # (the engine reads it more completely, when it is installed)
-        elif not (store.pdir(pid) / "meta.json").exists() and not engine.where() and ext == "pdf" and pdftext.save(pid, f, f.name):
+        elif not store.has(pid) and not engine.where() and ext == "pdf" and pdftext.save(pid, f, f.name):
             pass   # a PDF with its words in it, read by TextFold itself (a scan still needs the engine)
-        elif not (store.pdir(pid) / "meta.json").exists():
+        elif not store.has(pid):
             if not engine.where():
                 what = "PDF" if ext == "pdf" else "picture" if ext in engine.PICTURES else f"{engine.FILES[ext]} file"
                 _say(f"This {what} needs the PDF engine: python3 -m textfold engine install")
@@ -61,7 +61,7 @@ def get(a):
                 src.write_bytes(data)
             engine.convert(src, out, tier, progress=lambda s, d, t: _say(f"  converting {d}/{t}") if t else None, log=lambda line: None)
             pdfdoc.store_pdf(pid, out, pdfdoc.read_output(out), f.name, tier)
-            (store.pdir(pid) / pdfdoc.kept_name(pid, src)).write_bytes(data)
+            store.keep_original(pid, ext, data)
             shutil.rmtree(out, ignore_errors=True)   # the engine's output (and its copy of the file), stored
             if src != f:
                 src.unlink(missing_ok=True)
@@ -135,14 +135,17 @@ def adapt_cmd(a):
     print(text)
     if a.keep:
         pid = webpage.pid_of(final)
-        if (store.pdir(pid) / "meta.json").exists():
+        if store.has(pid):
             print(f"{pid} is in the library already: delete it first")
             return 2
-        store.pdir(pid).mkdir(parents=True, exist_ok=True)
         info = webpage.about(webpage.visible(page, final), final)
         meta = {**webpage.meta_of(pid, final, info), "recipe": recipe, "snapshot_kind": how}
         pre = local.prefetch(re.findall(r'<img[^>]*\ssrc="([^"]+)"', html))
-        local.store_doc(pid, html, meta, "snapshot.html", page, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)
+        store.repository().prepare_import(pid)
+        with store.repository().workspace(pid):
+            local.store_doc(pid, html, meta, "snapshot.html", page, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)
+            with store.edit(pid) as document:
+                document.source.reference = final
         print(f"kept: {pid}")
     return 0
 

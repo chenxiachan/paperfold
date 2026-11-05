@@ -132,8 +132,7 @@ def receive(msg):
         raise ValueError("no-page")
     url = url.split("#")[0]
     pid = webpage.pid_of(url)
-    d = store.pdir(pid)
-    new = not (d / "meta.json").exists()
+    new = not store.has(pid)
     if new:
         how, view = webpage.view_of(msg.get("read") if isinstance(msg.get("read"), dict) else None)
         if view:
@@ -144,19 +143,21 @@ def receive(msg):
         host = re.sub(r"^www\.", "", urllib.parse.urlparse(url).hostname or "")
         if info["title"] == host:   # (the page names itself nowhere TextFold reads: the tab's title)
             info["title"] = (msg.get("title") or "").strip()[:300] or host
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "url.txt").write_text(url, encoding="utf-8")
         meta = webpage.meta_of(pid, url, info)
         meta["source"] = {**meta["source"], "via": "browser"}
         meta["snapshot_kind"] = "browser"
         meta["snapshot_taken"] = msg.get("taken") if isinstance(msg.get("taken"), str) else time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         meta["reader"] = how
         pre = local.prefetch(re.findall(r'<img[^>]*\ssrc="([^"]+)"', read))
-        local.store_doc(pid, read, meta, "snapshot.html", html, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)
-        if view:
-            (d / "article.html").write_text(view["html"], encoding="utf-8")   # (as the reading view gave it)
-        else:
-            (d / "source.md").write_text(md, encoding="utf-8")
+        store.repository().prepare_import(pid)
+        with store.repository().workspace(pid):
+            local.store_doc(pid, read, meta, "snapshot.html", html, lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)
+            with store.edit(pid) as document:
+                document.source.reference = url
+                if view:
+                    document.extensions["article.html"] = view["html"].encode("utf-8")
+                else:
+                    document.source.markdown = md
     there = _server_url()
     job = _generate(there, pid) if there and new else None
     return {"ok": True, "paper": pid, "new": new, "open": f"{there}/p/{pid}" if there else None, "job": job}

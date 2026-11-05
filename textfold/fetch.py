@@ -85,34 +85,41 @@ def get(url):
 
 
 def fetch(pid, root: Path, force=False):
-    d = root / "papers" / pid
-    d.mkdir(parents=True, exist_ok=True)
-    src, meta_f = d / "source.html", d / "meta.json"
-    if src.exists() and meta_f.exists() and not force:
-        return d
-    if src.exists() and not force:   # its HTML came, then its metadata did not: only that is asked for again
-        html, final = src.read_bytes(), ""
-    else:
-        html, final = get(f"https://arxiv.org/html/{pid}")
-        tmp = src.with_name(f"source.html.{uuid.uuid4().hex[:8]}.part")   # (never half a page, if the disk fails)
-        tmp.write_bytes(html)
-        tmp.replace(src)
-    abs_html = get(f"https://arxiv.org/abs/{pid}")[0].decode("utf-8", "replace")
-    metas = re.findall(r'<meta name="citation_(\w+)" content="([^"]*)"', abs_html)
-    lic = re.search(r'href="(https?://(?:arxiv\.org/licenses|creativecommons\.org)[^"]+)"', abs_html)
-    version = re.search(r"/html/\d{4}\.\d{4,5}(v\d+)", final) or re.search(r'src="\d{4}\.\d{4,5}(v\d+)/', html.decode("utf-8", "replace"))
-    meta = {
-        "id": pid,
-        "version": version.group(1) if version else "",
-        "title": unescape(next((v for k, v in metas if k == "title"), pid)),
-        "authors": [unescape(v) for k, v in metas if k == "author"],
-        "date": next((v for k, v in metas if k == "date"), ""),
-        "abs_url": f"https://arxiv.org/abs/{pid}",
-        "html_url": final or f"https://arxiv.org/html/{pid}{version.group(1) if version else ''}",
-        "license": lic.group(1) if lic else "",
-    }
-    meta_f.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-    return d
+    from . import store
+    from .storage import DocumentStore, LocalDirectoryBackend
+    repo = store.repository() if Path(root) == Path(store.DATA) else DocumentStore(LocalDirectoryBackend(root))
+    if isinstance(repo.backend, LocalDirectoryBackend):
+        folder = repo.backend.root / "papers" / pid
+        if not force and (folder / "source.html").exists() and (folder / "meta.json").exists():
+            return folder
+    with repo.edit(pid, create=True) as document:
+        if document.source.html is not None and document.meta is not None and not force:
+            return folder if isinstance(repo.backend, LocalDirectoryBackend) else document
+        if document.source.html is not None and not force:
+            html, final = document.source.html.encode("utf-8"), ""
+        else:
+            html, final = get(f"https://arxiv.org/html/{pid}")
+            document.source.html = html.decode("utf-8", "replace")
+    # Keep completed HTML if metadata fails; a generation lease still defers cloud publication.
+    repo.checkpoint(pid)
+    with repo.edit(pid, create=True) as document:
+        abs_html = get(f"https://arxiv.org/abs/{pid}")[0].decode("utf-8", "replace")
+        metas = re.findall(r'<meta name="citation_(\w+)" content="([^"]*)"', abs_html)
+        lic = re.search(r'href="(https?://(?:arxiv\.org/licenses|creativecommons\.org)[^"]+)"', abs_html)
+        version = re.search(r"/html/\d{4}\.\d{4,5}(v\d+)", final) or re.search(r'src="\d{4}\.\d{4,5}(v\d+)/', html.decode("utf-8", "replace"))
+        meta = {
+            "id": pid,
+            "version": version.group(1) if version else "",
+            "title": unescape(next((v for k, v in metas if k == "title"), pid)),
+            "authors": [unescape(v) for k, v in metas if k == "author"],
+            "date": next((v for k, v in metas if k == "date"), ""),
+            "abs_url": f"https://arxiv.org/abs/{pid}",
+            "html_url": final or f"https://arxiv.org/html/{pid}{version.group(1) if version else ''}",
+            "license": lic.group(1) if lic else "",
+        }
+        document.meta = meta
+        document.source.html = html.decode("utf-8", "replace")
+        return folder if isinstance(repo.backend, LocalDirectoryBackend) else document
 
 
 def image_name(src):

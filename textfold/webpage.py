@@ -38,10 +38,9 @@ def register(url):
     """A page's id (store.resolve), its address kept for the fetch."""
     url = url.strip()
     pid = pid_of(url)
-    d = store.pdir(pid)
-    if not (d / "meta.json").exists():
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "url.txt").write_text(url, encoding="utf-8")
+    if not store.has(pid):
+        with store.edit(pid, create=True) as doc:
+            doc.source.reference = url
     return pid
 
 
@@ -478,13 +477,12 @@ def meta_of(pid, final, info):
 
 def fetch(pid, progress=None):
     """Store a web page's article (once)."""
-    d = store.pdir(pid)
-    if (d / "meta.json").exists() and (d / "source.html").exists():
+    if store.readable(pid):
         return pid
-    url = store.read_text(d / "url.txt").strip()
+    url = store.document(pid).source.reference.strip()
     data, final, charset = _get(url)
     page = data.decode(charset or "utf-8", "replace") if charset else data
     md, html, info = read(page, final)
     pre = local.prefetch(re.findall(r'<img[^>]*\ssrc="([^"]+)"', html))
-    return local.store_doc(pid, html, meta_of(pid, final, info), "source.md", md,
+    return local.store_doc(pid, html, meta_of(pid, final, info), "markdown", md,
                            lambda folder: local.Images(folder, None, pre=pre).resolve, sizes=True)

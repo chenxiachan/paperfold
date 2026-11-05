@@ -51,15 +51,15 @@ class Saved(unittest.TestCase):
         web.mkdir()
         for name in (*server.STATIC, "app.html", "template.html"):
             shutil.copy2(build.WEB / name, web / name)
-        (root / "scan.pdf").write_bytes(b"%PDF-1.5\n%%EOF\n")
         patches = [mock.patch.object(build, "WEB", web), mock.patch.object(store, "DATA", root / "data"),
-                   mock.patch.object(pdf, "has_source", return_value=True), mock.patch.object(pdf, "path", return_value=root / "scan.pdf")]
+                   mock.patch.object(pdf, "has_source", return_value=True)]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
         server.PAGES.clear()
         self.addCleanup(server.PAGES.clear)
         self.pid = local.import_text("# A scan\n\nA paragraph read from a scanned page.\n")
+        self.assertTrue(pdf.keep(self.pid, b"%PDF-1.5\n%%EOF\n"))
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(Jobs()))
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.addCleanup(self.httpd.server_close)

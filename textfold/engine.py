@@ -53,7 +53,11 @@ class Stopped(Exception):
 def home():
     """Where a new engine goes unless the reader chooses a folder: beside the library, in the folder it was moved to
     (Settings), or else in the system's folder for app data (beside the library that stays there, or a clone's)."""
-    root = store.library_root()
+    if store.is_local():
+        root = store.library_root()
+    else:
+        from .storage_settings import active_path
+        root = active_path(store.DATA, store.DATA)  # engine location stays local in cloud mode
     return root / "engine" if root != Path(store.DATA).resolve() else store.app_data() / "engine"
 
 

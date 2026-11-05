@@ -18,12 +18,15 @@ import json
 import os
 import re
 import shutil
+import copy
+import tempfile
 import threading
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 from . import editable, ids, markdown, notes, picture, semantic, store
+from .documents import Document, Source
 from .fetch import UA, urlread
 from .parse import parse
 
@@ -149,7 +152,8 @@ def import_text(text, name="document.md", base=None):
     """Store a document given as text (base: the folder its relative image paths start from, if known). Returns its id."""
     title, html, meta = _read_md(text, name)
     pid = make_id(title, text)
-    return store_doc(pid, html, {"id": pid, **meta}, "source.md", text, lambda folder: Images(folder, base).resolve, sizes=True)
+    store.repository().prepare_import(pid)
+    return store_doc(pid, html, {"id": pid, **meta}, "markdown", text, lambda folder: Images(folder, base).resolve, sizes=True)
 
 
 # what a replaced text takes with it: the text (the one last generated kept in its history: keep_text), what was read
@@ -163,9 +167,11 @@ def text_of(pid):
     """A stored document's text, to be edited and put in its place (replace_text): the Markdown it was read from
     (source.md: a Markdown file's, a converted file's, a web page's read by TextFold, and any document's once edited),
     else the Markdown of its page as the reader reads it (editable.py: an arXiv paper, an article from Wikipedia or
-    Europe PMC, a page sent from the browser). None: no such document."""
+    Europe PMC, a page sent from the browser). None for missing documents or immutable cloud originals."""
+    if not store.is_local() or not store.valid_id(pid):
+        return None
     d = store.pdir(pid)
-    if not (store.valid_id(pid) and all((d / f).exists() for f in ("meta.json", "source.html"))):
+    if not all((d / f).exists() for f in ("meta.json", "source.html")):
         return None
     if (d / "source.md").exists():
         return store.read_text(d / "source.md")
@@ -175,6 +181,8 @@ def text_of(pid):
 def original(pid):
     """The text a document had when it was last generated (or read in), before the edits since (keep_text), or None:
     the page's edit history shows what they changed in it, and puts any of it back (app.js, review)."""
+    if not store.is_local():
+        return None
     f = store.pdir(pid) / HISTORY / "source.md"
     return store.read_text(f) if store.valid_id(pid) and f.exists() else None
 
@@ -200,6 +208,8 @@ def keep_text(d, text):
 def settle(pid):
     """A document generated again in every language its levels were in when its text was edited (store.pending): its
     edit history goes, as the page said it would, and the languages it was to be generated in with it."""
+    if not store.is_local():
+        return
     d = store.pdir(pid)
     if not (d / HISTORY).exists():   # (never edited, or settled before)
         return
@@ -226,8 +236,42 @@ def replace_text(pid, text, name=None, base=None):
     its meta ("pending", with those of an edit before not made again yet): the page says they are to be generated again,
     and does it for all of them at once (app.js), so a text can be put right in several places first and the model asked
     once. Returns the new title. LookupError: no such document, or none with a text to edit (text_of)."""
+    if not store.valid_id(pid):
+        raise LookupError(pid)
     with _REPLACING:
         return _replace(pid, text, name, base)
+
+
+def _normalized(html, resolver, sizes=False):
+    """Image downloading needs scratch files; persistence gets resource values."""
+    with tempfile.TemporaryDirectory(prefix="textfold-images-") as temp:
+        folder = Path(temp)
+        html = semantic.normalize(html, resolve_img=resolver(folder), sizes=sizes)
+        images = {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+        return html, images
+
+
+def _replace_backend(pid, text, name, base):
+    if not store.readable(pid):
+        raise LookupError(pid)
+    old = store.parsed(pid)
+    gone = ids.load(pid)
+    with store.edit(pid) as document:
+        was = document.meta
+        title, html, meta = _read_md(text, name or (was.get("source") or {}).get("name") or "document.md")
+        meta = {**was, **meta, "id": pid, "replaced": store.stamp()}
+        html, images = _normalized(html, lambda folder: Images(folder, base).resolve, sizes=True)
+        html, new = ids.freeze(html, meta, old, gone)
+        previous = Document(pid, meta=copy.deepcopy(was),
+                            source=Source(html=document.source.html, markdown=document.source.markdown),
+                            layers=copy.deepcopy(document.layers), notes=copy.deepcopy(document.notes),
+                            images=dict(document.images), _legacy=dict(document._legacy))
+        document.previous = previous
+        document.meta, document.source.html, document.source.markdown = meta, html, text
+        document.images, document.layers = images, {}
+    ids.remember(pid, old, new)
+    notes.reanchor(pid, old, new)
+    return title
 
 
 def _html_of(pid, text, was, name=None):
@@ -239,6 +283,10 @@ def _html_of(pid, text, was, name=None):
 
 
 def _replace(pid, text, name, base):
+    if not store.is_local():
+        if not store.valid_id(pid) or not pid.startswith("md-"):
+            raise LookupError(pid)
+        return _replace_backend(pid, text, name, base)
     d = store.pdir(pid)
     before = text_of(pid)
     if before is None:
@@ -380,26 +428,29 @@ def _word_at(doc, unit, at):
     return {"unit": uid, "token": i, "after": False} if i is not None else {"unit": uid, "token": len(ends) - 1, "after": True}
 
 
-def store_doc(pid, html, meta, raw_name, raw, resolver, sizes=False, old=None):
-    """A document's semantic HTML stored as a paper: normalized (with its images, through resolver(img folder)) into
-    papers/<pid>/, written whole or not at all, with its paragraphs' ids (ids.freeze; old: the document it replaces,
-    whose paragraphs still there keep theirs). A paper already stored stays as it is."""
-    d = store.pdir(pid)
-    if (d / "meta.json").exists() and (d / "source.html").exists():
+def store_doc(pid, html, meta, raw_kind, raw, resolver, sizes=False, replace=False, old=None):
+    """Save a complete normalized document. Backends choose its representation."""
+    raw_kind = {"source.md": "markdown", "source.xml": "xml", "source.wiki.html": "wiki_html", "snapshot.html": "snapshot"}.get(raw_kind, raw_kind)
+    if raw_kind not in ("markdown", "xml", "wiki_html", "snapshot"):
+        raise ValueError("Unsupported source kind")
+    if not replace and store.readable(pid):
         return pid
     gone = ids.load(pid) if old is not None else None
-    tmp = d.with_name(d.name + ".tmp")
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
-    try:
-        page, _ = ids.freeze(semantic.normalize(html, resolve_img=resolver(tmp / "img"), sizes=sizes), meta, old, gone)
-        (tmp / "source.html").write_text(page, encoding="utf-8")
-        (tmp / raw_name).write_text(raw, encoding="utf-8")
-        (tmp / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-        shutil.rmtree(d, ignore_errors=True)
-        tmp.rename(d)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+    html, images = _normalized(html, resolver, sizes)
+    html, _ = ids.freeze(html, meta, old, gone)
+    with store.edit(pid, create=True) as document:
+        if not replace and document.meta is not None and document.source.html is not None:
+            return pid
+        document.meta, document.source.html, document.images = meta, html, images
+        if raw_kind == "snapshot":
+            document.extensions["snapshot.html"] = raw.encode("utf-8")
+            document.source.originals["html"] = raw.encode("utf-8")
+        else:
+            setattr(document.source, raw_kind, raw)
+        if replace:
+            document.layers = {}   # these belonged to the previous source text
+            document.previous = None
+            document.extensions = {k: v for k, v in document.extensions.items() if not k.startswith("history/")}
     return pid
 
 
