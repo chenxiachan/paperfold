@@ -4,10 +4,12 @@
 // to six), the months one under another, scrolled on their own, the deeper a day the more notes on it; zoomed out (−,
 // ⌘ or Ctrl and the wheel, a pinch), each month a small square map, side by side. Days are picked by a click, a drag
 // across them, a month's name for the month; ⌘ or Ctrl adds to what is picked, shift runs on from the last day picked;
-// the rows then list their notes alone; Today picks today. A note opens there (#n=), goes (with an undo), shows the
-// records it went into. What is ticked gathers on the right, whatever days are in view; from there it is deleted, made
-// a reading record (/api/record: what I read, was curious about, got, attended to), a document of the library which
-// opens, or the same as Markdown for Obsidian (/api/record/obsidian). Each icon says what it is in a tip.
+// held at the calendar's edge in a drag, it scrolls on, so a stretch runs across months; Today picks today. The rows
+// then list those days' notes alone. Above them, four questions are asked of the days picked (else every note), or of
+// the notes ticked when some are: what I read, what I was curious about, what I got, what I attended to; the answer
+// (/api/record/view) shows under them, and is saved as a document of the library (/api/record) or as Markdown for
+// Obsidian (/api/record/obsidian). A note opens there (#n=), goes (with an undo), shows the records it went into. Each
+// icon says what it is in a tip.
 (() => {
   const I18N = window.DR_I18N;
   const store = {
@@ -95,7 +97,7 @@
       `<button type="button" class="nb-nline k-${lineKind(n)}" aria-expanded="${open}"><time>${esc(oneDay ? clock(t) : `${short(t)} ${clock(t)}`)}</time>` +
       `<span class="nb-ntext">${esc(lineOf(n))}</span></button><span class="nb-icons">${used}` +
       `<a class="nb-ico" href="${esc(placeOf(n))}" ${tipped(T.nb_there)}>${I.out}</a>` +
-      `<button type="button" class="nb-ico nb-trash" ${tipped(T.nb_delete)}>${I.trash}</button></span></div>` +
+      `<button type="button" class="nb-ico nb-trash" ${tipped(T.nb_delete_note)}>${I.trash}</button></span></div>` +
       (open ? `<div class="nb-ndetail">${detailHtml(n)}</div>` : '') + '</div>';
   }
   function textHtml(pid, ns, oneDay) {
@@ -122,9 +124,8 @@
     const by = new Map();   // each text once, the one written in last first; its notes in the order they were made
     for (const n of list) { if (!by.has(n.paper)) by.set(n.paper, []); by.get(n.paper).unshift(n); }
     const every = list.length && list.every((n) => picked.has(key(n))), any = list.some((n) => picked.has(key(n)));
-    const said = view === 'cal' ? daysSaid() : '';
-    $('nb-listhead').innerHTML = list.length || said ? `<input type="checkbox" class="nb-check nb-master" ${tipped(T.nb_pick_all)}${every ? ' checked' : ''}>` +
-      `<b class="nb-cnt">${list.length}</b>${said ? `<span>${esc(said)}</span><button type="button" class="nb-ico nb-undays" ${tipped(T.nb_clear_days)}>${I.x}</button>` : ''}` : '';
+    $('nb-listhead').innerHTML = list.length ? `<input type="checkbox" class="nb-check nb-master" ${tipped(T.nb_pick_all)}${every ? ' checked' : ''}>` +
+      `<span>${esc(T.nb_pick_all)}</span>` : '';
     const master = $('nb-listhead').querySelector('.nb-master');
     if (master) master.indeterminate = !every && any;
     $('nb-list').innerHTML = !data.notes.length ? `<p class="nb-empty">${esc(T.nb_empty)}</p>`
@@ -132,33 +133,69 @@
     if (!list.length) $('nb-list').classList.add('nb-bare'); else $('nb-list').classList.remove('nb-bare');
     document.querySelectorAll('.nb-tcheck[data-some]').forEach((c) => { c.indeterminate = true; });
     for (const k of openC) { const el = document.querySelector(`.nb-n[data-key="${CSS.escape(k)}"] .nb-ctx`); if (el) context(k, el); }
-    renderTray();
+    renderAsk();
   }
 
-  // ── what is picked, gathered on the right whatever days are in view: a text a group, a note a line; the record of
-  // the four questions, the same for Obsidian, and deletion made from it ──
-  function renderTray() {
-    const ns = data.notes.filter((n) => picked.has(key(n))), tray = $('nb-tray');
-    const said = tray.querySelector('.nb-said'), keepSaid = said ? [said.className, said.textContent] : null;
-    if (!ns.length) {
-      tray.innerHTML = `<div class="nb-trayhead"><span>${esc(T.nb_tray)}</span></div><p class="nb-trayempty">${esc(T.nb_tray_empty)}</p>`;
-      return;
-    }
-    const by = new Map();
-    for (const n of ns) { if (!by.has(n.paper)) by.set(n.paper, []); by.get(n.paper).unshift(n); }
-    tray.innerHTML = `<div class="nb-trayhead"><span>${esc(T.nb_tray)}</span><b class="nb-cnt">${ns.length}</b>` +
-      `<button type="button" class="nb-ico nb-trayclear" ${tipped(T.nb_clear)}>${I.x}</button></div><div class="nb-traybody">` +
-      [...by].map(([pid, g]) => `<div class="nb-tg"><div class="nb-tgh"><span>${esc(titleOf(pid))}</span><b class="nb-cnt">${g.length}</b>` +
-        `<button type="button" class="nb-ico nb-tgx" data-pid="${esc(pid)}" ${tipped(T.nb_unpick)}>${I.x}</button></div>` +
+  // ── the four questions, asked of what is in view (the days picked, else every note) or of what is ticked: the
+  // answer under them, one at a time; saved as a document of the library, or as Markdown for Obsidian ──
+  const QS = ['read', 'curious', 'got', 'attend'];
+  let asked = null, answer = null, answerFor = '', answerTimer = null, showPicked = false;
+  const scope = () => (picked.size ? data.notes.filter((n) => picked.has(key(n))) : listed());
+  const scopeItems = () => scope().map((n) => ({ paper: n.paper, note: n.id }));
+  const scopeSig = () => scope().map(key).sort().join(',');
+  function scopeHtml() {
+    if (picked.size) {
+      const ns = data.notes.filter((n) => picked.has(key(n))), by = new Map();
+      for (const n of ns) { if (!by.has(n.paper)) by.set(n.paper, []); by.get(n.paper).unshift(n); }
+      const list = showPicked ? `<div class="nb-picks">${[...by].map(([pid, g]) => `<div class="nb-tg"><div class="nb-tgh"><span>${esc(titleOf(pid))}</span>` +
+        `<b class="nb-cnt">${g.length}</b><button type="button" class="nb-ico nb-tgx" data-pid="${esc(pid)}" ${tipped(T.nb_unpick)}>${I.x}</button></div>` +
         g.map((n) => `<div class="nb-ti k-${lineKind(n)}" data-key="${esc(key(n))}"><span>${esc(lineOf(n))}</span>` +
-          `<button type="button" class="nb-ico nb-tix" ${tipped(T.nb_unpick)}>${I.x}</button></div>`).join('') + '</div>').join('') +
-      `</div><div class="nb-trayacts"><button type="button" class="nb-go nb-record" ${tipped(T.nb_record_tip)}>${esc(T.nb_record)}</button>` +
-      `<button type="button" class="nb-btn nb-obs">${esc(T.nb_obsidian)}</button>` +
-      `<button type="button" class="nb-btn nb-del">${esc(T.nb_delete)}</button></div><div class="nb-said" role="status"></div>`;
-    if (keepSaid) { const s2 = tray.querySelector('.nb-said'); [s2.className, s2.textContent] = keepSaid; }
+          `<button type="button" class="nb-ico nb-tix" ${tipped(T.nb_unpick)}>${I.x}</button></div>`).join('') + '</div>').join('')}</div>` : '';
+      return `<div class="nb-scope"><button type="button" class="nb-scopebtn" aria-expanded="${showPicked}">${I.chev}<span>${esc(T.nb_scope_picked)}</span>` +
+        `<b class="nb-cnt">${ns.length}</b></button><button type="button" class="nb-ico nb-unpickall" ${tipped(T.nb_clear_picked)}>${I.x}</button></div>${list}`;
+    }
+    const said = view === 'cal' ? daysSaid() : '';
+    return `<div class="nb-scope"><span class="nb-scopel">${esc(said || T.nb_scope_all)}</span><b class="nb-cnt">${listed().length}</b>` +
+      (said ? `<button type="button" class="nb-ico nb-undays" ${tipped(T.nb_clear_days)}>${I.x}</button>` : '') + '</div>';
   }
-  const items = () => data.notes.filter((n) => picked.has(key(n))).map((n) => ({ paper: n.paper, note: n.id }));
-  const say = (text, bad) => { const s2 = $('nb-tray').querySelector('.nb-said'); if (s2) { s2.className = `nb-said${bad ? ' bad' : ''}`; s2.textContent = text; } };
+  const src = (e) => `<a class="nb-src" href="${esc(e.there)}">${esc([e.title, e.section, e.day].filter(Boolean).join(' · '))}</a>`;
+  function answerHtml() {
+    if (!asked) return '';
+    if (!answer || answerFor !== scopeSig()) return `<div class="nb-answer"><p class="nb-wait">${esc(T.nb_loading)}</p></div>`;
+    const a = answer, none = (k) => `<p class="nb-wait">${esc(T[`nb_none_${k}`])}</p>`;
+    let body = '';
+    if (asked === 'read') body = a.read.map((t) => `<div class="nb-arow"><a class="nb-atitle" href="/p/${esc(t.pid)}${t.lang ? `?lang=${esc(t.lang)}` : ''}">${esc(t.title)}</a>` +
+      `<span class="nb-ameta"><b class="nb-cnt">${t.notes}</b>${esc(t.span)}</span>${t.line ? `<p class="nb-aline">${esc(t.line)}</p>` : ''}</div>`).join('');
+    else if (asked === 'curious') body = a.curious.length ? a.curious.map((e) => `<div class="nb-arow"><p class="nb-q">${esc(e.q)}</p>` +
+      `${e.a ? `<p class="nb-a">${esc(e.a)}</p>` : ''}${src(e)}</div>`).join('') : none('curious');
+    else if (asked === 'got') body = a.got.length ? a.got.map((e) => `<div class="nb-arow"><p class="nb-text">${esc(e.text)}</p>${src(e)}</div>`).join('') : none('got');
+    else body = a.attend.length ? a.attend.map((t) => `<div class="nb-arow"><div class="nb-atitle">${esc(t.title)}</div>` + t.sections.map((s) =>
+      `<div class="nb-asec"><b>${esc(s.title)}</b>${s.line ? ` <span>${esc(s.line)}</span>` : ''}</div>` +
+      s.quotes.map((q) => `<a class="nb-quote nb-aquote" href="${esc(q.there)}">${esc(q.quote)}</a>`).join('')).join('') + '</div>').join('') : none('attend');
+    return `<div class="nb-answer">${body}<div class="nb-aacts"><span class="nb-said" role="status"></span>` +
+      `<button type="button" class="nb-btn nb-savedoc" ${tipped(T.nb_save_doc_tip)}>${esc(T.nb_save_doc)}</button>` +
+      `<button type="button" class="nb-btn nb-obs">${esc(T.nb_obsidian)}</button></div></div>`;
+  }
+  function renderAsk() {
+    const n = scope().length;
+    $('nb-ask').innerHTML = !data.notes.length ? '' : scopeHtml() + (n ? `<div class="nb-qs" role="radiogroup">${QS.map((q) =>
+      `<button type="button" role="radio" data-q="${q}" aria-checked="${asked === q}">${esc(T[`nb_q_${q}`])}</button>`).join('')}</div>` + answerHtml() : '');
+    if (asked && n && answerFor !== scopeSig()) {   // (the answer of another scope: asked again, once the picking settles)
+      clearTimeout(answerTimer);
+      answerTimer = setTimeout(fetchAnswer, drag ? 400 : 120);
+    }
+  }
+  async function fetchAnswer() {
+    const sig = scopeSig(), items = scopeItems();
+    if (!items.length) return;
+    try {
+      const got = await postJson('/api/record/view', { items, ui });
+      if (sig !== scopeSig()) return;   // (picked again meanwhile)
+      answer = got; answerFor = sig;
+    } catch (x) { answer = null; answerFor = ''; }
+    renderAsk();
+  }
+  const say = (text, bad) => { const s2 = $('nb-ask').querySelector('.nb-said'); if (s2) { s2.className = `nb-said${bad ? ' bad' : ''}`; s2.textContent = text; } };
   const postJson = async (path, body) => {
     const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const got = await r.json().catch(() => ({}));
@@ -181,23 +218,25 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     return name;
   }
-  $('nb-tray').addEventListener('click', async (e) => {
+  $('nb-ask').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.matches('.nb-trayclear')) { picked.clear(); return renderList(); }
+    if (b.dataset.q) { asked = asked === b.dataset.q ? null : b.dataset.q; return renderAsk(); }
+    if (b.matches('.nb-scopebtn')) { showPicked = !showPicked; return renderAsk(); }
+    if (b.matches('.nb-unpickall')) { picked.clear(); showPicked = false; return renderList(); }
+    if (b.matches('.nb-undays')) { days = new Set(); anchor = null; return picks(); }
     if (b.matches('.nb-tgx')) { for (const k of [...picked]) if (k.startsWith(`${b.dataset.pid}|`)) picked.delete(k); return renderList(); }
     if (b.matches('.nb-tix')) { picked.delete(b.closest('.nb-ti').dataset.key); return renderList(); }
-    if (b.matches('.nb-del')) return remove([...picked]);
-    if (b.matches('.nb-record')) {
+    if (b.matches('.nb-savedoc')) {
       b.disabled = true; say(T.nb_making);
-      try { const got = await postJson('/api/record', { items: items(), ui }); location.href = `/p/${got.paper}?lang=${encodeURIComponent(got.lang)}`; }
+      try { const got = await postJson('/api/record', { items: scopeItems(), ui }); location.href = `/p/${got.paper}?lang=${encodeURIComponent(got.lang)}`; }
       catch (x) { say(T.nb_failed.replace('{e}', x.message), true); b.disabled = false; }
       return;
     }
     if (b.matches('.nb-obs')) {
       b.disabled = true;
       try {
-        const got = await postJson('/api/record/obsidian', { items: items(), ui });
+        const got = await postJson('/api/record/obsidian', { items: scopeItems(), ui });
         const where = await saveFile(got.name, got.text);
         if (where) say(T.nb_saved.replace('{name}', typeof where === 'string' ? where : got.name));
       } catch (x) { say(T.nb_failed.replace('{e}', x.message), true); }
@@ -353,7 +392,6 @@
       for (const n of listed()) { if (e.target.checked) picked.add(key(n)); else picked.delete(key(n)); }
       return renderList();
     }
-    if (e.target.closest('.nb-undays')) { days = new Set(); anchor = null; picks(); }
   });
 
   // the calendar: a click picks a day (again, alone: none); a drag, the days across; shift, from the last day picked;
@@ -383,7 +421,27 @@
     days = new Set([...drag.base, ...between(drag.from, +b.dataset.day)]);
     picks();
   });
-  addEventListener('pointerup', () => { drag = null; });
+  addEventListener('pointerup', () => { drag = null; edgeAt = null; });
+  let edgeAt = null, edgeRun = false;   // (the pointer held near the calendar's edge in a drag: it scrolls, and the run follows)
+  addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    if (!(e.buttons & 1)) { drag = null; edgeAt = null; return; }
+    edgeAt = { x: e.clientX, y: e.clientY };
+    if (!edgeRun) { edgeRun = true; requestAnimationFrame(edgeStep); }
+  });
+  function edgeStep() {
+    const box = calEl.querySelector('.nb-months');
+    if (!drag || !edgeAt || !box) { edgeRun = false; return; }
+    const r = box.getBoundingClientRect(), zone = 44;
+    const dy = edgeAt.y < r.top + zone ? -Math.ceil((r.top + zone - edgeAt.y) / 3) : edgeAt.y > r.bottom - zone ? Math.ceil((edgeAt.y - r.bottom + zone) / 3) : 0;
+    if (dy) {
+      box.scrollTop += dy;
+      const el = document.elementFromPoint(Math.min(Math.max(edgeAt.x, r.left + 4), r.right - 4), Math.min(Math.max(edgeAt.y, r.top + 4), r.bottom - 4));
+      const b = el && el.closest('.nb-d[data-day]');
+      if (b) { days = new Set([...drag.base, ...between(drag.from, +b.dataset.day)]); picks(); }
+    }
+    requestAnimationFrame(edgeStep);
+  }
   calEl.addEventListener('click', (e) => {
     if (e.target.closest('.nb-today')) {
       const t = midnight(Date.now()), d = new Date(t);

@@ -57,6 +57,7 @@
   POST /api/record            {items: [{paper, note}], ui}: the reading record of those notes, a document of the library in
                               its folder of records ({paper, lang}); no model is called
   POST /api/record/obsidian   {items, ui}: the same record as Markdown for Obsidian ({name, text})
+  POST /api/record/view       {items, ui}: its four answers, for the notes page to show ({period, read, curious, got, attend})
   POST /api/papers/delete     {paper}: move a paper to papers/.trash, kept 30 days (not while it is being generated); the
                               list. Or {papers: [ids]}: each that can go; {papers: the list, deleted: [ids], busy: [ids]}
   POST /api/papers/restore    {papers: [ids]}: those deleted last back from papers/.trash, in their folders (the
@@ -948,8 +949,10 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
-                if u.path in ("/api/record", "/api/record/obsidian"):
+                if u.path in ("/api/record", "/api/record/obsidian", "/api/record/view"):
                     try:
+                        if u.path == "/api/record/view":
+                            return self.json(record.view(body.get("items"), str(body.get("ui") or "en")))
                         if u.path == "/api/record":
                             pid = record.record(body.get("items"), str(body.get("ui") or "en"))
                             return self.json({"paper": pid, "lang": store.text_lang(pid)})

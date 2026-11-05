@@ -150,8 +150,17 @@ def gather(items, W):
             wrote.append({**entry, "text": _flat(n["text"])})
         if entry["quote"]:
             sid = sec.get("id") or ""
-            marked.setdefault(pid, {}).setdefault(sid, {"title": _flat(sec.get("title")), "line": _flat(sec.get("takeaway")), "notes": []})["notes"].append(entry)
+            marked.setdefault(pid, {}).setdefault(sid, {"title": _flat(sec.get("title")), "line": _own(sec), "notes": []})["notes"].append(entry)
     return picked, texts, asked, wrote, marked
+
+
+def _own(sec):
+    """A section's line without its heading again in front (a line made without a model opens with it)."""
+    line, title = _flat(sec.get("takeaway")), _flat(sec.get("title"))
+    for head in (f"{_flat(sec.get('num'))} {title}".strip(), title):
+        if head and line.startswith(head):
+            return line[len(head):].lstrip(" :：·-").strip()
+    return line
 
 
 def _period(picked, W):
@@ -253,6 +262,21 @@ def record(items, ui="en", when=None):
     f = next((x for x in fs["folders"] if x["name"] == W["folder"] and not x.get("parent")), None)
     library.change({"op": "move", "papers": [pid], "folder": f["id"]} if f else {"op": "new", "name": W["folder"], "papers": [pid]})
     return pid
+
+
+def view(items, ui="en"):
+    """The four answers for the page itself (the notes page shows one at a time): {period, read, curious, got, attend}."""
+    W = WORDS.get(ui) or WORDS["en"]
+    picked, texts, asked, wrote, marked = gather(items, W)
+    src = lambda e: {"pid": e["pid"], "title": e["title"], "section": e["section"], "day": e["day"], "there": _there(e)}  # noqa: E731
+    return {"period": _period(picked, W), "notes": len(picked),
+            "read": [{"pid": p, "title": t["title"], "line": t["line"], "notes": t["n"], "span": _span(t["days"], W),
+                      "lang": t["lang"]} for p, t in texts.items()],
+            "curious": [{**src(e), "q": e["q"], "a": e["a"]} for e in asked],
+            "got": [{**src(e), "text": e["text"]} for e in wrote],
+            "attend": [{"pid": p, "title": texts[p]["title"], "sections": [{"title": s["title"] or W["whole"], "line": s["line"],
+                        "quotes": [{"quote": e["quote"], "day": e["day"], "there": _there(e)} for e in s["notes"]]} for s in secs.values()]}
+                       for p, secs in marked.items()]}
 
 
 def _file(pid, title):

@@ -25,9 +25,10 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-views button { padding: 6px 9px; }
 .nb-views svg { width: 17px; height: 17px; }
 
-.nb-main { padding-top: 18px; padding-bottom: 80px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; column-gap: 28px; align-items: start; }
-.nb-main.nb-split { grid-template-columns: 340px minmax(0, 1fr) 300px; }   /* the calendar, the rows, what is picked */
-.nb-listhead { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 0 12px; color: var(--muted); font-size: 13px; min-height: 26px; }
+.nb-main { padding-top: 18px; padding-bottom: 80px; }
+.nb-main:not(.nb-split) .nb-right { max-width: 900px; margin: 0 auto; }
+.nb-main.nb-split { display: grid; grid-template-columns: 340px minmax(0, 1fr); column-gap: 32px; align-items: start; }   /* the calendar, then the questions over the rows */
+.nb-listhead { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; padding: 0 12px; color: var(--muted); font-size: 12.5px; min-height: 24px; }
 .nb-listhead:empty { display: none; }
 .nb-cnt { display: inline-block; min-width: 18px; text-align: center; font: 620 11.5px/18px var(--sans); color: var(--ink-2);
   background: var(--line-2); border-radius: 9px; padding: 0 6px; font-variant-numeric: tabular-nums; box-sizing: border-box; }
@@ -115,7 +116,8 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-d:hover { box-shadow: inset 0 0 0 1.5px var(--line); }
 .nb-d.out { visibility: hidden; }
 .nb-d.today::after { content: ""; position: absolute; left: 50%; bottom: 14%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--warm); }
-.nb-d.nb-on { box-shadow: 0 0 0 2px var(--accent-deep); }
+/* the days picked stand out by the others fading, a long stretch as much as one day (no ring on each) */
+.nb-months.picking .nb-d:not(.nb-on) { opacity: .32; }
 .nb-d.nb-on.lv0 { background: var(--accent-soft); color: var(--accent-deep); }
 .nb-months[data-zoom="year"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 18px 16px; align-content: start; }
 .nb-months[data-zoom="year"] .nb-m { margin: 0; }
@@ -127,17 +129,39 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-months[data-zoom="year"] .nb-d { width: 13px; height: 13px; aspect-ratio: auto; border-radius: 3px; font-size: 0; }
 .nb-months[data-zoom="year"] .nb-d.today { box-shadow: inset 0 0 0 1.5px var(--warm); }
 .nb-months[data-zoom="year"] .nb-d.today::after { display: none; }
-.nb-months[data-zoom="year"] .nb-d.nb-on { box-shadow: none; }
 .nb-months[data-zoom="year"] .nb-d.nb-on { outline: 0; }   /* (zoomed out, the days picked stand out by the others fading) */
 .nb-months[data-zoom="year"].picking .nb-d:not(.nb-on) { opacity: .28; }
 
-/* what is picked, on the right: a text a group, a note a line; the record, Obsidian and deletion under it */
-.nb-tray { position: sticky; top: 76px; max-height: calc(100vh - 96px); display: flex; flex-direction: column;
-  background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; }
-.nb-trayhead { display: flex; align-items: center; gap: 8px; padding: 11px 12px 10px 14px; font: 650 13.5px var(--sans); border-bottom: 1px solid var(--line-2); }
-.nb-trayhead .nb-trayclear { margin-left: auto; }
-.nb-trayempty { margin: 0; padding: 18px 16px 22px; color: var(--faint); font-size: 13px; line-height: 1.5; }
-.nb-traybody { overflow-y: auto; flex: 1; padding: 4px 0; }
+/* the questions, over the rows: what they are asked of (the days, or what is ticked), the four, the answer */
+.nb-ask { margin-bottom: 14px; }
+.nb-ask:empty { display: none; }
+.nb-scope { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 8px; }
+.nb-scopel { font: 650 16px var(--sans); letter-spacing: -.01em; }
+.nb-scopebtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 6px 2px 0; font: 650 16px var(--sans); color: var(--ink); cursor: pointer; }
+.nb-scopebtn[aria-expanded="true"] .nb-chev { transform: rotate(90deg); }
+.nb-picks { background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; margin-bottom: 10px; padding: 4px 0; max-height: 260px; overflow-y: auto; }
+.nb-qs { display: flex; flex-wrap: wrap; gap: 8px; }
+.nb-qs button { border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 14px var(--sans); border-radius: 999px;
+  padding: 8px 16px; cursor: pointer; transition: border-color .12s, background .12s; }
+.nb-qs button:hover { border-color: var(--accent); }
+.nb-qs button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
+.nb-answer { margin-top: 12px; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; padding: 6px 0 0; }
+.nb-arow { padding: 10px 16px; }
+.nb-arow + .nb-arow { border-top: 1px solid var(--line-2); }
+.nb-atitle { font: 620 14.5px var(--sans); color: var(--ink); text-decoration: none; }
+a.nb-atitle:hover { color: var(--accent); }
+.nb-ameta { margin-left: 10px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nb-ameta .nb-cnt { margin-right: 6px; }
+.nb-aline { margin: 3px 0 0; color: var(--ink-2); font: 14.5px/1.55 var(--serif); }
+.nb-src { display: inline-block; margin-top: 4px; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.nb-src:hover { color: var(--accent); }
+.nb-asec { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.nb-asec b { color: var(--ink-2); font-weight: 620; }
+a.nb-aquote { display: block; margin-top: 6px; text-decoration: none; color: var(--ink-2); }
+a.nb-aquote:hover { color: var(--ink); background: var(--surface); }
+.nb-wait { margin: 0; padding: 14px 16px; color: var(--muted); font-size: 13.5px; }
+.nb-aacts { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line-2); margin-top: 6px; }
+.nb-aacts .nb-said { flex: 1; padding: 0 4px; }
 .nb-tg + .nb-tg { border-top: 1px solid var(--line-2); }
 .nb-tgh { display: flex; align-items: center; gap: 6px; padding: 8px 8px 4px 14px; font: 620 12.5px var(--sans); color: var(--ink); }
 .nb-tgh span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -149,10 +173,7 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-ti:hover .nb-ico, .nb-tgh:hover .nb-ico, .nb-ti .nb-ico:focus-visible, .nb-tgh .nb-ico:focus-visible { opacity: 1; }
 @media (hover: none) { .nb-ti .nb-ico, .nb-tgh .nb-ico { opacity: 1; } }
 .nb-ico svg { width: 15px; height: 15px; }
-.nb-trayacts { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-top: 1px solid var(--line-2); }
-.nb-trayacts .nb-go { flex: 1 1 100%; }
-.nb-trayacts .nb-btn { flex: 1; }
-.nb-said { color: var(--muted); font-size: 12.5px; padding: 0 12px 10px; }
+.nb-said { color: var(--muted); font-size: 12.5px; }
 .nb-said:empty { display: none; }
 .nb-said.bad { color: var(--r-limitation); }
 .nb-btn { border: 1px solid var(--line); background: none; color: var(--ink-2); font: 550 13px var(--sans); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
@@ -167,10 +188,9 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-tip { position: fixed; z-index: 9; pointer-events: none; background: var(--ink); color: var(--surface); font: 550 12px/1.35 var(--sans);
   padding: 5px 8px; border-radius: 6px; white-space: nowrap; box-shadow: var(--pop); }
 
-@media (max-width: 1180px) {   /* narrower: what is picked below, the calendar above the rows */
-  .nb-main, .nb-main.nb-split { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
-  .nb-cal { position: static; height: auto; max-height: 52vh; }
-  .nb-tray { position: static; max-height: none; }
+@media (max-width: 1000px) {   /* narrower: the calendar above the questions and the rows */
+  .nb-main.nb-split { display: block; }
+  .nb-cal { position: static; height: auto; max-height: 52vh; margin-bottom: 16px; }
 }
 @media (max-width: 560px) {
   .nb-wrap { padding: 0 16px; }

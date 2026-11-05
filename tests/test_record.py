@@ -111,6 +111,15 @@ class Record(unittest.TestCase):
         self.assertIn(f"textfold://open?paper={self.a}&n=n-1&lang=en", md)
         self.assertIn("> [!question] Why a teacher?", md)
 
+    def test_the_four_answers_for_the_page(self):
+        got = record.view(self.items(), "en")
+        self.assertEqual(got["period"], "2026-11-01 to 2026-11-03")
+        self.assertEqual([t["title"] for t in got["read"]], ["Pruning", "Distillation"])
+        self.assertEqual(got["curious"][0]["q"], "Why a teacher?")
+        self.assertEqual(got["got"][0]["text"], "Magnitude only, no retraining.")
+        self.assertEqual([s["title"] for s in got["attend"][0]["sections"]], ["Method", "Results"])
+        self.assertTrue(got["got"][0]["there"].startswith(f"/p/{self.a}?lang=en#n=n-1"))
+
     def test_a_copy_stays_as_it_was(self):
         pid = record.record(self.items(), "en", when="2026-11-05 09:00")
         notes.delete(self.a, "n-1")
