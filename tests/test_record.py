@@ -120,6 +120,29 @@ class Record(unittest.TestCase):
         self.assertEqual([s["title"] for s in got["attend"][0]["sections"]], ["Method", "Results"])
         self.assertTrue(got["got"][0]["there"].startswith(f"/p/{self.a}?lang=en#n=n-1"))
 
+    def test_a_question_asked_of_the_notes(self):
+        reply = {"answer": "Pruning keeps the large weights [1], and loses little only on small models [2]. Distillation "
+                           "copies a teacher [3]. Nothing says which is faster [9].", "takeaway": "Two ways to shrink a network."}
+        with mock.patch.object(llm, "call", return_value=({"out": reply}, False)) as call, mock.patch.object(llm, "label", return_value="test-model"):
+            got = record.ask(self.items(), "How do they make a network smaller?", {"id": "test-model"}, "en")
+        prompt = call.call_args[0][0]
+        self.assertIn("Question: How do they make a network smaller?", prompt)
+        self.assertIn('[2] (T1 § Results, 2026-11-03) passage: "but only on the smaller models" paragraph: "On the held-out set', prompt)
+        self.assertIn("Write in English", prompt)
+        self.assertNotIn("[9]", got["answer"])   # (a number that names no note: left out)
+        self.assertEqual([x["n"] for x in got["notes"]], [1, 2, 3])
+        self.assertEqual(got["notes"][0]["line"], "Magnitude only, no retraining.")
+        qa = [{"q": got["question"], "answer": got["answer"], "model": got["model"]}]
+        title, md, lines, _ = record.record_md(self.items(), record.WORDS["en"], "2026-11-05 09:00", record._questions(qa))
+        self.assertIn("## What I asked", md)
+        self.assertIn(f"[1](/p/{self.a}?lang=en#n=n-1", md)
+        self.assertEqual(lines[0], "How do they make a network smaller?")
+        name, ob = record.obsidian(self.items(), "en", when="2026-11-05 09:00", qa=qa)
+        self.assertIn("> [!question] How do they make a network smaller?", ob)
+        self.assertIn(f"[[{self.a} Pruning#^n-1|1]]", ob)
+        pid = record.record(self.items(), "en", when="2026-11-05 09:00", qa=qa)
+        self.assertIn("How do they make a network smaller", store.read_text(store.pdir(pid) / "source.md"))
+
     def test_a_copy_stays_as_it_was(self):
         pid = record.record(self.items(), "en", when="2026-11-05 09:00")
         notes.delete(self.a, "n-1")

@@ -140,6 +140,32 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-scopebtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 6px 2px 0; font: 650 16px var(--sans); color: var(--ink); cursor: pointer; }
 .nb-scopebtn[aria-expanded="true"] .nb-chev { transform: rotate(90deg); }
 .nb-picks { background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; margin-bottom: 10px; padding: 4px 0; max-height: 260px; overflow-y: auto; }
+/* once something is picked: Summarize notes, which opens the four questions and a question of one's own */
+.nb-sumbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--btn); color: var(--on-btn);
+  font: 620 13.5px var(--sans); border-radius: 999px; padding: 7px 14px 7px 12px; cursor: pointer; }
+.nb-sumbtn svg { width: 15px; height: 15px; }
+.nb-sumbtn:hover { background: var(--btn-hover); }
+.nb-sumbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-deep); }
+.nb-panel { background: color-mix(in srgb, var(--accent-soft) 35%, var(--card)); border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; margin-bottom: 6px; }
+.nb-panel .nb-qs { align-items: center; }
+.nb-qs button.nb-panelx { margin-left: auto; border: 0; background: none; padding: 4px; color: var(--muted); border-radius: 6px; }
+.nb-qs button.nb-panelx:hover { background: var(--line-2); color: var(--ink); }
+.nb-askform { display: flex; gap: 8px; margin-top: 12px; }
+.nb-askq { flex: 1; min-width: 0; font: 14.5px var(--sans); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.nb-askq:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.nb-askform .nb-go { padding: 8px 18px; }
+.nb-qa1 { position: relative; }
+.nb-qa1 .nb-qax { position: absolute; top: 8px; right: 8px; opacity: 0; }
+.nb-qa1:hover .nb-qax, .nb-qax:focus-visible { opacity: 1; }
+.nb-md p { margin: 6px 0 0; font: 15px/1.6 var(--sans); }
+.nb-md ul { margin: 6px 0 0; padding-left: 20px; }
+.nb-md li { margin: 3px 0; font: 15px/1.6 var(--sans); }
+.nb-cite { display: inline-block; min-width: 16px; margin: 0 1px; padding: 0 4px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-deep);
+  font: 650 11px/16px var(--sans); text-align: center; text-decoration: none; vertical-align: 1px; }
+.nb-cite:hover { background: var(--accent); color: var(--on-btn); text-decoration: none; }
+.nb-by { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.nb-wait.bad { color: var(--r-limitation); }
+.nb-panel .nb-aacts { border-top: 0; margin-top: 10px; padding: 0; }
 .nb-qs { display: flex; flex-wrap: wrap; gap: 8px; }
 .nb-qs button { border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 14px var(--sans); border-radius: 999px;
   padding: 8px 16px; cursor: pointer; transition: border-color .12s, background .12s; }
