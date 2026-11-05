@@ -11,28 +11,29 @@
 </head>
 <body>
 <header class="nb-top">
-  <div class="nb-head">
+  <div class="nb-wrap nb-head">
     <a class="nb-home" href="/"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="2.4" rx="1.2" fill="var(--accent)"/><rect x="2" y="8.8" width="11" height="2.4" rx="1.2" fill="var(--accent)" opacity=".4"/><rect x="2" y="14.6" width="5" height="2.4" rx="1.2" fill="var(--warm)"/></svg><span>TextFold</span></a>
     <h1 id="nb-title"></h1>
-    <span class="nb-count" id="nb-count"></span>
-  </div>
-  <div class="nb-tools">
     <input type="search" id="nb-q" autocomplete="off" spellcheck="false">
-    <div class="nb-kinds" id="nb-order" role="radiogroup"></div>
-    <div class="nb-kinds" id="nb-kinds" role="radiogroup"></div>
-    <button type="button" class="nb-all" id="nb-all"></button>
+    <div class="nb-seg" id="nb-kinds" role="radiogroup"></div>
+    <div class="nb-seg nb-views" id="nb-views" role="radiogroup"></div>
   </div>
 </header>
-<main id="nb-list" class="nb-list" aria-live="polite"></main>
+<main class="nb-wrap nb-main">
+  <section id="nb-cal" class="nb-cal" hidden></section>
+  <div id="nb-listhead" class="nb-listhead"></div>
+  <div id="nb-list" class="nb-grid" aria-live="polite"></div>
+</main>
 <div class="nb-bar" id="nb-bar" role="toolbar" hidden>
-  <div class="nb-bar-in">
+  <div class="nb-wrap nb-bar-in">
     <span class="nb-picked" id="nb-picked"></span>
-    <span class="nb-model" id="nb-model"></span>
-    <button type="button" class="nb-clear" id="nb-clear"></button>
+    <span class="nb-said" id="nb-said" role="status"></span>
+    <button type="button" class="nb-btn" id="nb-del"></button>
+    <button type="button" class="nb-btn" id="nb-clear"></button>
     <button type="button" class="nb-go" id="nb-go"></button>
   </div>
-  <div class="nb-said" id="nb-said" role="status"></div>
 </div>
+<div class="nb-toast" id="nb-toast" role="status" hidden></div>
 <script id="boot" type="application/json">{{BOOT}}</script>
 <script src="/static/i18n.js"></script>
 <script src="/static/notes.js"></script>

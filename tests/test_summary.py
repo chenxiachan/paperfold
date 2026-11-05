@@ -115,6 +115,13 @@ class Summary(unittest.TestCase):
         self.assertIn("The model named no note for this point.", plain(second["toks"], doc["atoms"]))
         self.assertEqual(doc["meta"]["lang"], "en")
 
+    def test_which_summaries_a_note_went_into(self):
+        pid = summary.make(self.items()[:2], None, "en", when="2026-11-05 09:00")
+        got = summary.everything(library.stamp(store.papers()))
+        self.assertEqual(got["used"], {f"{self.a}|n-2": [pid], f"{self.b}|n-3": [pid]})
+        self.assertEqual(got["summaries"][pid]["made"], "2026-11-05 09:00")
+        self.assertNotIn(pid, got["papers"])   # (no notes of its own yet)
+
     def test_a_copy_stays_as_it_was(self):
         pid = summary.make(self.items(), None, "en", when="2026-11-05 09:00")
         notes.delete(self.a, "n-1")

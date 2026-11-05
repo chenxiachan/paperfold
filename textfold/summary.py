@@ -84,25 +84,33 @@ MARK = re.compile(r"^\s*\[(\d+)\]")
 
 
 def everything(papers):
-    """Every note of the documents listed (the server's list: titles, names), each with the id of its document:
-    {papers: {id: {title, name, lang}}, notes: [...]}, the newest first."""
-    out, rows = {}, []
+    """Every note of the documents listed (the server's list: titles, names), each with the id of its document, the
+    newest first; and which summaries each note went into: {papers: {id: {title, name, lang, summary}}, notes: [...],
+    summaries: {id: {title, made}}, used: {"<paper>|<note>": [summary ids]}}."""
+    out, rows, sums, used = {}, [], {}, {}
     for p in papers:
         pid = p["id"]
-        if not (store.pdir(pid) / "notes.json").exists():
+        has = (store.pdir(pid) / "notes.json").exists()
+        if not has and not p.get("summary"):
             continue
+        meta = json.loads(store.read_text(store.pdir(pid) / "meta.json"))
+        title = p.get("name") or p.get("title") or pid
+        if isinstance(meta.get("summary"), dict):
+            sums[pid] = {"title": title, "made": str(meta["summary"].get("made") or "")}
+            for x in meta["summary"].get("notes") or []:
+                if isinstance(x, dict) and x.get("paper") and x.get("note"):
+                    used.setdefault(f"{x['paper']}|{x['note']}", []).append(pid)
         try:
-            ns = notes.read(pid).get("notes") or []
+            ns = notes.read(pid).get("notes") or [] if has else []
         except (OSError, ValueError):
             continue   # (a notes file half written by a program of its own: the others are listed)
         if not ns:
             continue
-        meta = json.loads(store.read_text(store.pdir(pid) / "meta.json"))
         out[pid] = {"title": p.get("title") or pid, "name": p.get("name") or "", "lang": store.text_lang(pid),
-                    "summary": bool(meta.get("summary"))}
+                    "summary": pid in sums}
         rows += [{**n, "paper": pid} for n in ns if isinstance(n, dict) and n.get("id")]
     rows.sort(key=lambda n: n.get("created") or "", reverse=True)
-    return {"papers": out, "notes": rows}
+    return {"papers": out, "notes": rows, "summaries": sums, "used": used}
 
 
 def _flat(s):
