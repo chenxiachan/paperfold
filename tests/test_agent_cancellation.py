@@ -144,9 +144,13 @@ class AgentCancellation(unittest.TestCase):
             self.assertIs(run.call_args.kwargs['stop'],stop)
 
     def test_rate_limit_does_not_retry_codex_with_lower_effort(self):
+        def rate_limited(args, *, stderr, **kwargs):
+            stderr.write(b'429 Too Many Requests')
+            return subprocess.CompletedProcess(args, 1)
+
         with mock.patch.object(agents,'path_of',return_value='fixture'), \
              mock.patch.object(agents,'argv',return_value=['fixture']), \
-             mock.patch.object(agents.subprocess,'run',return_value=subprocess.CompletedProcess([],1,'','429 Too Many Requests')) as run:
+             mock.patch.object(agents.subprocess,'run',side_effect=rate_limited) as run:
             with self.assertRaisesRegex(RuntimeError,'429'):
                 agents.run_codex('fixture','prompt',{},'', 'off', 5)
             self.assertEqual(run.call_count,1)

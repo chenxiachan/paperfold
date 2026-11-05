@@ -5,7 +5,8 @@
                                 communicate with Zotero" is on (Settings › Advanced). Read only: nothing here changes
                                 the library, and nothing goes to Zotero's servers.
 
-An item is read by the best text it has: its arXiv paper when it names one (arXiv's HTML, as any arXiv link); else its
+An item is read by the best text it has: its arXiv paper when it names one (arXiv's HTML, as any arXiv link), unless
+the reader chose in Settings to read a PDF itself (server.take_pdf), then its file first; else its
 file (a PDF, an e-book, a saved web page, a Word file), taken as a file dropped on the landing is (server.take_file:
 the paper online when its DOI names one, else the PDF engine, else TextFold's own reading), so it is kept beside the
 paper as any original is; else its DOI, in Europe PMC. zotero.json, in the data folder, says which item became which
@@ -174,16 +175,16 @@ def _check(lib):
 
 # ── an item, read ─────────────────────────────────────────────────────
 
-def read(lib, key):
+def read(lib, key, online=True):
     """What an item is read from: {"ref", "title", "record"} for a paper online (its arXiv id, else its DOI when it has no
-    file), or {"data", "name", "refs", "title", "record"} for its file, to be taken as a dropped file is.
-    ValueError("no-file") when it has neither."""
+    file), or {"data", "name", "refs", "title", "record"} for its file, to be taken as a dropped file is. online False
+    (Settings: a PDF read itself): its file before its arXiv paper. ValueError("no-file") when it has neither."""
     _check(lib)
     if not KEY.fullmatch(key or ""):
         raise ValueError("bad-item")
     r, _ = _get(f"{lib}/items/{key}")
     it = item_of(r)
-    if it["arxiv"]:
+    if it["arxiv"] and online:
         return {"ref": it["arxiv"], "title": it["title"], "record": record_of(r, it)}
     for att in _attachments(lib, key):
         f = _file(lib, att)
@@ -191,8 +192,8 @@ def read(lib, key):
             name = f.name if engine.kind_of(f.name) else f"{f.name}.pdf"   # (a PDF kept under a name without .pdf)
             return {"data": f.read_bytes(), "name": name, "refs": [it["doi"]] if it["doi"] else [], "title": it["title"],
                     "record": record_of(r, it)}
-    if it["doi"]:
-        return {"ref": it["doi"], "title": it["title"], "record": record_of(r, it)}
+    if it["arxiv"] or it["doi"]:
+        return {"ref": it["arxiv"] or it["doi"], "title": it["title"], "record": record_of(r, it)}
     raise ValueError("no-file")
 
 

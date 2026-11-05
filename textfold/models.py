@@ -29,7 +29,7 @@ ANTHROPIC_PRESET = {"id": "anthropic", "name": "Anthropic", "base": "https://api
 
 def load_settings():
     s = {"model": None, "ask_model": None, "ask_effort": None, "efforts": {}, "providers": [], "custom_agents": [], "use_thoughtdag_env": False,
-         "pdf_tier": "fast", "engine_path": None, "zotero": {},
+         "pdf_tier": "fast", "pdf_online": True, "engine_path": None, "zotero": {},
          "lang": None}   # the reader's language as the page last told it (the page keeps its own: pf-ui-lang), for other programs
     old_home = next((h for h in OLD_HOMES if (h / "settings.json").exists()), None)
     if not SETTINGS.exists() and old_home:   # from before the name TextFold: copied, kept

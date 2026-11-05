@@ -806,14 +806,20 @@ def _codex(model, prompt, schema, system, effort, timeout, tools, stop, cmd, cap
         call = args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"]
         options = dict(input=f"{system}\n\n{prompt}", text=True, encoding="utf-8", errors="replace",
                        timeout=timeout, env=child_env(), cwd=tmp)
-        if stop is None:
-            r = subprocess.run(call, capture_output=True, **options)
-        else:
-            from ._agent_process import run
-            r = run(call, stop=stop, **options)
-        if r.returncode or not of.exists():
-            raise RuntimeError(f"codex exec exited {r.returncode}: {(r.stderr or r.stdout)[-800:]}")
-        return parse_json(of.read_text(encoding="utf-8")), None
+        # Codex can panic when its CLI writes to a full nonblocking pipe.
+        with tempfile.TemporaryFile(dir=tmp) as stdout, tempfile.TemporaryFile(dir=tmp) as stderr:
+            if stop is None:
+                r = subprocess.run(call, stdout=stdout, stderr=stderr, **options)
+            else:
+                from ._agent_process import run
+                r = run(call, stop=stop, stdout=stdout, stderr=stderr, **options)
+            if not r.returncode and of.exists():
+                return parse_json(of.read_text(encoding="utf-8")), None
+            stream = stderr if stderr.seek(0, os.SEEK_END) else stdout
+            size = stream.seek(0, os.SEEK_END)
+            stream.seek(max(0, size - 3200))
+            detail = stream.read().decode("utf-8", errors="replace")[-800:]
+        raise RuntimeError(f"codex exec exited {r.returncode}: {detail}")
 
 
 def run_pi(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
@@ -880,6 +886,8 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
     try:
         got = json.loads(r.stdout)
     except ValueError:
+        if r.returncode == 0 and r.stdout.strip():   # (finished, its output cut short: #99)
+            raise RuntimeError(f"codebuddy -p: its output is not whole JSON, cut off after: {r.stdout[-300:]}")
         raise RuntimeError(f"codebuddy -p exited {r.returncode}: {said}")
     rows = got if isinstance(got, list) else [got]
     res = next((x for x in reversed(rows) if isinstance(x, dict) and x.get("type") == "result"), None)

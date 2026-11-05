@@ -208,8 +208,9 @@ async function open() {
 }
 
 ipcMain.handle('open-external', (_e, url) => (/^https?:/.test(url) ? shell.openExternal(url) : null));
-// a file the reader saves (a page, its notes): where it goes, they choose in the system's own dialog; the path, or null
-const KINDS = { html: 'Web page', md: 'Markdown', json: 'JSON' };
+// a file the reader saves (a page, its notes, a figure's picture): where it goes, they choose in the system's own
+// dialog; the path, or null. A page is text, a picture its bytes
+const KINDS = { html: 'Web page', md: 'Markdown', json: 'JSON', png: 'PNG image', jpg: 'JPEG image', gif: 'GIF image', webp: 'WebP image', svg: 'SVG image' };
 ipcMain.handle('save-file', async (e, name, data) => {
   const ext = path.extname(String(name)).slice(1).toLowerCase();
   if (!KINDS[ext]) return null;
@@ -218,7 +219,7 @@ ipcMain.handle('save-file', async (e, name, data) => {
     filters: [{ name: KINDS[ext], extensions: [ext] }],
   });
   if (r.canceled || !r.filePath) return null;
-  await fs.promises.writeFile(r.filePath, String(data), 'utf8');
+  await fs.promises.writeFile(r.filePath, typeof data === 'string' ? data : Buffer.from(data));
   return r.filePath;
 });
 // the folder the library is to go to, or the library to open (Settings: textfold/storage_settings.py), in the system's

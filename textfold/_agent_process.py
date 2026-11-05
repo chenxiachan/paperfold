@@ -78,7 +78,7 @@ class _WindowsJob:
             kernel.CloseHandle(snapshot)
 
 
-def run(args, *, stop, timeout, **kwargs):
+def run(args, *, stop, timeout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **kwargs):
     """communicate with polling cancellation; output completed before Stop is retained."""
     from .llm import Stopped
     if stop.is_set(): raise Stopped()
@@ -90,7 +90,7 @@ def run(args, *, stop, timeout, **kwargs):
     try:
         source.write(body.encode(kwargs.get("encoding") or "utf-8") if isinstance(body, str) else body or b"")
         source.seek(0)
-        process = subprocess.Popen(args, stdin=source, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **flags, **kwargs)
+        process = subprocess.Popen(args, stdin=source, stdout=stdout, stderr=stderr, **flags, **kwargs)
     except BaseException:
         source.close()
         raise

@@ -1,5 +1,31 @@
 [
   {
+    "version": "0.10.45",
+    "en": [
+      ["Wide content fits the column", "A wide picture, table, formula or long link no longer makes the page scroll sideways. Beside the PDF, the text no longer slides under it."],
+      ["DeepSeek thinks at the level set", "The argument links and your questions now ask DeepSeek to think briefly, as set. Before, once its thinking was on, it thought at its default, high, which took longer and cost more."]
+    ],
+    "zh": [
+      ["宽内容不再撑宽页面", "很宽的图片、表格、公式或长链接不再让整页左右滚动。和 PDF 并排时，正文也不会再滑到 PDF 底下。"],
+      ["DeepSeek 按设定的档位思考", "论证连线和提问现在让 DeepSeek 按设定的低档思考。以前它一开思考就用默认的高档，更慢，也更贵。"]
+    ]
+  },
+  {
+    "version": "0.10.44",
+    "en": [
+      ["Edit the text of any document", "Edit text now works on every document: an arXiv paper, a web page, a file, not only a converted PDF. Undo every edit and the document is exactly as it came."],
+      ["Read a PDF from the file itself", "When TextFold finds a PDF you drop online, it reads the online version. To convert the file itself instead, choose Read the PDF itself under Settings › PDF engine › A PDF found online."],
+      ["Long sections in full", "A very long section, or one of many short paragraphs, is now generated in parts, so its levels and its translation are no longer cut off."],
+      ["Formulas at the size of the text", "In a fast conversion, formula pictures now come out about as large as the text around them, with no stray word under them. Convert a PDF again to see it."]
+    ],
+    "zh": [
+      ["任何文档都能修改原文", "“修改原文”现在对所有文档都能用：arXiv 论文、网页、文件，不只是转换来的 PDF。撤销全部修改，文档就和原来一模一样。"],
+      ["PDF 可以直接读文件本身", "拖进来的 PDF 如果在网上找得到，TextFold 会读网上的版本。想直接转换文件本身，可以在 设置 › PDF 引擎 › 在网上找到的 PDF 里选“读 PDF 本身”。"],
+      ["长章节完整生成", "很长的章节，或者短段落特别多的章节，现在分几部分生成，缩放层级和翻译都不会再被截断。"],
+      ["公式和正文一样大", "快速转换的公式图片现在和周围的文字差不多大，下面也不再多出一个词。PDF 重新转换后就能看到。"]
+    ]
+  },
+  {
     "version": "0.10.43",
     "en": [
       ["Fix a converted PDF’s text where you read it", "Select the words the conversion got wrong and choose Edit text. The text opens at those words. Save, and only the sections you changed are generated again. Your notes stay where they were."],
