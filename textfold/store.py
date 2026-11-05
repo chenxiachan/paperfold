@@ -414,7 +414,7 @@ def papers():
     if _nonlocal():
         return sorted([{'id': i.id, 'title': i.meta['title'], 'titles': i.titles,
                         'authors': i.meta.get('authors', []), 'langs': i.languages,
-                        'updated': i.updated, 'notes': i.note_count} for i in repository().list()],
+                        'updated': i.updated, 'notes': i.note_count, **summary_of(i.meta)} for i in repository().list()],
                       key=lambda item: -item['updated'])
     """Every paper on disk, newest layer first."""
     out = []
@@ -437,8 +437,19 @@ def papers():
         out.append({"id": d.name, "title": meta["title"], "titles": titles, "authors": meta.get("authors", []),
                     "langs": langs_, "updated": max(mtimes) if mtimes else mf.stat().st_mtime,
                     "notes": len(json.loads(read_text(nf)).get("notes", [])) if nf.exists() else 0,
-                    **({"zotero": True} if meta.get("zotero") else {}), **({"pending": True} if pending(d.name, meta, en) else {})})
+                    **({"zotero": True} if meta.get("zotero") else {}), **({"pending": True} if pending(d.name, meta, en) else {}),
+                    **summary_of(meta)})
     return sorted(out, key=lambda p: -p["updated"])
+
+
+def summary_of(meta):
+    """A summary of the reader's notes (summary.py), as the list shows it: when it was made, of how many notes in how
+    many texts; nothing for any other document."""
+    s = meta.get("summary")
+    if not isinstance(s, dict):
+        return {}
+    ns = [x for x in s.get("notes") or [] if isinstance(x, dict)]
+    return {"summary": {"made": str(s.get("made") or ""), "notes": len(ns), "texts": len({x.get("paper") for x in ns})}}
 
 
 def trash(pid, kept=None):

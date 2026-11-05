@@ -88,6 +88,9 @@ class Summary(unittest.TestCase):
         self.assertEqual([f["name"] for f in fs["folders"]], ["Summaries"])
         self.assertEqual(fs["of"][pid], fs["folders"][0]["id"])
         store.assemble(pid)   # (it reads in the reader)
+        listed = {p["id"]: p for p in store.papers()}
+        self.assertEqual(listed[pid]["summary"], {"made": "2026-11-05 09:00", "notes": 3, "texts": 2})   # (the sidebar marks it)
+        self.assertNotIn("summary", listed[self.a])
 
     def test_points_unfold_to_the_notes_they_rest_on(self):
         reply = {"overview": {"takeaway": "Two ways to make a network smaller.", "topic": "smaller"},

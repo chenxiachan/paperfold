@@ -139,6 +139,11 @@
 .sb-settings:hover, .sb-help:hover, .sb-zotero:hover { background: var(--surface); }
 .sb-zotero { display: flex; align-items: center; gap: 6px; }
 .sb-notes { text-decoration: none; box-sizing: border-box; }
+/* a summary of the reader's notes (summary.py): tinted, with the notes' mark, when it was made for its id */
+.sb-item.sb-sum { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
+.sb-item.sb-sum:hover, .sb-item.sb-sum.active { background: var(--accent-soft); }
+.sb-sum .sb-ico { width: 13px; height: 13px; vertical-align: -2px; margin-right: 5px; color: var(--accent); }
+.sb-sum .sb-id { color: var(--accent-deep); font-variant-numeric: tabular-nums; }
 .sb-zotero svg { width: 15px; height: 15px; flex: none; }
 /* its edge, dragged to change its width */
 .sb-resize { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; cursor: col-resize; touch-action: none; z-index: 1; }

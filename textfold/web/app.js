@@ -153,15 +153,18 @@
       const langs = p.langs.map((l) => `<span${l === readLang ? ' class="on"' : ''}>${SHORT[l] || l.toUpperCase()}</span>`).join('');
       const active = PAPER && PAPER.id === p.id;
       const unfinished = !j && !p.langs.length && !p.pending;   // stopped (or failed) before its first language: a click goes on with it
-      return `<div class="sb-row${chosen.has(p.id) ? ' chosen' : ''}" data-pid="${p.id}" data-q="${esc(hay(p))}"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
-        <span class="sb-t">${esc(title)}</span><span class="sb-m"><span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span></span>
+      // a summary of the reader's notes (the notes page, summary.py): its own mark, and when it was made for its id
+      const sum = p.summary, said = sum && T.sb_summary.replace('{when}', (sum.made || '').slice(5));
+      return `<div class="sb-row${chosen.has(p.id) ? ' chosen' : ''}" data-pid="${p.id}" data-q="${esc(hay(p))}"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}${sum ? ' sb-sum' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
+        <span class="sb-t">${sum ? NOTES.replace('<svg ', '<svg class="sb-ico" ') : ''}${esc(title)}</span><span class="sb-m">${sum ? `<span class="sb-id">${esc(said)}</span>`
+          : `<span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span>`}</span>
         ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
         (j ? stopBtn(j, T) : chosen.size ? '<span class="sb-check" aria-hidden="true"></span>'
           : `<button type="button" class="sb-del" data-del="${p.id}" title="${esc(T.del_paper)}" aria-label="${esc(T.del_paper)}">×</button>`) + '</div>';
     };
     // papers, Wikipedia articles, GitHub READMEs and documents of one's own, each under its name when there is more than one kind
     // (a file read from a Zotero item is among the papers: Zotero says what it is)
-    const kindOf = (p) => (p.zotero ? 'paper' : /^wiki-/.test(p.id) ? 'wiki' : /^gh-/.test(p.id) ? 'gh' : /^web-/.test(p.id) ? 'web' : /^(md|pdf|doc)-/.test(p.id) ? 'doc' : 'paper');
+    const kindOf = (p) => (p.summary ? 'summary' : p.zotero ? 'paper' : /^wiki-/.test(p.id) ? 'wiki' : /^gh-/.test(p.id) ? 'gh' : /^web-/.test(p.id) ? 'web' : /^(md|pdf|doc)-/.test(p.id) ? 'doc' : 'paper');
     // by kind, or by when each came in or was last opened (one never opened: when it came in), newest first, in
     // folders too; by kind, in the server's order (the latest layer first)
     const order = sortOrder(), when = (p) => (order === 'opened' ? p.opened || p.added : p.added) || p.updated;
@@ -171,7 +174,7 @@
     const today = new Date().setHours(0, 0, 0, 0);
     const since = (p) => { const at = when(p) * 1000; return at >= today ? 0 : Date.now() - at < 7 * 864e5 ? 1 : Date.now() - at < 30 * 864e5 ? 2 : 3; };
     const groups = (order !== 'kind' ? [[0, T.d_today], [1, T.d_week], [2, T.d_month], [3, T.d_older]].map(([k, name]) => [name, loose.filter((p) => since(p) === k)])
-      : [['paper', T.papers], ['wiki', T.g_wiki], ['gh', 'GitHub'], ['web', T.g_web], ['doc', T.g_docs]].map(([k, name]) => [name, loose.filter((p) => kindOf(p) === k)]))
+      : [['paper', T.papers], ['wiki', T.g_wiki], ['gh', 'GitHub'], ['web', T.g_web], ['doc', T.g_docs], ['summary', T.g_summaries]].map(([k, name]) => [name, loose.filter((p) => kindOf(p) === k)]))
       .filter(([, ps]) => ps.length);
     const named = (value) => `<input class="sb-fname-in" value="${esc(value)}" placeholder="${esc(T.f_name)}" aria-label="${esc(T.f_name)}" maxlength="80" spellcheck="false">`;
     const fresh = (parent) => (editing === 'new' && within === parent ? `<div class="sb-folder"><div class="sb-frow">${named('')}</div></div>` : '');

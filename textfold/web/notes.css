@@ -26,9 +26,18 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-day > h2 { font: 650 13px var(--sans); color: var(--muted); text-transform: none; letter-spacing: .02em; margin: 0 0 8px; }
 .nb-doc { background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; margin: 0 0 12px; overflow: hidden; }
 .nb-dhead { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
-.nb-dhead a { color: var(--ink); text-decoration: none; font: 620 14.5px var(--sans); flex: 1; min-width: 0; }
-.nb-dhead a:hover { color: var(--accent); }
+.nb-dtitle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 0;
+  text-align: left; color: var(--ink); font: 620 14.5px var(--sans); cursor: pointer; }
+.nb-dtitle > span:first-of-type { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-dtitle svg { width: 14px; height: 14px; flex: none; color: var(--muted); transform: rotate(90deg); transition: transform .15s var(--ease); }
+.nb-doc.shut .nb-dtitle svg { transform: none; }
+.nb-dtitle:hover { color: var(--accent); }
 .nb-dn { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.nb-dopen { color: var(--muted); text-decoration: none; font-size: 14px; padding: 0 2px; }
+.nb-dopen:hover { color: var(--accent); }
+.nb-doc.shut .nb-dhead { border-bottom: 0; padding-bottom: 4px; }
+.nb-dprev { padding: 0 14px 11px 60px; color: var(--muted); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; cursor: pointer; }
 .nb-tag { font: 600 11px var(--sans); color: var(--accent-deep); background: var(--accent-soft); border-radius: 5px; padding: 1px 6px; margin-left: 6px; }
 .nb-note { display: flex; gap: 10px; padding: 12px 14px; }
 .nb-note + .nb-note { border-top: 1px solid var(--line-2); }
