@@ -216,7 +216,7 @@
   const atCls = (t) => {
     if (!t.a) return t.x ? ' at' : '';
     const a = A[t.a];
-    if (a.citation ??= a.html.includes('ltx_cite')) return ' at wrap citation';
+    if (a.kind === 'cite') return ' at wrap citation';
     return a.kind === 'ref' ? ' at wrap' : ' at';
   };
   // The animation can draw a paragraph at its measured width when a citation spans multiple lines.
