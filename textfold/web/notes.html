@@ -19,10 +19,12 @@
     <div class="nb-seg nb-views" id="nb-views" role="radiogroup"></div>
   </div>
 </header>
-<main class="nb-wrap nb-main">
+<main class="nb-wrap nb-main" id="nb-main">
   <section id="nb-cal" class="nb-cal" hidden></section>
-  <div id="nb-listhead" class="nb-listhead"></div>
-  <div id="nb-list" class="nb-grid" aria-live="polite"></div>
+  <div class="nb-right">
+    <div id="nb-listhead" class="nb-listhead"></div>
+    <div id="nb-list" class="nb-rows" aria-live="polite"></div>
+  </div>
 </main>
 <div class="nb-bar" id="nb-bar" role="toolbar" hidden>
   <div class="nb-wrap nb-bar-in">
@@ -34,6 +36,7 @@
   </div>
 </div>
 <div class="nb-toast" id="nb-toast" role="status" hidden></div>
+<div class="nb-tip" id="nb-tip" role="tooltip" hidden></div>
 <script id="boot" type="application/json">{{BOOT}}</script>
 <script src="/static/i18n.js"></script>
 <script src="/static/notes.js"></script>
