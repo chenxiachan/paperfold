@@ -54,14 +54,13 @@
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
-  POST /api/record            {items: [{paper, note}], ui}: the reading record of those notes, a document of the library in
-                              its folder of records ({paper, lang}); no model is called
-  POST /api/record/obsidian   {items, ui}: the same record as Markdown for Obsidian ({name, text})
-  POST /api/record/view       {items, ui}: its four answers, for the notes page to show ({period, read, curious, got, attend})
-  POST /api/record/ask        {items, question, ui}: the question answered by the model from those notes ({question,
-                              answer, takeaway, model, notes, sections}); /api/record and /api/record/obsidian take {qa} too
-  POST /api/record/digest     {items, ui}: the overview the model writes of those notes, a part a text ({opening, texts,
-                              closing, model, notes, sections}); /api/record and /api/record/obsidian take {digest} too
+  POST /api/record            {items: [{paper, note}], ui, kind: "digest" | "ask", question}: a document of the library made
+                              of those notes, in its folder of records: the overview the model writes of them (without a
+                              model, the notes alone), or a question's answer (503 no-model without one); {paper, lang, title}
+  GET  /api/record/<id>/obsidian  the same as Markdown for Obsidian, kept as it was made ({name, text})
+  POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
+                              (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
+  POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
   POST /api/papers/delete     {paper}: move a paper to papers/.trash, kept 30 days (not while it is being generated); the
                               list. Or {papers: [ids]}: each that can go; {papers: the list, deleted: [ids], busy: [ids]}
   POST /api/papers/restore    {papers: [ids]}: those deleted last back from papers/.trash, in their folders (the
@@ -703,6 +702,13 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
+                m = re.fullmatch(r"/api/record/([\w.-]+)/obsidian", u.path)
+                if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
+                    try:
+                        name, text = record.obsidian_of(m.group(1))
+                    except (LookupError, OSError):
+                        return self.json({"error": "no such record"}, 404)
+                    return self.json({"name": name, "text": text})
                 if u.path == "/api/whatsnew":
                     return self.json(news.state())
                 m = re.fullmatch(r"/api/text/([\w.-]+)", u.path)
@@ -953,30 +959,21 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
-                if u.path in ("/api/record", "/api/record/obsidian", "/api/record/view", "/api/record/ask", "/api/record/digest"):
+                if u.path == "/api/record":
                     try:
-                        if u.path in ("/api/record/ask", "/api/record/digest"):
-                            try:
-                                spec = models.ask_spec()
-                            except RuntimeError:
-                                return self.json({"error": "no-model"}, 503)
-                            try:
-                                if u.path == "/api/record/digest":
-                                    return self.json(record.digest(body.get("items"), spec, str(body.get("ui") or "en")))
-                                return self.json(record.ask(body.get("items"), str(body.get("question") or ""), spec, str(body.get("ui") or "en")))
-                            except ValueError:
-                                raise
-                            except Exception as e:   # the model failed: the reader can ask again
-                                return self.json({"error": str(e)[:600]}, 502)
-                        if u.path == "/api/record/view":
-                            return self.json(record.view(body.get("items"), str(body.get("ui") or "en")))
-                        if u.path == "/api/record":
-                            pid = record.record(body.get("items"), str(body.get("ui") or "en"), qa=body.get("qa") or [], digest=body.get("digest"))
-                            return self.json({"paper": pid, "lang": store.text_lang(pid)})
-                        name, text = record.obsidian(body.get("items"), str(body.get("ui") or "en"), qa=body.get("qa") or [], digest=body.get("digest"))
-                        return self.json({"name": name, "text": text})
+                        spec = models.ask_spec()
+                    except RuntimeError:   # no model: the notes alone, and no question answered
+                        spec = None
+                    try:
+                        pid, title = record.make(body.get("items"), str(body.get("ui") or "en"), "ask" if body.get("kind") == "ask" else "digest",
+                                                 str(body.get("question") or ""), spec)
+                    except record.NoModel:
+                        return self.json({"error": "no-model"}, 503)
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
+                    except Exception as e:   # the model failed: nothing is kept, the reader can ask again
+                        return self.json({"error": str(e)[:600]}, 502)
+                    return self.json({"paper": pid, "lang": store.text_lang(pid), "title": title})
                 if u.path == "/api/ask/stop":
                     notes.stop(str(body.get("req") or "")[:40])
                     return self.json({"ok": True})

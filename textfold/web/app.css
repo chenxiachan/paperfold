@@ -140,6 +140,8 @@
 .sb-zotero { display: flex; align-items: center; gap: 6px; }
 .sb-notes { text-decoration: none; box-sizing: border-box; }
 .sb-notes.on { background: var(--accent-soft); color: var(--accent-deep); }
+.sb-item.sb-flash { animation: sb-flash 2.4s var(--ease); }   /* (a document just made, on the notes page) */
+@keyframes sb-flash { 0%, 40% { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); } 100% { box-shadow: inset 0 0 0 1.5px transparent; } }
 /* a summary of the reader's notes (summary.py): tinted, with the notes' mark, when it was made for its id */
 .sb-item.sb-sum { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
 .sb-item.sb-sum:hover, .sb-item.sb-sum.active { background: var(--accent-soft); }

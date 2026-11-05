@@ -83,6 +83,17 @@
     document.dispatchEvent(new Event('tf-lang'));   // (what else speaks it: the app's update)
   }
   let papers = BOOT.papers || [];
+  // a document made elsewhere on the page (the notes page's records, notes.js): the library again, the new one shown
+  document.addEventListener('tf-library', (e) => {
+    Promise.all([api('/api/papers'), api('/api/folders')]).then(([p, f]) => {
+      papers = p; folders = f;
+      const pid = e.detail && e.detail.paper, in_ = pid && folders.of[pid];
+      if (in_) folded.delete(in_);
+      renderSidebar();
+      const row = pid && side.querySelector(`.sb-row[data-pid="${CSS.escape(pid)}"] .sb-item`);
+      if (row) { row.classList.add('sb-flash'); row.scrollIntoView({ block: 'nearest' }); setTimeout(() => row.classList.remove('sb-flash'), 2400); }
+    }).catch(() => {});
+  });
   let folders = BOOT.folders || { folders: [], of: {} };   // the reader's folders (each in its parent, or at the top), and which document is in which (library.py)
   let sbQuery = '';        // the sidebar's search, as typed
   let editing = null;      // a folder's name being written: 'new', or the folder's id

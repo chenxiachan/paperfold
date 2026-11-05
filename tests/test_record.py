@@ -111,14 +111,25 @@ class Record(unittest.TestCase):
         self.assertIn(f"textfold://open?paper={self.a}&n=n-1&lang=en", md)
         self.assertIn("> [!question] Why a teacher?", md)
 
-    def test_the_four_answers_for_the_page(self):
-        got = record.view(self.items(), "en")
-        self.assertEqual(got["period"], "2026-11-01 to 2026-11-03")
-        self.assertEqual([t["title"] for t in got["read"]], ["Pruning", "Distillation"])
-        self.assertEqual(got["curious"][0]["q"], "Why a teacher?")
-        self.assertEqual(got["got"][0]["text"], "Magnitude only, no retraining.")
-        self.assertEqual([s["title"] for s in got["attend"][0]["sections"]], ["Method", "Results"])
-        self.assertTrue(got["got"][0]["there"].startswith(f"/p/{self.a}?lang=en#n=n-1"))
+    def test_what_the_page_makes_is_a_document_with_its_obsidian_beside_it(self):
+        reply = {"opening": "Two texts. Mostly smaller networks [1].", "texts": [{"t": 1, "line": "Prune with care.", "about": "It prunes [T1.1].",
+                 "noticed": "You marked a but [2].", "meaning": "A condition [2].", "extend": ""}], "closing": {"line": "Smaller networks.", "body": "[1][3]"}}
+        with mock.patch.object(llm, "call", return_value=({"out": reply}, False)), mock.patch.object(llm, "label", return_value="test-model"):
+            pid, title = record.make(self.items(), "en", "digest", "", {"id": "test-model"}, when="2026-11-05 09:00")
+        self.assertEqual(title, "Reading record · 2026-11-01 to 2026-11-03")
+        name, text = record.obsidian_of(pid)
+        self.assertEqual(name, "Reading record · 2026-11-01 to 2026-11-03.md")
+        self.assertIn("## Overview", text)
+        self.assertIn("Prune with care.", store.read_text(store.pdir(pid) / "source.md"))
+        with self.assertRaises(record.NoModel):
+            record.make(self.items(), "en", "ask", "Why?", None)
+        pid2, _ = record.make(self.items(), "en", "digest", "", None, when="2026-11-05 10:00")   # (no model: the notes alone)
+        self.assertNotIn("## Overview", store.read_text(store.pdir(pid2) / "source.md"))
+        answer = {"answer": "By pruning [1] or by a teacher [3].", "takeaway": "Two ways."}
+        with mock.patch.object(llm, "call", return_value=({"out": answer}, False)), mock.patch.object(llm, "label", return_value="test-model"):
+            pid3, title3 = record.make(self.items(), "en", "ask", "How do they shrink a network?", {"id": "test-model"}, when="2026-11-05 11:00")
+        self.assertEqual(title3, "How do they shrink a network? · 2026-11-01 to 2026-11-03")
+        self.assertIn("## What I asked", store.read_text(store.pdir(pid3) / "source.md"))
 
     def test_a_question_asked_of_the_notes(self):
         reply = {"answer": "Pruning keeps the large weights [1], and loses little only on small models [2]. Distillation "

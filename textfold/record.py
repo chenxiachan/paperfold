@@ -24,13 +24,13 @@ WORDS = {
     "en": {"title": "Reading record · {period}", "read": "What I read", "curious": "What I was curious about",
            "got": "What I got", "attend": "What I attended to", "to": "to", "notes": "{n} notes",
            "intro": "Made on {when} from {n} notes in {d} texts. Each entry is a copy made then: \"there\" opens it as it is now.",
-           "appendix": "The notes picked",
+           "appendix": "The notes picked", "q_title": "{q} · {period}",
            "answer": "Answer: ", "there": "there", "open": "open", "folder": "Reading records", "whole": "the whole text",
            "made_with": "Made with TextFold", "mine": "What I asked", "by": "(Answered by {m} from these notes; each number is a note it rests on.)",
            "digest": "Overview", "closing": "Altogether", "extend": "Further: ",
            "digest_by": "(Written by {m} from these notes and the texts: a number is a note, § a section of the text, and \"further\" the model's own knowledge.)"},
     "zh": {"title": "阅读记录 · {period}", "read": "读了什么", "curious": "好奇什么", "got": "得到了什么", "attend": "关注的点",
-           "to": "至", "notes": "{n} 条笔记", "intro": "{when} 生成，依据 {d} 篇文本里的 {n} 条笔记。每一条都是当时的快照，点“原处”打开它现在的样子。", "appendix": "所选的笔记",
+           "to": "至", "notes": "{n} 条笔记", "intro": "{when} 生成，依据 {d} 篇文本里的 {n} 条笔记。每一条都是当时的快照，点“原处”打开它现在的样子。", "appendix": "所选的笔记", "q_title": "{q} · {period}",
            "answer": "回答：", "there": "原处", "open": "打开", "folder": "阅读记录", "whole": "整篇文本", "made_with": "用 TextFold 生成",
            "mine": "我问的", "by": "（这段回答由 {m} 依据这些笔记写成，编号是它依据的笔记。）",
            "digest": "总结", "closing": "总的来看", "extend": "拓展：",
@@ -285,13 +285,14 @@ def _digest_in(d):
     return out if out["opening"] or parts else None
 
 
-def record_md(items, W, when, qa=(), digest=None):
+def record_md(items, W, when, qa=(), digest=None, title=None):
     """The record as TextFold reads it: a heading a question, a paragraph an entry, each opening with its line (what
     the levels fold it to: lines, below). digest: the overview the model wrote of these notes, first; qa: the
     questions the reader asked of them, answered, next."""
     picked, texts, asked, wrote, marked = gather(items, W)
     period, lines = _period(picked, W), []
-    out = [f"# {_md(W['title'].format(period=period))}", "",
+    title = title.format(period=period) if title else W["title"].format(period=period)
+    out = [f"# {_md(title)}", "",
            W["intro"].format(when=when, n=len(picked), d=len(texts)), ""]
 
     def para(line, rest):
@@ -349,7 +350,7 @@ def record_md(items, W, when, qa=(), digest=None):
                 quotes = " ".join(f"“{_md(e['quote'])}” ([{W['there']}]({_there(e)}))" for e in s["notes"])
                 head = s["title"] or W["whole"]
                 para(head, f"{_md(_words(W, s['line'])) + ' ' if s['line'] else ''}{quotes}")
-    return W["title"].format(period=period), "\n".join(out), lines, picked
+    return title, "\n".join(out), lines, picked
 
 
 def _topic(line):
@@ -384,12 +385,13 @@ def fold_lines(pid, lines, lang, made):
     store.save_en(doc, "")
 
 
-def record(items, ui="en", when=None, qa=(), digest=None):
+def record(items, ui="en", when=None, qa=(), digest=None, title=None):
     """The reading record of the notes picked ([{paper, note}]) as a document of the library, in the folder of
-    records: its id. digest: the overview written of them on the page; qa: the questions asked of them, answered."""
+    records: its id. digest: the overview written of them; qa: the questions asked of them, answered; title: its own
+    ({period} in it), else a record's."""
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
-    title, md, lines, picked = record_md(items, W, when, _questions(qa), _digest_in(digest))
+    title, md, lines, picked = record_md(items, W, when, _questions(qa), _digest_in(digest), title)
     t, html, meta = local._read_md(md, "record.md")
     meta["label"] = t
     pid = local.make_id(t, md)
@@ -400,21 +402,6 @@ def record(items, ui="en", when=None, qa=(), digest=None):
     f = next((x for x in fs["folders"] if x["name"] == W["folder"] and not x.get("parent")), None)
     library.change({"op": "move", "papers": [pid], "folder": f["id"]} if f else {"op": "new", "name": W["folder"], "papers": [pid]})
     return pid
-
-
-def view(items, ui="en"):
-    """The four answers for the page itself (the notes page shows one at a time): {period, read, curious, got, attend}."""
-    W = WORDS.get(ui) or WORDS["en"]
-    picked, texts, asked, wrote, marked = gather(items, W)
-    src = lambda e: {"pid": e["pid"], "title": e["title"], "section": e["section"], "day": e["day"], "there": _there(e)}  # noqa: E731
-    return {"period": _period(picked, W), "notes": len(picked),
-            "read": [{"pid": p, "title": t["title"], "line": t["line"], "notes": t["n"], "span": _span(t["days"], W),
-                      "lang": t["lang"]} for p, t in texts.items()],
-            "curious": [{**src(e), "q": e["q"], "a": e["a"]} for e in asked],
-            "got": [{**src(e), "text": e["text"]} for e in wrote],
-            "attend": [{"pid": p, "title": texts[p]["title"], "sections": [{"title": s["title"] or W["whole"], "line": s["line"],
-                        "quotes": [{"quote": e["quote"], "day": e["day"], "there": _there(e)} for e in s["notes"]]} for s in secs.values()]}
-                       for p, secs in marked.items()]}
 
 
 ASK_SCHEMA = {"type": "object", "properties": {"answer": {"type": "string"}, "takeaway": {"type": "string"}},
@@ -529,19 +516,57 @@ def digest(items, spec, ui="en", timeout=900):
     return {**got, **_refs(every, entries, secs)}
 
 
+class NoModel(Exception):
+    """A question asked, and no model to answer it."""
+
+
+def make(items, ui="en", kind="digest", question="", spec=None, when=None):
+    """What the notes page makes of the notes picked: a document of the library, in the folder of records, with the
+    same as Markdown for Obsidian kept beside it (obsidian.md, the notes as they were then): the overview the model
+    writes of them (kind "digest"; without a model, the notes alone), or a question's answer (kind "ask", the question
+    its title; NoModel without one). Its id and title."""
+    W = WORDS.get(ui) or WORDS["en"]
+    when = when or time.strftime("%Y-%m-%d %H:%M")
+    qa, dg, title = [], None, None
+    if kind == "ask":
+        if spec is None:
+            raise NoModel()
+        got = ask(items, question, spec, ui)
+        qa = [{"q": got["question"], "answer": got["answer"], "model": got["model"]}]
+        title = W["q_title"].replace("{q}", got["question"].replace("{", "(").replace("}", ")"))
+    elif spec is not None:
+        dg = digest(items, spec, ui)
+    pid = record(items, ui, when, qa=qa, digest=dg, title=title)
+    name, text = obsidian(items, ui, when, qa=qa, digest=dg, title=title)
+    store.put_asset(pid, "obsidian.md", text.encode("utf-8"))
+    meta = json.loads(store.read_text(store.pdir(pid) / "meta.json"))
+    meta["summary"]["obsidian"] = name
+    (store.pdir(pid) / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    return pid, meta["title"]
+
+
+def obsidian_of(pid):
+    """The Markdown for Obsidian kept beside a document make() made: (file name, text); LookupError: none."""
+    meta = json.loads(store.read_text(store.pdir(pid) / "meta.json"))
+    name = (meta.get("summary") or {}).get("obsidian")
+    if not name:
+        raise LookupError(pid)
+    return name, store.asset(pid, "obsidian.md").decode("utf-8")
+
+
 def _file(pid, title):
     """The name the reader's own Markdown for Obsidian gives a text's notes (reader.js fileName), so [[it]] links there."""
     return re.sub(r'[\\/:*?"<>|]+', " ", f"{pid} {title}")[:90].strip()
 
 
-def obsidian(items, ui="en", when=None, qa=(), digest=None):
-    """The reading record as Markdown for Obsidian: (file name, text). qa, digest: as record()'s."""
+def obsidian(items, ui="en", when=None, qa=(), digest=None, title=None):
+    """The reading record as Markdown for Obsidian: (file name, text). qa, digest, title: as record()'s."""
     qa, digest = _questions(qa), _digest_in(digest)
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
     picked, texts, asked, wrote, marked = gather(items, W)
     period = _period(picked, W)
-    title = W["title"].format(period=period)
+    title = title.format(period=period) if title else W["title"].format(period=period)
     q = lambda s: json.dumps(str(s), ensure_ascii=False)  # noqa: E731
     link = lambda pid: f"[[{_file(pid, texts[pid]['title'])}|{texts[pid]['title']}]]"  # noqa: E731
 
