@@ -146,21 +146,15 @@ class Replace(Base):
         self.assertFalse((d / "previous").exists())
         self.assertEqual(store.papers()[0]["id"], pid)
 
-    def test_only_a_document_with_a_text_of_its_own_is_replaced(self):
+    def test_only_a_stored_document_is_replaced(self):   # (one that came as a page too: test_edit_any.py)
         with self.assertRaises(LookupError):
             local.replace_text("md-not-there-12345678", TEXT)
-        d = store.pdir("2512.23916")
-        d.mkdir(parents=True)
-        (d / "meta.json").write_text("{}", encoding="utf-8")
-        (d / "source.html").write_text("<article></article>", encoding="utf-8")
-        with self.assertRaises(LookupError):
-            local.replace_text("2512.23916", TEXT)
+        self.assertIsNone(local.text_of("md-not-there-12345678"))
         pid = local.import_text(TEXT, "diary.md")
         with self.assertRaises(ValueError):
             local.replace_text(pid, TEXT, "diary.docx")
         self.assertEqual((store.pdir(pid) / "source.md").read_text(encoding="utf-8"), TEXT)
         self.assertEqual(local.text_of(pid), TEXT)
-        self.assertIsNone(local.text_of("2512.23916"))
 
     def test_its_pictures_stay_though_the_folder_they_came_from_is_gone(self):
         from PIL import Image

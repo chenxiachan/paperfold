@@ -120,8 +120,8 @@ Models (⚙ Model & API), ported from ThoughtDAG's model access:
   `model_reasoning_effort` (off as `none`, else `low`); Pi `--thinking`; the Claude API thinking and effort by model
   (off is `between_tools` on Sonnet 5.x, `disabled` on older models, the least effort where thinking cannot be
   switched off, no thinking on Haiku); OpenAI-compatible APIs the provider's field (OpenRouter `reasoning`, GLM and
-  DeepSeek and Kimi `thinking`, Qwen `enable_thinking`), then OpenAI's `reasoning_effort` (off as none, minimal, low:
-  some models always think).
+  DeepSeek and Kimi `thinking`, DeepSeek's level as `reasoning_effort` beside it since on alone it thinks at high, Qwen
+  `enable_thinking`), then OpenAI's `reasoning_effort` (off as none, minimal, low: some models always think).
 - **A level is a request, never a condition.** These spellings change as APIs change, so a request refused for one
   (a 400 or 422, or an answer left in the reasoning) is sent the next way, and last without any reasoning field; the
   way that worked is remembered for the run. Under every caller, a call that fails with a level set is made once more
@@ -131,7 +131,8 @@ Models (⚙ Model & API), ported from ThoughtDAG's model access:
   through Pi took 44 s without thinking and 386 s at xhigh, with the same blind grades; Sonnet 108 s against 395 s,
   +0.14 on a 5-point scale; Haiku 163 s against 1545 s. A weaker model costs more quality than switching thinking off.
   Without thinking a reply's JSON fails to parse now and then (asked for once more), and a long section's
-  translation came back short: translations are made in parts of about 5,000 characters.
+  translation came back short: translations are made in parts of about 6,500 characters, a paragraph's sentences
+  and its levels counted (a section of many short paragraphs has more levels than text: #99).
 - **API providers**: keys from the environment, or a `.env` here or in `~/.textfold/`: Zhipu, Qwen, OpenAI,
   Anthropic, Google, DeepSeek, Kimi, OpenRouter, Ollama. (Until v0.9 ThoughtDAG's `.env` was read too; its providers
   were copied once into the settings.) Others are added in the dialog
@@ -348,7 +349,7 @@ from the landing, the settings or `python3 -m textfold engine install`. The fold
 settings (`engine_path`) and stays when the library moves, since its Python cannot move; removing it removes the folder
 (a PaperFold install in its old place is used too). Its command line only (`mineru-kit
 parse --format zip`), never the `mineru` document library. Fast is MinerU's flash tier (seconds, no model; formulas as
-pictures); accurate is advanced (a vision model, several seconds a page), with `--disable-image-analysis`.
+pictures, each drawn as a display formula, as wide against the reader's column as against its own); accurate is advanced (a vision model, several seconds a page), with `--disable-image-analysis`.
 `pdfdoc.py` turns `structured_content.json` into the document: running heads and page numbers out, the title from the
 page or the file, heading depth from numbering, a figure's panels grouped under the caption that names it, figures from
 after the references put before them, short front matter dropped. A file that waits for the engine is kept in
@@ -438,9 +439,9 @@ textfold/pdf.py      a paper's original PDF for the side-by-side view (source.pd
 textfold/pdffigs.py  an arXiv drawing whose words the browser set (TikZ): cut from the paper's PDF when the reader asks
 textfold/zotero.py   a Zotero library through Zotero Desktop's local API; an item read as a link or a dropped file
 textfold/tokens.py   tokenizer, sentence splitter, LCS alignment
-textfold/ladder.py   one model call per section; validation; written words aligned to source words for the morph
+textfold/ladder.py   one model call per section (in parts of 40 units for a longer one); validation; written words aligned to source words for the morph
 textfold/links.py    argument links, one call over the whole paper (in parts of 400 units for a longer one)
-textfold/translate.py  any language: sentence-aligned translation + short levels, one call per section (langs.py: the languages a text can be read in)
+textfold/translate.py  any language: sentence-aligned translation + short levels, one call per section (in parts of about 6,500 characters for a longer one; langs.py: the languages a text can be read in)
 textfold/store.py    versioned layers per paper; assembling a reader from them
 textfold/pipeline.py fetch → parse → ladder + links in the text's own language (once) → translation, with progress
 textfold/server.py   local server: pages, /api/papers, /api/jobs (and /api/jobs/stop), /api/generate, /api/settings

@@ -54,6 +54,14 @@ def normalize(html, resolve_img=None, sizes=False):
     _footnotes(soup, root)
     if sizes:   # the Markdown path (a README, a document, a web page, a converted PDF): its tables that are not data
         _unfold_tables(soup, root)
+    for cap in root.find_all("figcaption"):   # a caption written in paragraphs (<figcaption><p>...): their words
+        ps = cap.find_all("p", recursive=False)
+        for k, p in enumerate(ps):
+            if k:
+                p.insert_before(" ")
+            p.unwrap()
+        if ps and isinstance(cap.contents[-1], NavigableString):
+            cap.contents[-1].replace_with(cap.contents[-1].rstrip())
     _loose_images(soup, root)
     _images(soup, root, resolve_img)
     _tables(soup, root)

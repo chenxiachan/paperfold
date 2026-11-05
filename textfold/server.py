@@ -17,8 +17,8 @@
                               set aside ({paper, title, replaced: true, pending: the languages they were in}; not
                               while it is being generated); then /api/generate in each folds it again, asking the model
                               only for the sections that changed
-  GET  /api/text/<id>         {text, original}: the Markdown such a document was read from, for the reader to put
-                              right (a PDF's OCR) and send back to /api/import with its id; original: the text it had
+  GET  /api/text/<id>         {text, original}: a document's text as Markdown (local.text_of), for the reader to put
+                              right (a PDF's OCR, a page's words) and send back to /api/import with its id; original: the text it had
                               when it was last generated, before the edits since (null: none; local.original)
   POST /api/places            {id, spans: [[from, to], ...]}: where each place of that text is read on the page
                               ({places: [{words: [{unit, tokens}], at: {unit, token, after}} | {section} | null]}:
@@ -36,7 +36,7 @@
   POST /api/agents/save       {key?, name, command, protocol, models: [{id, name?, efforts?}]}  ·  POST /api/agents/remove {key}
   POST /api/providers/probe   {base, api_key | key, preset}: a provider's /models
   POST /api/providers/save    {key?, preset, name, base, api_key?, models}  ·  POST /api/providers/remove {key}
-  POST /api/settings          {use_thoughtdag_env}, {pdf_tier}, {lang} (one of langs.py; else 400)  ·  POST /api/settings/test
+  POST /api/settings          {use_thoughtdag_env}, {pdf_tier}, {pdf_online}, {lang} (one of langs.py; else 400)  ·  POST /api/settings/test
                               {model?} or {task: "ask"}: one tiny call
   GET  /api/notes/<id>        the reader's notes on a paper (docs/notes-format.md)
   GET  /api/doc/<id>?lang=xx  the document in the TextFold format (docs/format.md), as `textfold get --json` writes it,
@@ -104,7 +104,7 @@ STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
-                ".txt": "text/plain; charset=utf-8"}
+                ".txt": "text/plain; charset=utf-8", ".wasm": "application/wasm"}
 
 
 def vendor_file(rel):
@@ -187,7 +187,8 @@ def models_payload():
                        "hasKey": bool(p["api_key"]) and p["api_key"] not in ("none", "ollama")} for p in provs],
         "presets": providers.PRESETS[:-1] + [models.ANTHROPIC_PRESET, providers.PRESETS[-1]],
         "useThoughtdagEnv": s.get("use_thoughtdag_env", True), "thoughtdagEnv": providers.THOUGHTDAG_ENV.exists(),
-        "pdfTier": s.get("pdf_tier") or "fast", "engine": engine.status(), "storage": store.storage_status(),
+        "pdfTier": s.get("pdf_tier") or "fast", "pdfOnline": s.get("pdf_online") is not False,
+        "engine": engine.status(), "storage": store.storage_status(),
         "cloudStorage": cloud_storage_status(),
         "lang": s.get("lang") if s.get("lang") in langs.LANGS else None,
     }
@@ -482,14 +483,17 @@ def take_file(jobs, data, headers):
 
 def take_pdf(jobs, data, headers):
     """A PDF from the landing, as (reply, status). The paper online when the page found one it names (an arXiv id, a
-    DOI) and it can be read there: faster and truer than a conversion, and the file is kept as its original. Else the
-    file through the PDF engine; without one, it waits for the reader to install it."""
+    DOI) and it can be read there: faster and truer than a conversion, and the file is kept as its original; not when
+    the reader chose in Settings to read a PDF itself (pdf_online). Else the file through the PDF engine (TextFold's own
+    reading without one); a scan without one waits for the reader to install it."""
     if data[:5] != b"%PDF-":
         return {"error": "not-pdf"}, 400
     name, lang = _named(headers)
     try:
         refs = [r for r in json.loads(unquote(headers.get("X-Refs") or "[]")) if isinstance(r, str)][:6]
     except ValueError:
+        refs = []
+    if models.load_settings().get("pdf_online") is False:
         refs = []
     pid = pdfdoc.pid_of(data)
     store.repository().prepare_import(pid)
@@ -863,7 +867,7 @@ def make_handler(jobs):
                     lib, _, key = str(body.get("item") or "").rpartition("/")
                     lang = body.get("lang") if body.get("lang") in langs.LANGS else None
                     try:
-                        got = zotero.read(lib, key)
+                        got = zotero.read(lib, key, online=models.load_settings().get("pdf_online") is not False)
                         if "ref" in got:   # generated as a pasted link is (from the page, which asks for a model first)
                             pid = store.resolve(got["ref"])
                             zotero.link(lib, key, pid, got["title"], got["record"])
@@ -958,7 +962,10 @@ def make_handler(jobs):
                         if f:
                             saved["pdf"] = base64.b64encode(f).decode()
                             saved["pdfjs"] = {"lib": (build.VENDOR / "pdfjs" / "pdf.min.mjs").read_text(encoding="utf-8"),
-                                              "worker": (build.VENDOR / "pdfjs" / "pdf.worker.min.mjs").read_text(encoding="utf-8")}
+                                              "worker": (build.VENDOR / "pdfjs" / "pdf.worker.min.mjs").read_text(encoding="utf-8"),
+                                              # its decoders (a scanned page's pictures), by the names PDF.js asks for
+                                              "wasm": {w.name: base64.b64encode(w.read_bytes()).decode()
+                                                       for w in sorted((build.VENDOR / "pdfjs" / "wasm").glob("*.wasm"))}}
                             if pid.startswith("pdf-"):   # a converted PDF: its paragraphs' places on the pages
                                 with RELAYOUT:
                                     try:
@@ -1161,6 +1168,8 @@ def make_handler(jobs):
                         s["use_thoughtdag_env"] = bool(body["use_thoughtdag_env"])
                     if body.get("pdf_tier") in engine.TIERS:
                         s["pdf_tier"] = body["pdf_tier"]
+                    if "pdf_online" in body:   # (off: a PDF is read from itself, not from the paper online it names: #89)
+                        s["pdf_online"] = bool(body["pdf_online"])
                     models.save_settings(s)
                     return self.json(models_payload())
                 if u.path == "/api/settings/test":

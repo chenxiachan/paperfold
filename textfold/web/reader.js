@@ -212,8 +212,8 @@
     return out;
   }
 
-  // an atom is kept on one line, except a citation, which may list many works and breaks between them
-  const atCls = (t) => (t.a ? (A[t.a].wrap ??= A[t.a].html.includes('ltx_cite')) ? ' at wrap' : ' at' : t.x ? ' at' : '');
+  // A citation can list many works; a link can be an unbroken URL. Both may wrap within the column.
+  const atCls = (t) => (t.a ? (A[t.a].wrap ??= A[t.a].kind === 'ref' || A[t.a].html.includes('ltx_cite')) ? ' at wrap' : ' at' : t.x ? ' at' : '');
   // a piece's highlight (pieces(): hl): marked at Full or Brief, the same more lightly (another language), marked at
   // Key, marked at Takeaway
   const HL = ['', ' hl', ' hl hls', ' hl hlk', ' hl hlt'];
@@ -2344,7 +2344,7 @@
     selbar.innerHTML = `<button type="button" data-act="hl">${esc(t.n_highlight)}</button>${swatches('hl', toneOf({ anchor: anchors[0] }), 0, lastShade)}` +
       `<button type="button" data-act="note">${esc(t.n_note)}</button>` +
       `<button type="button" data-act="ask">${esc(t.n_ask)}</button>` +
-      // the author's words, in a document whose text can be put right (a PDF read wrong: app.js, editText)
+      // the author's words, which the reader can put right in any document (app.js, editText)
       (window.DRApp && window.DRApp.editText && anchors[0].tokens ? `<button type="button" data-act="edit">${esc(t.ed_fix)}</button>` : '');
     selbar.hidden = false;
     const r = getSelection().getRangeAt(0).getBoundingClientRect(), w = selbar.offsetWidth;
@@ -3673,9 +3673,13 @@
   svdlg.addEventListener('submit', (e) => { e.preventDefault(); doSave(); });
   savebtn.addEventListener('click', (e) => { e.stopPropagation(); openSave(); });
   // where a file goes, the reader chooses: the app's own save dialog, or the browser's (Chrome's file picker); a browser
-  // without one keeps it in its downloads. make() gives the file's text once the place is chosen; null when cancelled
+  // without one keeps it in its downloads. make() gives the file's text (a picture: a Blob) once the place is chosen;
+  // null when cancelled
   async function saveAs(name, make, type) {
-    if (window.desktop && window.desktop.saveFile) return window.desktop.saveFile(name, await make());
+    if (window.desktop && window.desktop.saveFile) {
+      const data = await make();   // (a picture: its bytes)
+      return window.desktop.saveFile(name, data instanceof Blob ? await data.arrayBuffer() : data);
+    }
     if (window.showSaveFilePicker) {
       let handle = null;
       try {
@@ -3964,27 +3968,37 @@ math { font-size: 1.05em; }
     msg.textContent = T[ui].pdf_loading;
     cmp.scroller.replaceChildren(msg);
     try {
-      let lib, data;
-      if (D.pdf && D.pdfjs) {   // a saved page: PDF.js and the file from inside it
+      // wasm: where PDF.js finds its decoders (pdfjs/wasm/: JBIG2 and CCITT, the pictures of scanned pages; JPEG 2000;
+      // colour profiles). Without them those pictures are left out of the page, which then shows blank (#108)
+      let lib, data, wasm;
+      const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      if (D.pdf && D.pdfjs) {   // a saved page: PDF.js, its decoders and the file from inside it
         const js = (text) => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
         lib = await import(js(D.pdfjs.lib));
         lib.GlobalWorkerOptions.workerSrc = js(D.pdfjs.worker);
-        data = Uint8Array.from(atob(D.pdf), (c) => c.charCodeAt(0));
+        data = bytes(D.pdf);
+        const inPage = D.pdfjs.wasm || {};
+        wasm = { BinaryDataFactory: class { async fetch({ kind, filename }) {   // (PDF.js asks for each by its name)
+          if (kind !== 'wasmUrl' || !inPage[filename]) throw new Error(`not in this page: ${filename}`);
+          return bytes(inPage[filename]);
+        } } };
       } else if (D.pdfAt) {   // a gallery's page: the file and PDF.js next to it
         const at = (p) => new URL(p, location.href).href;
         lib = await import(at(`${D.pdfAt.pdfjs}pdf.min.mjs`));
         lib.GlobalWorkerOptions.workerSrc = at(`${D.pdfAt.pdfjs}pdf.worker.min.mjs`);
+        wasm = { wasmUrl: at(`${D.pdfAt.pdfjs}wasm/`) };
         const r = await fetch(at(D.pdfAt.file));
         if (!r.ok) throw Object.assign(new Error('no pdf'), { open: D.meta.abs_url });
         data = new Uint8Array(await r.arrayBuffer());
       } else {
         lib = await import('/static/vendor/pdfjs/pdf.min.mjs');
         lib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
+        wasm = { wasmUrl: new URL('/static/vendor/pdfjs/wasm/', location.href).href };
         const r = await fetch(`/api/pdf/${encodeURIComponent(D.meta.id)}`);
         if (!r.ok) throw Object.assign(new Error('no pdf'), { open: (await r.json().catch(() => ({}))).open });
         data = new Uint8Array(await r.arrayBuffer());
       }
-      const loading = lib.getDocument({ data, isEvalSupported: false });
+      const loading = lib.getDocument({ data, isEvalSupported: false, ...wasm });
       const doc = await loading.promise;
       if (!cmp || cmp.pane !== pane) { loading.destroy(); return; }
       Object.assign(cmp, { lib, doc, loading, pages: [], spans: new Map() });
@@ -4423,13 +4437,69 @@ math { font-size: 1.05em; }
 
   // ── a figure, enlarged: a click on its picture opens it over the page with its caption (as the reader sees it now:
   //    this language, this level); Esc, a click beside it or × closes it. A picture larger than the screen opens to
-  //    fit, and a click on it shows it at full size, to scroll ──
+  //    fit, and a click on it shows it at full size, to scroll. Beside ×, its picture is copied or saved ──
   const lightbox = h('div', 'lightbox');
   lightbox.hidden = true;
   lightbox.setAttribute('role', 'dialog');
   lightbox.setAttribute('aria-modal', 'true');
   document.body.append(lightbox);
-  let lightboxFrom = null;
+  let lightboxFrom = null, captionPress = false;
+  const LB_ICONS = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    save: '<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
+  };
+  const PIC_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
+  const asDataUrl = (blob) => new Promise((ok, no) => { const f = new FileReader(); f.onload = () => ok(f.result); f.onerror = no; f.readAsDataURL(blob); });
+  async function fetched(src) {
+    const r = await fetch(new URL(src, document.baseURI));
+    if (!r.ok) throw new Error(`${r.status}`);
+    return r.blob();
+  }
+  // the picture as PNG: an image at its own size; a drawing (<svg>) at twice the size it has in the text, on white as
+  // it is shown, drawn by itself (so the pictures inside it go in with it)
+  async function picPng(pic) {
+    const drawing = pic.tagName.toLowerCase() === 'svg';
+    let img = pic, w = pic.naturalWidth, ht = pic.naturalHeight;
+    if (drawing) {
+      const r = pic.getBoundingClientRect(), k = Math.max(2, devicePixelRatio), svg = pic.cloneNode(true);
+      if (!svg.hasAttribute('viewBox')) svg.setAttribute('viewBox', `0 0 ${pic.width.baseVal.value || r.width} ${pic.height.baseVal.value || r.height}`);
+      w = Math.round(r.width * k); ht = Math.round(r.height * k);
+      svg.setAttribute('width', w); svg.setAttribute('height', ht);
+      for (const im of svg.querySelectorAll('img, image')) {
+        const at = im.localName === 'img' ? 'src' : im.hasAttribute('href') ? 'href' : 'xlink:href', src = im.getAttribute(at);
+        if (src && !src.startsWith('data:')) im.setAttribute(at, await asDataUrl(await fetched(src)));
+      }
+      img = new Image();
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+      await img.decode();
+    }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = ht;
+    const g = c.getContext('2d');
+    if (drawing) { g.fillStyle = '#fff'; g.fillRect(0, 0, w, ht); }
+    g.drawImage(img, 0, 0, w, ht);
+    return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('png'))), 'image/png'));
+  }
+  // copied as PNG (the picture made while the clipboard is asked: the click lets it be written); saved as the file it
+  // is (a drawing, as PNG), named by the text and the figure
+  async function copyPic(pic) {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': picPng(pic) })]);
+  }
+  async function savePic(pic, fig) {
+    let blob = pic.tagName.toLowerCase() === 'svg' ? null : await fetched(pic.currentSrc || pic.src).catch(() => null);
+    if (!blob || !PIC_EXT[blob.type]) blob = await picPng(pic);
+    const label = (fig && (fig.querySelector('figcaption .flabel')?.textContent.trim() || fig.id)) || 'figure';
+    const name = `${D.meta.id} ${label}`.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90).trim();
+    return saveAs(`${name}.${PIC_EXT[blob.type]}`, () => blob, blob.type);
+  }
+  function lbButton(icon, label, run) {
+    const b = h('button', 'lb-action', `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${LB_ICONS[icon]}</svg>`);
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', (e) => { e.stopPropagation(); run(); });
+    return b;
+  }
   function openLightbox(pic) {
     const fig = pic.closest('figure.fig'), cap = fig && fig.querySelector('figcaption');
     const shown = pic.cloneNode(true);
@@ -4441,15 +4511,24 @@ math { font-size: 1.05em; }
     const x = h('button', 'lb-x', '×');
     x.type = 'button';
     x.setAttribute('aria-label', T[ui].close);
-    lightbox.replaceChildren(stage, x);
+    const said = h('div', 'lb-said'), bar = h('div', 'lb-actions');
+    said.setAttribute('role', 'status');
+    const say = (s) => { said.textContent = s; clearTimeout(said._t); said._t = setTimeout(() => { said.textContent = ''; }, 2400); };
+    bar.append(lbButton('copy', T[ui].lb_copy, () => copyPic(pic).then(() => say(T[ui].lb_copied), () => say(T[ui].lb_failed))),
+      lbButton('save', T[ui].lb_save, () => savePic(pic, fig).catch(() => say(T[ui].lb_failed))), x);
+    lightbox.replaceChildren(stage, bar, said);
     if (cap) {
       const label = cap.querySelector('.flabel'), text = cap._tx ? cap._tx.innerText.trim() : '';
       const c = h('div', 'lb-cap');
       c.textContent = [label && label.textContent.trim(), text].filter(Boolean).join(' ');
-      if (c.textContent) lightbox.append(c);
+      if (c.textContent) {
+        c.tabIndex = 0;
+        lightbox.append(c);
+      }
       lightbox.setAttribute('aria-label', c.textContent || 'Figure');
     }
     lightbox.classList.remove('lb-full');
+    captionPress = false;
     lightbox.hidden = false;
     document.documentElement.classList.add('lb-open');
     lightboxFrom = document.activeElement;
@@ -4461,7 +4540,15 @@ math { font-size: 1.05em; }
     document.documentElement.classList.remove('lb-open');
     if (lightboxFrom && lightboxFrom.focus) lightboxFrom.focus({ preventScroll: true });
   }
+  lightbox.addEventListener('pointerdown', (e) => {
+    if (e.isPrimary) captionPress = !!e.target.closest('.lb-cap');
+  });
+  lightbox.addEventListener('pointercancel', (e) => { if (e.isPrimary) captionPress = false; });
   lightbox.addEventListener('click', (e) => {
+    // A selection can start on the caption and end on the backdrop.
+    const fromCaption = e.detail > 0 && captionPress;
+    captionPress = false;
+    if (fromCaption || e.target.closest('.lb-cap')) return;
     const pic = e.target.closest('.lb-pic');
     if (pic && pic.tagName.toLowerCase() === 'img') {   // larger than the screen: full size, to scroll; and back
       const fits = pic.naturalWidth <= pic.clientWidth + 2 && pic.naturalHeight <= pic.clientHeight + 2;
