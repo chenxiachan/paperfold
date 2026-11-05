@@ -36,8 +36,8 @@
   POST /api/providers/save    {key?, preset, name, base, api_key?, models}  ·  POST /api/providers/remove {key}
   POST /api/settings          {use_thoughtdag_env}, {pdf_tier}, {pdf_online}, {lang} (one of langs.py; else 400)  ·  POST /api/settings/test
                               {model?} or {task: "ask"}: one tiny call
-  GET  /notes                 every note of the library on one page, to pick some and summarize them (summary.py)
-  GET  /api/notes             every note of the library: {papers: {id: {title, name, lang, summary}}, notes: [...]}, newest first
+  GET  /notes                 every note of the library on one page, to pick some and make a reading record of them (record.py)
+  GET  /api/notes             every note of the library: {papers, notes (newest first), summaries, used} (record.everything)
   GET  /api/notes/<id>        the reader's notes on a paper (docs/notes-format.md)
   GET  /api/doc/<id>?lang=xx  the document in the TextFold format (docs/format.md), as `textfold get --json` writes it,
                               from its layers alone: nothing is generated, no model is called
@@ -54,8 +54,9 @@
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
-  POST /api/summary           {items: [{paper, note}], ui}: a summary of those notes, made a document of the library in
-                              its folder of summaries ({paper, lang, model}); without a model, the notes listed alone
+  POST /api/record            {items: [{paper, note}], ui}: the reading record of those notes, a document of the library in
+                              its folder of records ({paper, lang}); no model is called
+  POST /api/record/obsidian   {items, ui}: the same record as Markdown for Obsidian ({name, text})
   POST /api/papers/delete     {paper}: move a paper to papers/.trash, kept 30 days (not while it is being generated); the
                               list. Or {papers: [ids]}: each that can go; {papers: the list, deleted: [ids], busy: [ids]}
   POST /api/papers/restore    {papers: [ids]}: those deleted last back from papers/.trash, in their folders (the
@@ -98,7 +99,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, summary, zotero
+from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, record, store, zotero
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
           "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript",
@@ -612,7 +613,7 @@ def make_handler(jobs):
                 if u.path == "/notes":
                     return self.send(200, notes_page(jobs), "text/html; charset=utf-8")
                 if u.path == "/api/notes":
-                    return self.json(summary.everything(listed()))
+                    return self.json(record.everything(listed()))
                 if u.path == "/api/bridge":
                     return self.json(bridges.bridge_status(fresh=True))
                 if u.path == "/api/openrouter/minted":   # the app, waiting while the system browser authorises
@@ -947,18 +948,15 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
-                if u.path == "/api/summary":
+                if u.path in ("/api/record", "/api/record/obsidian"):
                     try:
-                        spec = models.ask_spec()
-                    except RuntimeError:   # no model: the notes are listed, no point is written
-                        spec = None
-                    try:
-                        pid = summary.make(body.get("items"), spec, str(body.get("ui") or "en"))
+                        if u.path == "/api/record":
+                            pid = record.record(body.get("items"), str(body.get("ui") or "en"))
+                            return self.json({"paper": pid, "lang": store.text_lang(pid)})
+                        name, text = record.obsidian(body.get("items"), str(body.get("ui") or "en"))
+                        return self.json({"name": name, "text": text})
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
-                    except Exception as e:  # the model failed: nothing is stored, the reader can ask again
-                        return self.json({"error": str(e)[:600]}, 502)
-                    return self.json({"paper": pid, "lang": store.text_lang(pid), "model": spec is not None})
                 if u.path == "/api/ask/stop":
                     notes.stop(str(body.get("req") or "")[:40])
                     return self.json({"ok": True})

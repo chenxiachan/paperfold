@@ -4,9 +4,10 @@
 // to six), the months one under another, scrolled on their own, the deeper a day the more notes on it; zoomed out (−,
 // ⌘ or Ctrl and the wheel, a pinch), each month a small square map, side by side. Days are picked by a click, a drag
 // across them, a month's name for the month; ⌘ or Ctrl adds to what is picked, shift runs on from the last day picked;
-// the rows then list their notes alone. A note opens there (#n=), goes (with an undo), shows the summaries it went
-// into. The notes ticked are deleted, or summarized (/api/summary) into a document of the library, which opens. Each
-// icon says what it is in a tip.
+// the rows then list their notes alone; Today picks today. A note opens there (#n=), goes (with an undo), shows the
+// records it went into. What is ticked gathers on the right, whatever days are in view; from there it is deleted, made
+// a reading record (/api/record: what I read, was curious about, got, attended to), a document of the library which
+// opens, or the same as Markdown for Obsidian (/api/record/obsidian). Each icon says what it is in a tip.
 (() => {
   const I18N = window.DR_I18N;
   const store = {
@@ -14,7 +15,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } },
   };
   // the interface's language, the app's (app.js: its menu at the top, the sidebar's): changed there, it changes here
-  let ui, T, LOC, modelName = '';
+  let ui, T, LOC;
   function setLang() {
     const v = store.get('pf-ui-lang');
     ui = I18N.uiFor(v || I18N.guess());
@@ -131,9 +132,78 @@
     if (!list.length) $('nb-list').classList.add('nb-bare'); else $('nb-list').classList.remove('nb-bare');
     document.querySelectorAll('.nb-tcheck[data-some]').forEach((c) => { c.indeterminate = true; });
     for (const k of openC) { const el = document.querySelector(`.nb-n[data-key="${CSS.escape(k)}"] .nb-ctx`); if (el) context(k, el); }
-    $('nb-bar').hidden = !picked.size;
-    $('nb-picked').textContent = T.nb_picked.replace('{n}', picked.size);
+    renderTray();
   }
+
+  // ── what is picked, gathered on the right whatever days are in view: a text a group, a note a line; the record of
+  // the four questions, the same for Obsidian, and deletion made from it ──
+  function renderTray() {
+    const ns = data.notes.filter((n) => picked.has(key(n))), tray = $('nb-tray');
+    const said = tray.querySelector('.nb-said'), keepSaid = said ? [said.className, said.textContent] : null;
+    if (!ns.length) {
+      tray.innerHTML = `<div class="nb-trayhead"><span>${esc(T.nb_tray)}</span></div><p class="nb-trayempty">${esc(T.nb_tray_empty)}</p>`;
+      return;
+    }
+    const by = new Map();
+    for (const n of ns) { if (!by.has(n.paper)) by.set(n.paper, []); by.get(n.paper).unshift(n); }
+    tray.innerHTML = `<div class="nb-trayhead"><span>${esc(T.nb_tray)}</span><b class="nb-cnt">${ns.length}</b>` +
+      `<button type="button" class="nb-ico nb-trayclear" ${tipped(T.nb_clear)}>${I.x}</button></div><div class="nb-traybody">` +
+      [...by].map(([pid, g]) => `<div class="nb-tg"><div class="nb-tgh"><span>${esc(titleOf(pid))}</span><b class="nb-cnt">${g.length}</b>` +
+        `<button type="button" class="nb-ico nb-tgx" data-pid="${esc(pid)}" ${tipped(T.nb_unpick)}>${I.x}</button></div>` +
+        g.map((n) => `<div class="nb-ti k-${lineKind(n)}" data-key="${esc(key(n))}"><span>${esc(lineOf(n))}</span>` +
+          `<button type="button" class="nb-ico nb-tix" ${tipped(T.nb_unpick)}>${I.x}</button></div>`).join('') + '</div>').join('') +
+      `</div><div class="nb-trayacts"><button type="button" class="nb-go nb-record" ${tipped(T.nb_record_tip)}>${esc(T.nb_record)}</button>` +
+      `<button type="button" class="nb-btn nb-obs">${esc(T.nb_obsidian)}</button>` +
+      `<button type="button" class="nb-btn nb-del">${esc(T.nb_delete)}</button></div><div class="nb-said" role="status"></div>`;
+    if (keepSaid) { const s2 = tray.querySelector('.nb-said'); [s2.className, s2.textContent] = keepSaid; }
+  }
+  const items = () => data.notes.filter((n) => picked.has(key(n))).map((n) => ({ paper: n.paper, note: n.id }));
+  const say = (text, bad) => { const s2 = $('nb-tray').querySelector('.nb-said'); if (s2) { s2.className = `nb-said${bad ? ' bad' : ''}`; s2.textContent = text; } };
+  const postJson = async (path, body) => {
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const got = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(got.error || r.status);
+    return got;
+  };
+  // a file saved where the reader says (the app's own dialog, the browser's, else a download), as the reader saves
+  async function saveFile(name, text) {
+    if (window.desktop && window.desktop.saveFile) return window.desktop.saveFile(name, text);
+    if (window.showSaveFilePicker) {
+      try {
+        const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }] });
+        const w = await h.createWritable(); await w.write(new Blob([text], { type: 'text/markdown;charset=utf-8' })); await w.close();
+        return h.name;
+      } catch (x) { if (x.name === 'AbortError') return null; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+    a.download = name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return name;
+  }
+  $('nb-tray').addEventListener('click', async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.matches('.nb-trayclear')) { picked.clear(); return renderList(); }
+    if (b.matches('.nb-tgx')) { for (const k of [...picked]) if (k.startsWith(`${b.dataset.pid}|`)) picked.delete(k); return renderList(); }
+    if (b.matches('.nb-tix')) { picked.delete(b.closest('.nb-ti').dataset.key); return renderList(); }
+    if (b.matches('.nb-del')) return remove([...picked]);
+    if (b.matches('.nb-record')) {
+      b.disabled = true; say(T.nb_making);
+      try { const got = await postJson('/api/record', { items: items(), ui }); location.href = `/p/${got.paper}?lang=${encodeURIComponent(got.lang)}`; }
+      catch (x) { say(T.nb_failed.replace('{e}', x.message), true); b.disabled = false; }
+      return;
+    }
+    if (b.matches('.nb-obs')) {
+      b.disabled = true;
+      try {
+        const got = await postJson('/api/record/obsidian', { items: items(), ui });
+        const where = await saveFile(got.name, got.text);
+        if (where) say(T.nb_saved.replace('{name}', typeof where === 'string' ? where : got.name));
+      } catch (x) { say(T.nb_failed.replace('{e}', x.message), true); }
+      b.disabled = false;
+    }
+  });
 
   // ── the calendar ──
   function perDay() {
@@ -162,12 +232,13 @@
         const c = per.get(d) || 0, tip = `${long.format(d)}${c ? ` · ${c}` : ''}`;
         return `<button type="button" class="nb-d lv${lv(c)}${d === today ? ' today' : ''}" data-day="${d}" ${tipped(tip)}>${zoom === 'month' ? new Date(d).getDate() : ''}</button>`;
       }).join('');
-      const name = fmt(zoom === 'month' ? { year: 'numeric', month: 'long' } : { year: 'numeric', month: 'short' }).format(new Date(y, m, 1));
-      return `<section class="nb-m" data-m="${y}-${m}"><button type="button" class="nb-mname" data-y="${y}" data-mo="${m}" ${tipped(`${T.nb_month_pick}${n ? ` · ${n}` : ''}`)}>${esc(name)}</button>` +
+      const mo = fmt({ month: zoom === 'month' && !/^(zh|ja|ko)/.test(LOC) ? 'long' : 'short' }).format(new Date(y, m, 1));   // (十月 reads as 10月)
+      return `<section class="nb-m" data-m="${y}-${m}"><button type="button" class="nb-mname" data-y="${y}" data-mo="${m}" ${tipped(`${T.nb_month_pick}${n ? ` · ${n}` : ''}`)}><b>${esc(mo)}</b><span>${y}</span></button>` +
         `${wds}<div class="nb-mgrid">${cells}</div></section>`;
     }).join('');
-    return `<div class="nb-calbar"><button type="button" class="nb-ico" data-zoom="year" ${tipped(T.nb_zoom_out)}${zoom === 'year' ? ' disabled' : ''}>${I.minus}</button>` +
-      `<button type="button" class="nb-ico" data-zoom="month" ${tipped(T.nb_zoom_in)}${zoom === 'month' ? ' disabled' : ''}>${I.plus}</button></div>` +
+    return `<div class="nb-calbar"><button type="button" class="nb-today" ${tipped(T.nb_today_tip)}>${esc(T.nb_today_btn)}</button><span class="nb-zoom">` +
+      `<button type="button" class="nb-ico" data-zoom="year" ${tipped(T.nb_zoom_out)}${zoom === 'year' ? ' disabled' : ''}>${I.minus}</button>` +
+      `<button type="button" class="nb-ico" data-zoom="month" ${tipped(T.nb_zoom_in)}${zoom === 'month' ? ' disabled' : ''}>${I.plus}</button></span></div>` +
       `<div class="nb-months" data-zoom="${zoom}">${blocks}</div>`;
   }
   function buildCal(at) {   // at: the month to bring to the top (a zoom); else where it was, or this month at first
@@ -181,8 +252,8 @@
   function paintCal() {
     const box = $('nb-cal').querySelector('.nb-months');
     if (box) box.classList.toggle('picking', days.size > 0);
-    $('nb-cal').querySelectorAll('.nb-d[data-day]').forEach((b) => b.classList.toggle('sel', days.has(+b.dataset.day)));
-    $('nb-cal').querySelectorAll('.nb-mname').forEach((b) => b.classList.toggle('sel', monthDays(+b.dataset.y, +b.dataset.mo).every((d) => days.has(d))));
+    $('nb-cal').querySelectorAll('.nb-d[data-day]').forEach((b) => b.classList.toggle('nb-on', days.has(+b.dataset.day)));
+    $('nb-cal').querySelectorAll('.nb-mname').forEach((b) => b.classList.toggle('nb-on', monthDays(+b.dataset.y, +b.dataset.mo).every((d) => days.has(d))));
   }
   const topMonth = () => {
     const box = $('nb-cal').querySelector('.nb-months');
@@ -314,6 +385,13 @@
   });
   addEventListener('pointerup', () => { drag = null; });
   calEl.addEventListener('click', (e) => {
+    if (e.target.closest('.nb-today')) {
+      const t = midnight(Date.now()), d = new Date(t);
+      days = new Set([t]); anchor = t; picks();
+      const box = calEl.querySelector('.nb-months'), sec = box && box.querySelector(`.nb-m[data-m="${d.getFullYear()}-${d.getMonth()}"]`);
+      if (sec) box.scrollTop = sec.offsetTop - box.offsetTop;
+      return;
+    }
     const z = e.target.closest('button[data-zoom]'), mn = e.target.closest('.nb-mname');
     if (z) return setZoom(z.dataset.zoom);
     if (!mn) return;
@@ -363,22 +441,6 @@
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.nb-d')) hideTip(); }, true);
 
   $('nb-q').addEventListener('input', (e) => { query = e.target.value; render(); });
-  $('nb-clear').onclick = () => { picked.clear(); $('nb-said').textContent = ''; renderList(); };
-  $('nb-del').onclick = () => remove([...picked]);
-  $('nb-go').onclick = async () => {
-    const items = data.notes.filter((n) => picked.has(key(n))).map((n) => ({ paper: n.paper, note: n.id }));
-    const go = $('nb-go'), said = $('nb-said');
-    go.disabled = true; said.className = 'nb-said'; said.textContent = T.nb_busy;
-    try {
-      const r = await fetch('/api/summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items, ui }) });
-      const got = await r.json();
-      if (!r.ok) throw new Error(got.error || r.status);
-      location.href = `/p/${got.paper}?lang=${encodeURIComponent(got.lang)}`;
-    } catch (x) {
-      said.className = 'nb-said bad'; said.textContent = T.nb_failed.replace('{e}', x.message); go.disabled = false;
-    }
-  };
-
   // the words on the page, in the interface's language (again when it changes)
   function labels() {
     document.title = `${T.nb_title} · TextFold`;
@@ -400,13 +462,8 @@
       if (!b || b.dataset.k === view) return;
       view = b.dataset.k; keep(); render();
     };
-    $('nb-del').textContent = T.nb_delete;
-    $('nb-clear').textContent = T.nb_clear;
-    $('nb-go').textContent = T.nb_go;
-    $('nb-go').dataset.tip = modelName ? T.nb_model.replace('{m}', modelName) : T.nb_no_model;
   }
   labels();
   document.addEventListener('tf-lang', () => { setLang(); labels(); calSig = ''; render(); });
-  fetch('/api/models').then((r) => r.json()).then((m) => { modelName = m.askName || m.selectedName || ''; labels(); }).catch(() => {});
   load().catch(() => { $('nb-list').innerHTML = `<p class="nb-empty">${esc(T.nb_none)}</p>`; });
 })();
