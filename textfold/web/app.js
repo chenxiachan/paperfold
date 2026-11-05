@@ -108,6 +108,7 @@
   // ── sidebar ──────────────────────────────────────────────────────────
   const side = document.getElementById('sidebar');
   const MARK = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect class="m1" x="2" y="3" width="16" height="2.4" rx="1.2"/><rect class="m2" x="2" y="8.8" width="11" height="2.4" rx="1.2"/><rect class="m3" x="2" y="14.6" width="5" height="2.4" rx="1.2"/></svg>';
+  const NOTES = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3.5h10v13H5z"/><path d="M7.5 7h5M7.5 10h5M7.5 13h3"/></svg>';   // the notes page (notes.js)
   const BOOKS = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h3v13H4z"/><path d="M8.5 3.5h3v13h-3z"/><path d="M13 4.2l2.8-.7 2.6 12.3-2.8.7z"/></svg>';
   const LIST = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="M7.5 3.5v13"/></svg>';
   const PIN = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path class="pin-head" d="M7.2 2.8h5.6l-.9 4.6 2.9 3v1.4H5.2v-1.4l2.9-3z"/><path d="M10 11.8v5.4"/></svg>';
@@ -215,7 +216,7 @@
         `<span class="sb-cn">${esc(T.sel_n.replace('{n}', chosen.size))}</span><button type="button" class="sb-cmove">${esc(T.sel_move)}</button>` +
         `<button type="button" class="sb-cdel">${esc(T.sel_delete)}</button>` +
         `<button type="button" class="sb-cx" title="${esc(T.sel_clear)}" aria-label="${esc(T.sel_clear)}">×</button></div>` : ''}
-      <div class="sb-foot"><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
+      <div class="sb-foot"><a class="sb-zotero sb-notes" href="/notes">${NOTES}${esc(T.sb_notes)}</a><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
       <div class="sb-resize" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(T.sb_resize)}" aria-label="${esc(T.sb_resize)}"></div>`;
     // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
     const busy = jobs.some(live);

@@ -109,7 +109,8 @@ def _sanitize(root, sizes=False):
         el.attrs.update(size)   # a picture's size in pixels, as its page gave it (a logo stays small)
         if align:   # a Markdown table's column alignment, as LaTeXML's class
             el["class"] = [f"ltx_align_{align.group(1)}"]
-        if name == "a" and not re.match(r"^(#|https?://|mailto:)", el.get("href", ""), re.I):
+        # (/p/<id>: a document of the library, as a summary's notes link to theirs: summary.py)
+        if name == "a" and not re.match(r"^(#|https?://|mailto:|/p/[\w.-]+(?:\?lang=[\w-]+)?(?:#[\w=&.-]*)?$)", el.get("href", ""), re.I):
             el.attrs.pop("href", None)
         if name == "img" and re.match(r"^(javascript|vbscript|data:(?!image/(png|jpe?g|gif|webp)))", el.get("src", ""), re.I):
             el.attrs.pop("src", None)

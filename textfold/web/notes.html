@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" class="app notes-page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 44 44%27%3E%3Crect width=%2744%27 height=%2744%27 rx=%2710%27 fill=%27%23FAF9F7%27/%3E%3Crect x=%278%27 y=%2711%27 width=%2728%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27/%3E%3Crect x=%278%27 y=%2720%27 width=%2719%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27 opacity=%270.4%27/%3E%3Crect x=%278%27 y=%2729%27 width=%2710%27 height=%275%27 rx=%272.5%27 fill=%27%23E08A3C%27/%3E%3C/svg%3E">
+<title>TextFold</title>
+{{HEAD}}
+<link rel="stylesheet" href="/static/reader.css">
+<link rel="stylesheet" href="/static/notes.css">
+</head>
+<body>
+<header class="nb-top">
+  <div class="nb-head">
+    <a class="nb-home" href="/"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="2.4" rx="1.2" fill="var(--accent)"/><rect x="2" y="8.8" width="11" height="2.4" rx="1.2" fill="var(--accent)" opacity=".4"/><rect x="2" y="14.6" width="5" height="2.4" rx="1.2" fill="var(--warm)"/></svg><span>TextFold</span></a>
+    <h1 id="nb-title"></h1>
+    <span class="nb-count" id="nb-count"></span>
+  </div>
+  <div class="nb-tools">
+    <input type="search" id="nb-q" autocomplete="off" spellcheck="false">
+    <div class="nb-kinds" id="nb-kinds" role="radiogroup"></div>
+    <button type="button" class="nb-all" id="nb-all"></button>
+  </div>
+</header>
+<main id="nb-list" class="nb-list" aria-live="polite"></main>
+<div class="nb-bar" id="nb-bar" role="toolbar" hidden>
+  <div class="nb-bar-in">
+    <span class="nb-picked" id="nb-picked"></span>
+    <span class="nb-model" id="nb-model"></span>
+    <button type="button" class="nb-clear" id="nb-clear"></button>
+    <button type="button" class="nb-go" id="nb-go"></button>
+  </div>
+  <div class="nb-said" id="nb-said" role="status"></div>
+</div>
+<script id="boot" type="application/json">{{BOOT}}</script>
+<script src="/static/i18n.js"></script>
+<script src="/static/notes.js"></script>
+</body>
+</html>

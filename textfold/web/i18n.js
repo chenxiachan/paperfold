@@ -889,6 +889,38 @@ window.DR_I18N = (() => {
     hi: { n_tools: "वेब पर खोजें", n_tools_tip: "एजेंट को वेब पर खोजकर और पेज खोलकर जवाब देने दें", n_tools_on: "वेब पर खोज चालू: एजेंट अपने टूल से वेब पर खोजकर और पेज खोलकर जवाब देता है।" },
   };
   for (const [code, words] of Object.entries(TOOLS)) Object.assign(S[code], words);
+  // the notes page (notes.js): every note of the library, by day and by text, some picked to be summarized
+  // (the other languages read it in English for now)
+  const NB = {
+    en: { nb_title: "Notes", nb_search: "Search your notes, their passages and your questions", nb_f_all: "All", nb_f_hl: "Highlights",
+      nb_f_note: "Notes", nb_f_ask: "Questions", nb_k_hl: "Highlight", nb_k_note: "Note", nb_k_ask: "Question", nb_today: "Today",
+      nb_yesterday: "Yesterday", nb_n: "{n} notes in {d} texts", nb_dn: "{n}", nb_pick: "Pick this note", nb_pick_doc: "Pick its notes of this day",
+      nb_all: "Pick all shown", nb_none_all: "Unpick all shown", nb_unfold: "Context", nb_fold: "Hide context", nb_there: "Open there",
+      nb_loading: "Reading the text…", nb_gone: "This passage is no longer in the text: open it there to see where it was.",
+      nb_asked: "Asked", nb_answer: "Answer", nb_whole: "On the whole text", nb_written: "the model’s words, at {lvl}",
+      nb_summary_doc: "Summary", nb_picked: "{n} notes picked, from {d} texts", nb_model: "Summarized by {m}",
+      nb_no_model: "No model connected: the summary will list the notes alone.", nb_clear: "Clear", nb_go: "Summarize",
+      nb_busy: "Summarizing. The model is writing; this can take a minute.", nb_failed: "The summary could not be made: {e}",
+      nb_empty: "No notes yet. The highlights, notes and questions you make in the reader all come here.", nb_none: "No note matches.",
+      sb_notes: "Notes" },
+    zh: { nb_title: "笔记", nb_search: "搜索笔记、原句和问过的问题", nb_f_all: "全部", nb_f_hl: "高光", nb_f_note: "批注", nb_f_ask: "问答",
+      nb_k_hl: "高光", nb_k_note: "批注", nb_k_ask: "问答", nb_today: "今天", nb_yesterday: "昨天", nb_n: "{d} 篇文本里的 {n} 条笔记",
+      nb_dn: "{n} 条", nb_pick: "选这条笔记", nb_pick_doc: "选这一天在这篇里的笔记", nb_all: "全选显示的", nb_none_all: "取消全选",
+      nb_unfold: "上下文", nb_fold: "收起", nb_there: "原处", nb_loading: "正在读取文本…", nb_gone: "这段已经不在文本里了，点“原处”看它原来在哪。",
+      nb_asked: "问", nb_answer: "答", nb_whole: "整篇文本", nb_written: "模型写的 {lvl} 层", nb_summary_doc: "总结",
+      nb_picked: "已选 {n} 条，来自 {d} 篇", nb_model: "总结用：{m}", nb_no_model: "没有连接模型：总结只会列出所选的笔记。",
+      nb_clear: "清除", nb_go: "总结所选", nb_busy: "正在总结，模型在写，可能要一两分钟。", nb_failed: "没能生成总结：{e}",
+      nb_empty: "还没有笔记。在阅读器里划线、写批注或提问，都会出现在这里。", nb_none: "没有匹配的笔记。", sb_notes: "笔记" },
+    "zh-Hant": { nb_title: "筆記", nb_search: "搜尋筆記、原句和問過的問題", nb_f_all: "全部", nb_f_hl: "高光", nb_f_note: "批註", nb_f_ask: "問答",
+      nb_k_hl: "高光", nb_k_note: "批註", nb_k_ask: "問答", nb_today: "今天", nb_yesterday: "昨天", nb_n: "{d} 篇文本裡的 {n} 條筆記",
+      nb_dn: "{n} 條", nb_pick: "選這條筆記", nb_pick_doc: "選這一天在這篇裡的筆記", nb_all: "全選顯示的", nb_none_all: "取消全選",
+      nb_unfold: "上下文", nb_fold: "收起", nb_there: "原處", nb_loading: "正在讀取文本…", nb_gone: "這段已經不在文本裡了，點「原處」看它原來在哪。",
+      nb_asked: "問", nb_answer: "答", nb_whole: "整篇文本", nb_written: "模型寫的 {lvl} 層", nb_summary_doc: "總結",
+      nb_picked: "已選 {n} 條，來自 {d} 篇", nb_model: "總結用：{m}", nb_no_model: "沒有連接模型：總結只會列出所選的筆記。",
+      nb_clear: "清除", nb_go: "總結所選", nb_busy: "正在總結，模型在寫，可能要一兩分鐘。", nb_failed: "沒能生成總結：{e}",
+      nb_empty: "還沒有筆記。在閱讀器裡劃線、寫批註或提問，都會出現在這裡。", nb_none: "沒有符合的筆記。", sb_notes: "筆記" },
+  };
+  for (const [code, words] of Object.entries(NB)) Object.assign(S[code], words);
   // text: the document is not a paper, and the questions about it say so
   const t = (lang, text) => ({ ...S.en, ...(S[lang] || {}), ...(text ? { ...DOCS.en, ...(DOCS[lang] || {}) } : {}) });
   // the language a visitor most likely reads, among the ones offered: the interface's, or `among` (a text's, by name)

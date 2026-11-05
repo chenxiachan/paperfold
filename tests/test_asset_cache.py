@@ -25,7 +25,7 @@ class AssetCache(unittest.TestCase):
         root = Path(self.tmp.name)
         web = root / "web"
         web.mkdir()
-        for name in (*server.STATIC, "app.html", "template.html"):
+        for name in (*server.STATIC, "app.html", "template.html", "notes.html"):
             shutil.copy2(build.WEB / name, web / name)
         for obj, key, value in ((build, "WEB", web), (store, "DATA", root / "data")):
             patch = mock.patch.object(obj, key, value)
@@ -81,7 +81,9 @@ class AssetCache(unittest.TestCase):
                 self.assertEqual(headers["Cache-Control"], "no-store")
 
     def test_landing_and_reader_version_only_shared_assets(self):
-        for path, expected in (("/", set(server.STATIC) - {"reader.js"}), (f"/p/{self.pid}", set(server.STATIC))):
+        page = set(server.STATIC) - {"notes.js", "notes.css"}   # (the notes page's own: /notes, below)
+        for path, expected in (("/", page - {"reader.js"}), (f"/p/{self.pid}", page),
+                               ("/notes", {"reader.css", "notes.css", "i18n.js", "notes.js"})):
             with self.subTest(path=path):
                 status, headers, body = self.get(path)
                 self.assertEqual(status, 200)

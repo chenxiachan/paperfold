@@ -138,6 +138,7 @@
 .sb-settings, .sb-help, .sb-zotero { width: 100%; text-align: left; border: 0; background: none; font: 550 13px var(--sans); color: var(--ink-2); padding: 6px 4px; border-radius: 7px; cursor: pointer; }
 .sb-settings:hover, .sb-help:hover, .sb-zotero:hover { background: var(--surface); }
 .sb-zotero { display: flex; align-items: center; gap: 6px; }
+.sb-notes { text-decoration: none; box-sizing: border-box; }
 .sb-zotero svg { width: 15px; height: 15px; flex: none; }
 /* its edge, dragged to change its width */
 .sb-resize { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; cursor: col-resize; touch-action: none; z-index: 1; }
