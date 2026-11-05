@@ -154,6 +154,29 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-askq { flex: 1; min-width: 0; font: 14.5px var(--sans); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
 .nb-askq:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
 .nb-askform .nb-go { padding: 8px 18px; }
+/* the conversation: the question asked on the right, the answer under it; suggestions over the box */
+.nb-turn { position: relative; margin-bottom: 12px; }
+.nb-mq { margin: 0 0 8px auto; max-width: 80%; width: fit-content; background: var(--accent-soft); color: var(--accent-deep);
+  padding: 8px 14px; border-radius: 14px 14px 4px 14px; font: 600 14px/1.45 var(--sans); }
+.nb-ma { background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; padding: 4px 18px 12px; }
+.nb-turn .nb-qax { position: absolute; top: 4px; left: 0; opacity: 0; }
+.nb-turn:hover .nb-qax, .nb-turn .nb-qax:focus-visible { opacity: 1; }
+.nb-digest p { margin: 8px 0 0; font: 15px/1.65 var(--sans); }
+.nb-dopen { color: var(--ink); }
+.nb-dpart { margin-top: 16px; }
+.nb-dhead { display: flex; align-items: baseline; gap: 8px; font: 650 15.5px var(--sans); color: var(--ink); text-decoration: none; }
+a.nb-dhead:hover { color: var(--accent); text-decoration: none; }
+.nb-dhead span { color: var(--accent); font-weight: 600; }
+.nb-digest .nb-dline { margin-top: 4px; font-weight: 620; color: var(--ink); }
+.nb-digest .nb-dext { color: var(--muted); font-size: 14px; }
+.nb-dext i { font-style: normal; font-weight: 620; margin-right: 2px; }
+.nb-dclose { border-top: 1px solid var(--line-2); padding-top: 14px; }
+.nb-sugs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.nb-sug { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); font: 550 13.5px var(--sans); border-radius: 999px; padding: 6px 13px; cursor: pointer; }
+.nb-sug:hover { border-color: var(--accent); color: var(--accent-deep); }
+.nb-sug.nb-sug1 { border-color: var(--accent); color: var(--accent-deep); font-weight: 650; }
+.nb-cite.nb-sec { background: var(--line-2); color: var(--ink-2); }
+.nb-cite.nb-sec:hover { background: var(--ink-2); color: var(--card); }
 .nb-qa1 { position: relative; }
 .nb-qa1 .nb-qax { position: absolute; top: 8px; right: 8px; opacity: 0; }
 .nb-qa1:hover .nb-qax, .nb-qax:focus-visible { opacity: 1; }

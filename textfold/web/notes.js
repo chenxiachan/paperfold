@@ -5,10 +5,9 @@
 // ⌘ or Ctrl and the wheel, a pinch), each month a small square map, side by side. Days are picked by a click, a drag
 // across them, a month's name for the month; ⌘ or Ctrl adds to what is picked, shift runs on from the last day picked;
 // held at the calendar's edge in a drag, it scrolls on, so a stretch runs across months; Today picks today. The rows
-// then list those days' notes alone. Above them, four questions are asked of the days picked (else every note), or of
-// the notes ticked when some are: what I read, what I was curious about, what I got, what I attended to; the answer
-// (/api/record/view) shows under them, and is saved as a document of the library (/api/record) or as Markdown for
-// Obsidian (/api/record/obsidian). A note opens there (#n=), goes (with an undo), shows the records it went into. Each
+// then list those days' notes alone. Once days are picked or notes ticked, a box above the rows asks them anything,
+// as a conversation, with suggestions, the first an overview of them (a part a text, every claim linked to its note or
+// section); what was written is saved as a document of the library (/api/record) or as Markdown for Obsidian. A note opens there (#n=), goes (with an undo), shows the records it went into. Each
 // icon says what it is in a tip.
 (() => {
   const I18N = window.DR_I18N;
@@ -136,12 +135,13 @@
     renderAsk();
   }
 
-  // ── the four questions, asked of what is in view (the days picked, else every note) or of what is ticked: the
-  // answer under them, one at a time; saved as a document of the library, or as Markdown for Obsidian ──
-  const QS = ['read', 'curious', 'got', 'attend'];
-  let asked = null, answer = null, answerFor = '', answerTimer = null, showPicked = false, panel = false;
-  let qa = [], qaFor = '';   // the questions the reader asked of these notes, and their answers (the model's)
+  // ── once days are picked or notes ticked: a box to ask them anything, as a conversation, with suggestions; the first
+  // writes an overview of them (/api/record/digest), a part a text, every claim linked to its note or section; the
+  // others, and any question of one's own, are answered from them (/api/record/ask). What was written is saved as a
+  // document of the library (/api/record) or as Markdown for Obsidian, the notes themselves after it ──
+  let thread = [], threadFor = '', showPicked = false;
   const scope = () => (picked.size ? data.notes.filter((n) => picked.has(key(n))) : listed());
+  const chosen = () => picked.size > 0 || (view === 'cal' && days.size > 0);
   const scopeItems = () => scope().map((n) => ({ paper: n.paper, note: n.id }));
   const scopeSig = () => scope().map(key).sort().join(',');
   function scopeHtml() {
@@ -153,86 +153,81 @@
         g.map((n) => `<div class="nb-ti k-${lineKind(n)}" data-key="${esc(key(n))}"><span>${esc(lineOf(n))}</span>` +
           `<button type="button" class="nb-ico nb-tix" ${tipped(T.nb_unpick)}>${I.x}</button></div>`).join('') + '</div>').join('')}</div>` : '';
       return `<div class="nb-scope"><button type="button" class="nb-scopebtn" aria-expanded="${showPicked}">${I.chev}<span>${esc(T.nb_scope_picked)}</span>` +
-        `<b class="nb-cnt">${ns.length}</b></button><button type="button" class="nb-ico nb-unpickall" ${tipped(T.nb_clear_picked)}>${I.x}</button>${sumBtn()}</div>${list}`;
+        `<b class="nb-cnt">${ns.length}</b></button><button type="button" class="nb-ico nb-unpickall" ${tipped(T.nb_clear_picked)}>${I.x}</button></div>${list}`;
     }
     const said = view === 'cal' ? daysSaid() : '';
     return `<div class="nb-scope"><span class="nb-scopel">${esc(said || T.nb_scope_all)}</span><b class="nb-cnt">${listed().length}</b>` +
-      (said ? `<button type="button" class="nb-ico nb-undays" ${tipped(T.nb_clear_days)}>${I.x}</button>${sumBtn()}` : '') + '</div>';
+      (said ? `<button type="button" class="nb-ico nb-undays" ${tipped(T.nb_clear_days)}>${I.x}</button>` : '') + '</div>';
   }
-  const sumBtn = () => (scope().length ? `<button type="button" class="nb-sumbtn" aria-pressed="${panel}">${I.sum}<span>${esc(T.nb_summarize)}</span></button>` : '');
-  const src = (e) => `<a class="nb-src" href="${esc(e.there)}">${esc([e.title, e.section, e.day].filter(Boolean).join(' · '))}</a>`;
-  function answerHtml() {
-    if (!asked) return '';
-    if (!answer || answerFor !== scopeSig()) return `<div class="nb-answer"><p class="nb-wait">${esc(T.nb_loading)}</p></div>`;
-    const a = answer, none = (k) => `<p class="nb-wait">${esc(T[`nb_none_${k}`])}</p>`;
-    let body = '';
-    if (asked === 'read') body = a.read.map((t) => `<div class="nb-arow"><a class="nb-atitle" href="/p/${esc(t.pid)}${t.lang ? `?lang=${esc(t.lang)}` : ''}">${esc(t.title)}</a>` +
-      `<span class="nb-ameta"><b class="nb-cnt">${t.notes}</b>${esc(t.span)}</span>${t.line ? `<p class="nb-aline">${esc(t.line)}</p>` : ''}</div>`).join('');
-    else if (asked === 'curious') body = a.curious.length ? a.curious.map((e) => `<div class="nb-arow"><p class="nb-q">${esc(e.q)}</p>` +
-      `${e.a ? `<p class="nb-a">${esc(e.a)}</p>` : ''}${src(e)}</div>`).join('') : none('curious');
-    else if (asked === 'got') body = a.got.length ? a.got.map((e) => `<div class="nb-arow"><p class="nb-text">${esc(e.text)}</p>${src(e)}</div>`).join('') : none('got');
-    else body = a.attend.length ? a.attend.map((t) => `<div class="nb-arow"><div class="nb-atitle">${esc(t.title)}</div>` + t.sections.map((s) =>
-      `<div class="nb-asec"><b>${esc(s.title)}</b>${s.line ? ` <span>${esc(s.line)}</span>` : ''}</div>` +
-      s.quotes.map((q) => `<a class="nb-quote nb-aquote" href="${esc(q.there)}">${esc(q.quote)}</a>`).join('')).join('') + '</div>').join('') : none('attend');
-    return `<div class="nb-answer">${body}</div>`;
-  }
-  // an answer of the model's: its paragraphs and lists, each number a link to the note it rests on
-  function mdLite(text, cited) {
-    const by = new Map((cited || []).map((c) => [c.n, c]));
-    const inline = (l) => esc(l).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\[(\d{1,3})\]/g, (m, k) => {
-      const c = by.get(+k);
+  // a text of the model's: its numbers made links, [3] to a note, [T1.3] to a section of a text; its paragraphs and lists
+  function cites(s, refs) {
+    const ns = new Map((refs.notes || []).map((c) => [c.n, c])), ss = new Map((refs.sections || []).map((c) => [c.code, c]));
+    return esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\[(T\d{1,2}\.\d{1,3}|\d{1,3})\]/g, (m, k) => {
+      if (k[0] === 'T') { const c = ss.get(k); return c ? `<a class="nb-cite nb-sec" href="${esc(c.there)}" data-tip="${esc(`${c.text} · ${c.title}`.slice(0, 140))}">§${esc(k.split('.')[1])}</a>` : ''; }
+      const c = ns.get(+k);
       return c ? `<a class="nb-cite" href="${esc(c.there)}" data-tip="${esc(`${c.title} · ${c.line}`.slice(0, 140))}">${k}</a>` : '';
     });
+  }
+  function mdLite(text, refs) {
     const out = [];
     let list = null;
     for (const raw of String(text || '').split('\n')) {
       const l = raw.trim(), item = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(l);
-      if (item) { if (!list) { list = []; } list.push(`<li>${inline(item[1])}</li>`); continue; }
+      if (item) { (list = list || []).push(`<li>${cites(item[1], refs)}</li>`); continue; }
       if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; }
-      if (l) out.push(`<p>${inline(l)}</p>`);
+      if (l) out.push(`<p>${cites(l, refs)}</p>`);
     }
     if (list) out.push(`<ul>${list.join('')}</ul>`);
     return out.join('');
   }
-  function qaHtml() {
-    return qa.map((x, i) => `<div class="nb-answer nb-qa1"><div class="nb-arow"><p class="nb-q">${esc(x.q)}</p>` +
+  const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+  const bare = (s) => String(s || '').replace(/\s*\[(?:T\d{1,2}\.)?\d{1,3}\]/g, '').trim();
+  function digestHtml(d) {
+    const parts = d.texts.map((x, i) => `<section class="nb-dpart"><a class="nb-dhead" href="/p/${esc(x.pid)}${x.lang ? `?lang=${esc(x.lang)}` : ''}">` +
+      `<span>${CIRCLED[i] || `${i + 1}.`}</span>${esc(x.title)}</a>${x.line ? `<p class="nb-dline">${esc(bare(x.line))}</p>` : ''}` +
+      `<p>${cites([x.about, x.noticed, x.meaning].filter(Boolean).join(' '), d)}</p>` +
+      (x.extend ? `<p class="nb-dext"><i>${esc(T.nb_extend)}</i>${esc(x.extend)}</p>` : '') + '</section>').join('');
+    const c = d.closing || {};
+    return `<div class="nb-digest">${d.opening ? `<p class="nb-dopen">${cites(d.opening, d)}</p>` : ''}${parts}` +
+      (c.line || c.body ? `<section class="nb-dpart nb-dclose"><div class="nb-dhead">${esc(T.nb_closing)}</div>${c.line ? `<p class="nb-dline">${esc(bare(c.line))}</p>` : ''}` +
+        `${c.body ? `<p>${cites(c.body, d)}</p>` : ''}</section>` : '') + `<p class="nb-by">${esc(T.nb_digest_by.replace('{m}', d.model || ''))}</p></div>`;
+  }
+  // without a model: the notes by text, as they are (the record's own parts)
+  function plainHtml(v) {
+    return `<p class="nb-wait">${esc(T.nb_no_model_digest)}</p>` + v.read.map((t) => {
+      const qs = v.curious.filter((e) => e.pid === t.pid), ws = v.got.filter((e) => e.pid === t.pid), at = v.attend.find((a) => a.pid === t.pid);
+      return `<section class="nb-dpart"><a class="nb-dhead" href="/p/${esc(t.pid)}">${esc(t.title)}</a>${t.line ? `<p class="nb-dline">${esc(t.line)}</p>` : ''}` +
+        qs.map((e) => `<p><b>${esc(e.q)}</b> ${esc(e.a)} <a class="nb-src" href="${esc(e.there)}">↗</a></p>`).join('') +
+        ws.map((e) => `<p>${esc(e.text)} <a class="nb-src" href="${esc(e.there)}">↗</a></p>`).join('') +
+        (at ? at.sections.map((s) => `<p class="nb-asec"><b>${esc(s.title)}</b> ${esc(s.line)}</p>` + s.quotes.map((q) =>
+          `<a class="nb-quote nb-aquote" href="${esc(q.there)}">${esc(q.quote)}</a>`).join('')).join('') : '') + '</section>';
+    }).join('');
+  }
+  function threadHtml() {
+    return thread.map((x, i) => `<div class="nb-turn"><div class="nb-mq">${esc(x.q)}</div><div class="nb-ma">` +
       (x.pending ? `<p class="nb-wait">${esc(T.nb_thinking)}</p>` : x.error ? `<p class="nb-wait bad">${esc(x.error)}</p>`
-        : `<div class="nb-md">${mdLite(x.answer, x.notes)}</div><p class="nb-by">${esc(T.nb_by.replace('{m}', x.model || ''))}</p>`) +
+        : x.kind === 'digest' ? (x.plain ? plainHtml(x.plain) : digestHtml(x.res))
+          : `<div class="nb-md">${mdLite(x.res.answer, x.res)}</div><p class="nb-by">${esc(T.nb_by.replace('{m}', x.res.model || ''))}</p>`) +
       `</div><button type="button" class="nb-ico nb-qax" data-i="${i}" ${tipped(T.nb_remove_q)}>${I.x}</button></div>`).join('');
   }
+  const SUGS = () => [['digest', T.nb_sug_digest], ['ask', T.nb_sug_links], ['ask', T.nb_sug_focus], ['ask', T.nb_sug_open]];
   function panelHtml() {
-    const done = qa.some((x) => x.answer) || (asked && answer && answerFor === scopeSig());
-    return `<div class="nb-panel"><div class="nb-qs" role="radiogroup">${QS.map((q) =>
-      `<button type="button" role="radio" data-q="${q}" aria-checked="${asked === q}">${esc(T[`nb_q_${q}`])}</button>`).join('')}` +
-      `<button type="button" class="nb-ico nb-panelx" ${tipped(T.nb_close)}>${I.x}</button></div>` +
+    const done = thread.some((x) => x.res || x.plain);
+    return `<div class="nb-panel">${threadHtml()}<div class="nb-sugs">${SUGS().map(([k, q], i) =>
+      `<button type="button" class="nb-sug${k === 'digest' ? ' nb-sug1' : ''}" data-sug="${i}">${esc(q)}</button>`).join('')}</div>` +
       `<form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off">` +
-      `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}>${esc(T.nb_ask_go)}</button></form>` + answerHtml() + qaHtml() +
+      `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}>${esc(T.nb_ask_go)}</button></form>` +
       (done ? `<div class="nb-aacts"><span class="nb-said" role="status"></span>` +
         `<button type="button" class="nb-btn nb-savedoc" ${tipped(T.nb_save_doc_tip)}>${esc(T.nb_save_doc)}</button>` +
         `<button type="button" class="nb-btn nb-obs">${esc(T.nb_obsidian)}</button></div>` : '') + '</div>';
   }
   function renderAsk() {
     const n = scope().length, sig = scopeSig();
-    if (qaFor !== sig) { qa = []; qaFor = sig; }   // (questions asked of other notes: not of these)
-    if (!n) panel = false;
+    if (threadFor !== sig) { thread = []; threadFor = sig; }   // (what was asked of other notes: not of these)
     const box = $('nb-ask'), typed = box.querySelector('.nb-askq'), was = typed ? [typed.value, document.activeElement === typed] : null;
-    box.innerHTML = !data.notes.length ? '' : scopeHtml() + (panel && n ? panelHtml() : '');
+    box.innerHTML = !data.notes.length ? '' : scopeHtml() + (n && chosen() ? panelHtml() : '');
     const q = box.querySelector('.nb-askq');
     if (q && was) { q.value = was[0]; if (was[1]) q.focus(); }
-    if (panel && asked && n && answerFor !== scopeSig()) {   // (the answer of another scope: asked again, once the picking settles)
-      clearTimeout(answerTimer);
-      answerTimer = setTimeout(fetchAnswer, drag ? 400 : 120);
-    }
-  }
-  async function fetchAnswer() {
-    const sig = scopeSig(), items = scopeItems();
-    if (!items.length) return;
-    try {
-      const got = await postJson('/api/record/view', { items, ui });
-      if (sig !== scopeSig()) return;   // (picked again meanwhile)
-      answer = got; answerFor = sig;
-    } catch (x) { answer = null; answerFor = ''; }
-    renderAsk();
   }
   const say = (text, bad) => { const s2 = $('nb-ask').querySelector('.nb-said'); if (s2) { s2.className = `nb-said${bad ? ' bad' : ''}`; s2.textContent = text; } };
   const postJson = async (path, body) => {
@@ -241,6 +236,19 @@
     if (!r.ok) throw new Error(got.error || r.status);
     return got;
   };
+  async function askIt(kind, question) {
+    const x = { kind, q: question, pending: true }, sig = scopeSig(), items = scopeItems();
+    thread.push(x); renderAsk();
+    try {
+      x.res = await postJson(kind === 'digest' ? '/api/record/digest' : '/api/record/ask', kind === 'digest' ? { items, ui } : { items, question, ui });
+    } catch (err) {
+      if (err.message === 'no-model' && kind === 'digest') {
+        try { x.plain = await postJson('/api/record/view', { items, ui }); } catch (e2) { x.error = T.nb_failed.replace('{e}', e2.message); }
+      } else x.error = err.message === 'no-model' ? T.nb_no_model_ask : T.nb_failed.replace('{e}', err.message);
+    }
+    x.pending = false;
+    if (threadFor === sig) renderAsk();
+  }
   // a file saved where the reader says (the app's own dialog, the browser's, else a download), as the reader saves
   async function saveFile(name, text) {
     if (window.desktop && window.desktop.saveFile) return window.desktop.saveFile(name, text);
@@ -257,28 +265,23 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     return name;
   }
-  const answered = () => qa.filter((x) => x.answer).map((x) => ({ q: x.q, answer: x.answer, model: x.model }));
-  $('nb-ask').addEventListener('submit', async (e) => {
+  // what is kept: the last overview written, the questions answered
+  const kept = () => {
+    const d = [...thread].reverse().find((x) => x.kind === 'digest' && x.res);
+    return { digest: d ? d.res : null, qa: thread.filter((x) => x.kind === 'ask' && x.res).map((x) => ({ q: x.q, answer: x.res.answer, model: x.res.model })) };
+  };
+  $('nb-ask').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = e.target.querySelector('.nb-askq'), question = input.value.trim();
     if (!question) return;
-    const x = { q: question, pending: true }, sig = scopeSig();
-    qa.push(x); input.value = ''; renderAsk();
-    try {
-      const got = await postJson('/api/record/ask', { items: scopeItems(), question, ui });
-      Object.assign(x, { answer: got.answer, notes: got.notes, model: got.model, pending: false });
-    } catch (err) {
-      Object.assign(x, { pending: false, error: err.message === 'no-model' ? T.nb_no_model_ask : T.nb_failed.replace('{e}', err.message) });
-    }
-    if (qaFor === sig) renderAsk();
+    input.value = '';
+    askIt('ask', question);
   });
   $('nb-ask').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.matches('.nb-sumbtn')) { panel = !panel; if (!panel) asked = null; renderAsk(); if (panel) { const q = $('nb-ask').querySelector('.nb-askq'); if (q) q.focus(); } return; }
-    if (b.matches('.nb-panelx')) { panel = false; asked = null; return renderAsk(); }
-    if (b.matches('.nb-qax')) { qa.splice(+b.dataset.i, 1); return renderAsk(); }
-    if (b.dataset.q) { asked = asked === b.dataset.q ? null : b.dataset.q; return renderAsk(); }
+    if (b.dataset.sug !== undefined) { const [k, q] = SUGS()[+b.dataset.sug]; return askIt(k, q); }
+    if (b.matches('.nb-qax')) { thread.splice(+b.dataset.i, 1); return renderAsk(); }
     if (b.matches('.nb-scopebtn')) { showPicked = !showPicked; return renderAsk(); }
     if (b.matches('.nb-unpickall')) { picked.clear(); showPicked = false; return renderList(); }
     if (b.matches('.nb-undays')) { days = new Set(); anchor = null; return picks(); }
@@ -286,14 +289,14 @@
     if (b.matches('.nb-tix')) { picked.delete(b.closest('.nb-ti').dataset.key); return renderList(); }
     if (b.matches('.nb-savedoc')) {
       b.disabled = true; say(T.nb_making);
-      try { const got = await postJson('/api/record', { items: scopeItems(), ui, qa: answered() }); location.href = `/p/${got.paper}?lang=${encodeURIComponent(got.lang)}`; }
+      try { const got = await postJson('/api/record', { items: scopeItems(), ui, ...kept() }); location.href = `/p/${got.paper}?lang=${encodeURIComponent(got.lang)}`; }
       catch (x) { say(T.nb_failed.replace('{e}', x.message), true); b.disabled = false; }
       return;
     }
     if (b.matches('.nb-obs')) {
       b.disabled = true;
       try {
-        const got = await postJson('/api/record/obsidian', { items: scopeItems(), ui, qa: answered() });
+        const got = await postJson('/api/record/obsidian', { items: scopeItems(), ui, ...kept() });
         const where = await saveFile(got.name, got.text);
         if (where) say(T.nb_saved.replace('{name}', typeof where === 'string' ? where : got.name));
       } catch (x) { say(T.nb_failed.replace('{e}', x.message), true); }

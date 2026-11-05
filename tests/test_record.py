@@ -127,7 +127,7 @@ class Record(unittest.TestCase):
             got = record.ask(self.items(), "How do they make a network smaller?", {"id": "test-model"}, "en")
         prompt = call.call_args[0][0]
         self.assertIn("Question: How do they make a network smaller?", prompt)
-        self.assertIn('[2] (T1 § Results, 2026-11-03) passage: "but only on the smaller models" paragraph: "On the held-out set', prompt)
+        self.assertIn('[2] (T1, in T1.2 Results, 2026-11-03) passage: "but only on the smaller models" paragraph: "On the held-out set', prompt)
         self.assertIn("Write in English", prompt)
         self.assertNotIn("[9]", got["answer"])   # (a number that names no note: left out)
         self.assertEqual([x["n"] for x in got["notes"]], [1, 2, 3])
@@ -142,6 +142,35 @@ class Record(unittest.TestCase):
         self.assertIn(f"[[{self.a} Pruning#^n-1|1]]", ob)
         pid = record.record(self.items(), "en", when="2026-11-05 09:00", qa=qa)
         self.assertIn("How do they make a network smaller", store.read_text(store.pdir(pid) / "source.md"))
+
+    def test_an_overview_a_part_a_text_every_claim_cited(self):
+        reply = {"opening": "You read two texts over three days. Mostly about making networks smaller [1].",
+                 "texts": [{"t": 2, "line": "A teacher passes on what it learned [3].", "about": "A student matches a teacher [T2.1].",
+                            "noticed": "You asked why a teacher is needed [3].", "meaning": "Knowledge moves by outputs [3][7].", "extend": ""},
+                           {"t": 1, "line": "Prune, but mind the model's size.", "about": "It removes small weights [T1.1] and reports a loss [T1.2][T1.9].",
+                            "noticed": "You wrote it needs no retraining [1] and marked a but [2].", "meaning": "The result has a condition [2].",
+                            "extend": "Lottery-ticket work asks the same question."}],
+                 "closing": {"line": "Lately: smaller networks, and what they keep.", "body": "Both texts shrink a network [1][3]."}}
+        with mock.patch.object(llm, "call", return_value=({"out": reply}, False)) as call, mock.patch.object(llm, "label", return_value="test-model"):
+            got = record.digest(self.items(), {"id": "test-model"}, "en")
+        prompt = call.call_args[0][0]
+        self.assertIn("  [T1.1] Method", prompt)
+        self.assertIn("[1] (T1, in T1.1 Method, 2026-11-01)", prompt)
+        self.assertEqual([x["t"] for x in got["texts"]], [1, 2])   # (in the order of the texts)
+        self.assertNotIn("[T1.9]", got["texts"][0]["about"])     # (a section that is not there: left out)
+        self.assertNotIn("[7]", got["texts"][1]["meaning"])
+        self.assertEqual({x["code"] for x in got["sections"]}, {"T1.1", "T1.2", "T2.1"})
+        title, md, lines, _ = record.record_md(self.items(), record.WORDS["en"], "2026-11-05 09:00", (), record._digest_in(got))
+        self.assertTrue(md.index("## Overview") < md.index("## What I read"))
+        self.assertIn("### Pruning", md)
+        self.assertIn(f"[§1](/p/{self.a}?lang=en#s=", md)
+        self.assertIn("Further: Lottery-ticket work asks the same question.", md)
+        self.assertEqual(lines[:2], ["You read two texts over three days.", "Prune, but mind the model's size."])
+        name, ob = record.obsidian(self.items(), "en", when="2026-11-05 09:00", digest=got)
+        self.assertIn(f"### [[{self.a} Pruning|Pruning]]", ob)
+        self.assertIn(f"textfold://open?paper={self.a}&s=", ob)
+        pid = record.record(self.items(), "en", when="2026-11-05 09:00", digest=got)
+        self.assertIn("Lately: smaller networks", store.read_text(store.pdir(pid) / "source.md"))
 
     def test_a_copy_stays_as_it_was(self):
         pid = record.record(self.items(), "en", when="2026-11-05 09:00")

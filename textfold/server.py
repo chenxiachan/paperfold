@@ -59,7 +59,9 @@
   POST /api/record/obsidian   {items, ui}: the same record as Markdown for Obsidian ({name, text})
   POST /api/record/view       {items, ui}: its four answers, for the notes page to show ({period, read, curious, got, attend})
   POST /api/record/ask        {items, question, ui}: the question answered by the model from those notes ({question,
-                              answer, takeaway, model, notes}); /api/record and /api/record/obsidian take {qa} too, to keep
+                              answer, takeaway, model, notes, sections}); /api/record and /api/record/obsidian take {qa} too
+  POST /api/record/digest     {items, ui}: the overview the model writes of those notes, a part a text ({opening, texts,
+                              closing, model, notes, sections}); /api/record and /api/record/obsidian take {digest} too
   POST /api/papers/delete     {paper}: move a paper to papers/.trash, kept 30 days (not while it is being generated); the
                               list. Or {papers: [ids]}: each that can go; {papers: the list, deleted: [ids], busy: [ids]}
   POST /api/papers/restore    {papers: [ids]}: those deleted last back from papers/.trash, in their folders (the
@@ -951,14 +953,16 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
-                if u.path in ("/api/record", "/api/record/obsidian", "/api/record/view", "/api/record/ask"):
+                if u.path in ("/api/record", "/api/record/obsidian", "/api/record/view", "/api/record/ask", "/api/record/digest"):
                     try:
-                        if u.path == "/api/record/ask":
+                        if u.path in ("/api/record/ask", "/api/record/digest"):
                             try:
                                 spec = models.ask_spec()
                             except RuntimeError:
                                 return self.json({"error": "no-model"}, 503)
                             try:
+                                if u.path == "/api/record/digest":
+                                    return self.json(record.digest(body.get("items"), spec, str(body.get("ui") or "en")))
                                 return self.json(record.ask(body.get("items"), str(body.get("question") or ""), spec, str(body.get("ui") or "en")))
                             except ValueError:
                                 raise
@@ -967,9 +971,9 @@ def make_handler(jobs):
                         if u.path == "/api/record/view":
                             return self.json(record.view(body.get("items"), str(body.get("ui") or "en")))
                         if u.path == "/api/record":
-                            pid = record.record(body.get("items"), str(body.get("ui") or "en"), qa=body.get("qa") or [])
+                            pid = record.record(body.get("items"), str(body.get("ui") or "en"), qa=body.get("qa") or [], digest=body.get("digest"))
                             return self.json({"paper": pid, "lang": store.text_lang(pid)})
-                        name, text = record.obsidian(body.get("items"), str(body.get("ui") or "en"), qa=body.get("qa") or [])
+                        name, text = record.obsidian(body.get("items"), str(body.get("ui") or "en"), qa=body.get("qa") or [], digest=body.get("digest"))
                         return self.json({"name": name, "text": text})
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
