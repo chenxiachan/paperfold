@@ -139,6 +139,7 @@
 .sb-settings:hover, .sb-help:hover, .sb-zotero:hover { background: var(--surface); }
 .sb-zotero { display: flex; align-items: center; gap: 6px; }
 .sb-notes { text-decoration: none; box-sizing: border-box; }
+.sb-notes.on { background: var(--accent-soft); color: var(--accent-deep); }
 /* a summary of the reader's notes (summary.py): tinted, with the notes' mark, when it was made for its id */
 .sb-item.sb-sum { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
 .sb-item.sb-sum:hover, .sb-item.sb-sum.active { background: var(--accent-soft); }

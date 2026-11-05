@@ -11,6 +11,8 @@ html.notes-page, .notes-page body { background: var(--surface); }
 .nb-home svg { width: 16px; height: 16px; }
 .nb-home:hover { color: var(--ink); text-decoration: none; }
 .nb-head h1 { margin: 0 8px 0 0; font: 650 20px var(--sans); letter-spacing: -.01em; }
+.notes-page .ui-top { position: static; margin-left: auto; }   /* (the landing's, in the bar) */
+.notes-page #nb-q { max-width: 520px; }
 #nb-q { flex: 1 1 240px; min-width: 0; font: 14px var(--sans); color: var(--ink); background: var(--card);
   border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px; }
 #nb-q:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }

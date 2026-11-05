@@ -551,21 +551,27 @@ def listed():
     return rows
 
 
-def landing_page(jobs):
+def app_boot(jobs):
+    """What the app around the reader starts with (app.js): the library, its folders, the jobs, the models."""
     # The agents on this computer are looked for as the server starts, in a second or two: the first page waits that
     # long for them, so it names the model in use rather than asking for one to be connected
     agents.wait_scanned(2)
     data = models_payload()
-    boot = {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data["selectedName"] or "",
+    return {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data["selectedName"] or "",
             "askName": data["askName"], "modelData": data,
             "bridge": data["bridge"], "langs": langs.natives()}
+
+
+def landing_page(jobs):
+    boot = app_boot(jobs)
     t = build.app_assets((build.WEB / "app.html").read_text(encoding="utf-8"))
     return t.replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS)).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
 
 
-def notes_page():
+def notes_page(jobs):
+    """The notes page, in the app as the landing is: the sidebar beside it, the language at the top."""
     t = build.app_assets((build.WEB / "notes.html").read_text(encoding="utf-8"))
-    boot = {"langs": langs.natives()}
+    boot = app_boot(jobs)
     return t.replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS)).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
 
 
@@ -604,7 +610,7 @@ def make_handler(jobs):
                 if u.path == "/":
                     return self.send(200, landing_page(jobs), "text/html; charset=utf-8")
                 if u.path == "/notes":
-                    return self.send(200, notes_page(), "text/html; charset=utf-8")
+                    return self.send(200, notes_page(jobs), "text/html; charset=utf-8")
                 if u.path == "/api/notes":
                     return self.json(summary.everything(listed()))
                 if u.path == "/api/bridge":

@@ -8,6 +8,7 @@
   const readerEl = document.getElementById('paper-data');
   const DATA = readerEl ? JSON.parse(readerEl.textContent) : null;
   const PAPER = DATA ? DATA.meta : null;   // the paper open in the reader, if any
+  const NOTES_PAGE = !!document.getElementById('nb-main');   // the notes page (notes.js), in the app as the landing is
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
   // the brightness and the style chosen in a paper's Aa menu (reader.js, textfold.type), on the landing too
   try {
@@ -77,6 +78,7 @@
     tellLang(code);
     renderSidebar();
     if (landing) renderLanding();
+    renderTop();
     if (window.__reader && window.__reader.setUi) window.__reader.setUi(code);
     document.dispatchEvent(new Event('tf-lang'));   // (what else speaks it: the app's update)
   }
@@ -219,7 +221,7 @@
         `<span class="sb-cn">${esc(T.sel_n.replace('{n}', chosen.size))}</span><button type="button" class="sb-cmove">${esc(T.sel_move)}</button>` +
         `<button type="button" class="sb-cdel">${esc(T.sel_delete)}</button>` +
         `<button type="button" class="sb-cx" title="${esc(T.sel_clear)}" aria-label="${esc(T.sel_clear)}">×</button></div>` : ''}
-      <div class="sb-foot"><a class="sb-zotero sb-notes" href="/notes">${NOTES}${esc(T.sb_notes)}</a><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
+      <div class="sb-foot"><a class="sb-zotero sb-notes${NOTES_PAGE ? ' on' : ''}" href="/notes"${NOTES_PAGE ? ' aria-current="page"' : ''}>${NOTES}${esc(T.sb_notes)}</a><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
       <div class="sb-resize" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(T.sb_resize)}" aria-label="${esc(T.sb_resize)}"></div>`;
     // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
     const busy = jobs.some(live);
@@ -1395,6 +1397,7 @@
   // ── the landing ──────────────────────────────────────────────────────
   const landing = document.getElementById('landing');
   function renderLanding() {
+    if (!landing) return;   // (another page of the app: the notes page)
     const T = t();
     document.documentElement.lang = I18N.htmlLang(uiLang);
     document.getElementById('h-tagline').textContent = T.hero;
@@ -1448,6 +1451,24 @@
       askName = d.askName || '';
       renderSidebar(); renderLanding();
     };
+  }
+  // on another page of the app (the notes page): the language and the help at its top, as on the landing
+  const topLang = !landing && document.getElementById('ui-lang');
+  function renderTop() {
+    if (!topLang) return;
+    const T = t();
+    topLang.value = uiLang;
+    topLang.setAttribute('aria-label', T.language);
+    document.getElementById('ui-lang-box').title = T.language;
+    document.getElementById('ui-help-t').textContent = T.tut_open;
+    document.getElementById('ui-help').title = T.tut_open;
+  }
+  if (topLang) {
+    for (const code of I18N.CODES) topLang.append(Object.assign(h('option'), { value: code, textContent: I18N.NATIVE[code] }));
+    topLang.onchange = () => setReaderLang(topLang.value);
+    const help = document.getElementById('ui-help');
+    if (window.TFTutorial) help.onclick = () => window.TFTutorial.open(uiLang); else help.hidden = true;
+    renderTop();
   }
   if (landing) {
     const sel = document.getElementById('lang');

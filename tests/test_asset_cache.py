@@ -83,7 +83,7 @@ class AssetCache(unittest.TestCase):
     def test_landing_and_reader_version_only_shared_assets(self):
         page = set(server.STATIC) - {"notes.js", "notes.css"}   # (the notes page's own: /notes, below)
         for path, expected in (("/", page - {"reader.js"}), (f"/p/{self.pid}", page),
-                               ("/notes", {"reader.css", "notes.css", "i18n.js", "notes.js"})):
+                               ("/notes", page - {"reader.js"} - {"webmcp.js"} | {"notes.js", "notes.css"})):
             with self.subTest(path=path):
                 status, headers, body = self.get(path)
                 self.assertEqual(status, 200)

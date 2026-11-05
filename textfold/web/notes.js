@@ -13,14 +13,15 @@
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } },
   };
-  try {   // the brightness and the style chosen in a text's Aa menu (reader.js, textfold.type), here too
-    const v = JSON.parse(store.get('textfold.type') || 'null') || {}, r = document.documentElement;
-    if (['light', 'dark'].includes(v.mode)) r.dataset.theme = v.mode;
-    if (v.style === 'paper') r.dataset.style = v.style;
-  } catch { /* (written by hand) */ }
-  const ui = (() => { const v = store.get('pf-ui-lang'); return v && I18N.NATIVE[v] ? v : I18N.guess(); })();
-  const T = I18N.t(ui), LOC = I18N.htmlLang(ui);
-  document.documentElement.lang = LOC;
+  // the interface's language, the app's (app.js: its menu at the top, the sidebar's): changed there, it changes here
+  let ui, T, LOC, modelName = '';
+  function setLang() {
+    const v = store.get('pf-ui-lang');
+    ui = I18N.uiFor(v || I18N.guess());
+    T = I18N.t(ui); LOC = I18N.htmlLang(ui);
+    document.documentElement.lang = LOC;
+  }
+  setLang();
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const $ = (id) => document.getElementById(id);
   const fold = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -378,31 +379,34 @@
     }
   };
 
-  document.title = `${T.nb_title} · TextFold`;
-  $('nb-title').textContent = T.nb_title;
-  $('nb-q').placeholder = T.nb_search; $('nb-q').setAttribute('aria-label', T.nb_search);
-  $('nb-kinds').innerHTML = [['all', T.nb_f_all], ['hl', T.nb_f_hl], ['note', T.nb_f_note], ['ask', T.nb_f_ask], ['new', T.nb_f_new]]
-    .map(([k, name]) => `<button type="button" role="radio" data-k="${k}" aria-checked="${k === kind}"${k === 'new' ? ` class="nb-gap" ${tipped(T.nb_f_new_tip)}` : ''}>${esc(name)}</button>`).join('');
-  $('nb-kinds').onclick = (e) => {
-    const b = e.target.closest('button[data-k]');
-    if (!b) return;
-    kind = b.dataset.k;
-    $('nb-kinds').querySelectorAll('button').forEach((x) => x.setAttribute('aria-checked', x === b));
-    render();
-  };
-  $('nb-views').innerHTML = [['list', I.list, T.nb_list], ['cal', I.cal, T.nb_cal]]
-    .map(([k, ico, name]) => `<button type="button" role="radio" data-k="${k}" aria-checked="${k === view}" ${tipped(name)}>${ico}</button>`).join('');
-  $('nb-views').onclick = (e) => {
-    const b = e.target.closest('button[data-k]');
-    if (!b || b.dataset.k === view) return;
-    view = b.dataset.k; keep(); render();
-  };
-  $('nb-del').textContent = T.nb_delete;
-  $('nb-clear').textContent = T.nb_clear;
-  $('nb-go').textContent = T.nb_go;
-  fetch('/api/models').then((r) => r.json()).then((m) => {
-    const name = m.askName || m.selectedName;
-    $('nb-go').dataset.tip = name ? T.nb_model.replace('{m}', name) : T.nb_no_model;
-  }).catch(() => {});
+  // the words on the page, in the interface's language (again when it changes)
+  function labels() {
+    document.title = `${T.nb_title} · TextFold`;
+    $('nb-title').textContent = T.nb_title;
+    $('nb-q').placeholder = T.nb_search; $('nb-q').setAttribute('aria-label', T.nb_search);
+    $('nb-kinds').innerHTML = [['all', T.nb_f_all], ['hl', T.nb_f_hl], ['note', T.nb_f_note], ['ask', T.nb_f_ask], ['new', T.nb_f_new]]
+      .map(([k, name]) => `<button type="button" role="radio" data-k="${k}" aria-checked="${k === kind}"${k === 'new' ? ` class="nb-gap" ${tipped(T.nb_f_new_tip)}` : ''}>${esc(name)}</button>`).join('');
+    $('nb-kinds').onclick = (e) => {
+      const b = e.target.closest('button[data-k]');
+      if (!b) return;
+      kind = b.dataset.k;
+      $('nb-kinds').querySelectorAll('button').forEach((x) => x.setAttribute('aria-checked', x === b));
+      render();
+    };
+    $('nb-views').innerHTML = [['list', I.list, T.nb_list], ['cal', I.cal, T.nb_cal]]
+      .map(([k, ico, name]) => `<button type="button" role="radio" data-k="${k}" aria-checked="${k === view}" ${tipped(name)}>${ico}</button>`).join('');
+    $('nb-views').onclick = (e) => {
+      const b = e.target.closest('button[data-k]');
+      if (!b || b.dataset.k === view) return;
+      view = b.dataset.k; keep(); render();
+    };
+    $('nb-del').textContent = T.nb_delete;
+    $('nb-clear').textContent = T.nb_clear;
+    $('nb-go').textContent = T.nb_go;
+    $('nb-go').dataset.tip = modelName ? T.nb_model.replace('{m}', modelName) : T.nb_no_model;
+  }
+  labels();
+  document.addEventListener('tf-lang', () => { setLang(); labels(); calSig = ''; render(); });
+  fetch('/api/models').then((r) => r.json()).then((m) => { modelName = m.askName || m.selectedName || ''; labels(); }).catch(() => {});
   load().catch(() => { $('nb-list').innerHTML = `<p class="nb-empty">${esc(T.nb_none)}</p>`; });
 })();

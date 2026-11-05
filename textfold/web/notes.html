@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="app notes-page">
+<html lang="en" class="app landing notes-page">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,16 +7,21 @@
 <title>TextFold</title>
 {{HEAD}}
 <link rel="stylesheet" href="/static/reader.css">
+<link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/notes.css">
 </head>
 <body>
+<aside id="sidebar"></aside>
 <header class="nb-top">
   <div class="nb-wrap nb-head">
-    <a class="nb-home" href="/"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="3" width="16" height="2.4" rx="1.2" fill="var(--accent)"/><rect x="2" y="8.8" width="11" height="2.4" rx="1.2" fill="var(--accent)" opacity=".4"/><rect x="2" y="14.6" width="5" height="2.4" rx="1.2" fill="var(--warm)"/></svg><span>TextFold</span></a>
     <h1 id="nb-title"></h1>
     <input type="search" id="nb-q" autocomplete="off" spellcheck="false">
     <div class="nb-seg" id="nb-kinds" role="radiogroup"></div>
     <div class="nb-seg nb-views" id="nb-views" role="radiogroup"></div>
+    <div class="ui-top">
+  <button type="button" class="ui-help" id="ui-help"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.65c-.5.22-.8.6-.8 1.15v.35"/><circle cx="8" cy="11.4" r=".4" fill="currentColor"/></svg><span id="ui-help-t"></span></button>
+  <label class="ui-lang" id="ui-lang-box"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.5 3.9 2.5 6.2S9.7 12.4 8 14.2C6.3 12.4 5.5 10.3 5.5 8S6.3 3.6 8 1.8z"/></svg><select id="ui-lang"></select></label>
+  </div>
   </div>
 </header>
 <main class="nb-wrap nb-main" id="nb-main">
@@ -39,6 +44,8 @@
 <div class="nb-tip" id="nb-tip" role="tooltip" hidden></div>
 <script id="boot" type="application/json">{{BOOT}}</script>
 <script src="/static/i18n.js"></script>
+<script src="/static/tutorial.js"></script>
+<script src="/static/app.js"></script>
 <script src="/static/notes.js"></script>
 </body>
 </html>
