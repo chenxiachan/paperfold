@@ -208,6 +208,7 @@ html.morphing .dot, html.morphing div.legend i { animation: none !important; }
 /* the sandbox a keyframe is laid out in: in the flow of nothing, never painted */
 .zsand { position: fixed; top: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; contain: layout style paint; }
 #ghosts > * { position: fixed; margin: 0; white-space: nowrap; transform-origin: 0 0; }
+#ghosts > .tx { white-space: normal; }
 
 /* ── document column ────────────────────────────────────── */
 .doc { position: relative; max-width: var(--col); margin: 0 auto; padding: 8px 24px 160px; }
@@ -233,10 +234,11 @@ html[data-font="sans"] { --text: var(--sans); }
 .tk.at:not(.wrap):not(:has(math, .katex)) { display: inline-flex; overflow-x: auto; align-items: baseline; }
 .tk.at.wrap { white-space: normal; }
 .wg { display: inline-block; max-width: 100%; white-space: normal; }
+.tk.at.citation, .wg:has(> .tk.citation) { display: inline; }
 /* An unusually long inline formula scrolls as a formula too. Scrolling an outer inline-block would move the
    baseline of every ordinary formula; keep the scroll box on the MathML (and its inline zoom copy). */
-.u .tx math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; }
-.u .tx .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
+:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; }
+:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
 .u img { max-width: 100%; height: auto; }
 [data-id] { transform-origin: 0 0; }
 
@@ -266,7 +268,7 @@ html[data-font="sans"] { --text: var(--sans); }
 
 /* ── units ──────────────────────────────────────────────── */
 .u { position: relative; min-width: 0; max-width: 100%; transition: background-color .35s, border-color .35s, color .35s; border: 1px solid transparent; }
-.u .tx { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.u .tx, .zp.tx, #ghosts > .tx { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--beat); opacity: 0; transition: opacity .3s; --beat: var(--r-context); }
 .u.r-gap .dot { --beat: var(--r-gap); } .u.r-claim .dot { --beat: var(--r-claim); }
 .u.r-method .dot { --beat: var(--r-method); } .u.r-setup .dot { --beat: var(--r-setup); }
@@ -280,19 +282,19 @@ html[data-font="sans"] { --text: var(--sans); }
 /* L4 Full and L3 Key: the author's words */
 .u[data-l="4"], .u[data-l="3"] { font-family: var(--text); font-size: calc(18.5px * var(--fs)); line-height: calc(1.62 * var(--lh, 1)); color: var(--ink-2); margin: 0 0 calc(14px * var(--fs)); }
 html[data-font="sans"] .u[data-l="4"], html[data-font="sans"] .u[data-l="3"] { font-size: calc(17px * var(--fs)); line-height: calc(1.68 * var(--lh, 1)); }
-.u[data-l="4"] .tk.lead, .u[data-l="3"] .tk.lead, .u[data-l="4"] .tr.lead, .u[data-l="3"] .tr.lead { color: var(--ink); }
+:is(.u, .tx)[data-l="4"] .tk.lead, :is(.u, .tx)[data-l="3"] .tk.lead, .u[data-l="4"] .tr.lead, .u[data-l="3"] .tr.lead { color: var(--ink); }
 .tk.gap, .tr.gap { color: var(--faint) !important; padding: 0 .1em; }
 .u.abstract[data-l="4"], .u.abstract[data-l="3"] { font-size: calc(17.5px * var(--fs)); }
 .u.local-open { background: var(--card); border-color: var(--line); border-radius: 10px; padding: 10px 14px; margin-left: -15px; margin-right: -15px; box-shadow: 0 8px 28px -18px rgba(40, 30, 10, .35); }
 
 /* L2 Brief: takeaway + reason, written */
 .u[data-l="2"] { font-family: var(--sans); font-size: calc(16.5px * var(--fs)); line-height: calc(1.55 * var(--lh, 1)); color: var(--muted); margin: 0 0 calc(12px * var(--fs)); padding-left: 18px; }
-.u[data-l="2"] .tk.lead, .u[data-l="2"] .tr.lead { color: var(--ink); font-weight: 560; }
+:is(.u, .tx)[data-l="2"] .tk.lead, .u[data-l="2"] .tr.lead { color: var(--ink); font-weight: 560; }
 .u[data-l="2"] .dot { left: 0; top: .62em; opacity: 1; }
 
 /* L1 Takeaway: one line per unit on a spine */
 .u[data-l="1"] { font-family: var(--sans); font-size: calc(15.5px * var(--fs)); line-height: calc(1.45 * var(--lh, 1)); color: var(--ink-2); padding: 3px 0 3px 22px; margin: 0; }
-.u[data-l="1"] .tk.lead, .u[data-l="1"] .tr.lead { color: var(--ink); font-weight: 600; }
+:is(.u, .tx)[data-l="1"] .tk.lead, .u[data-l="1"] .tr.lead { color: var(--ink); font-weight: 600; }
 .u[data-l="1"] .dot { left: 0; top: .72em; opacity: 1; box-shadow: 0 0 0 3px var(--surface); }
 .doc[data-level="1"] .chunk .body { position: relative; }
 .doc[data-level="1"] .chunk .body::before { content: ""; position: absolute; left: 3px; top: 10px; bottom: 10px; width: 1px; background: var(--line); }
@@ -941,7 +943,7 @@ html.morphing .chatbtn { pointer-events: none; }
 .license a:hover { color: var(--muted); }
 /* "keep my highlights": the reader's passages, kept as the paper zooms out, in the author's type */
 .tk.kept, .tr.kept { font-family: var(--serif); font-weight: 400; color: var(--ink-2); }
-.u[data-l="1"] .tk.kept, .u[data-l="1"] .tr.kept { font-size: .95em; }
+:is(.u, .tx)[data-l="1"] .tk.kept, .u[data-l="1"] .tr.kept { font-size: .95em; }
 .keepbtn { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--sans); color: var(--muted); background: none;
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px 4px 6px; cursor: pointer; margin-right: 6px; }
 .keepbtn i { width: 22px; height: 13px; border-radius: 999px; background: var(--line); position: relative; transition: background-color .2s; }
