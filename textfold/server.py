@@ -55,8 +55,9 @@
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
   POST /api/record            {items: [{paper, note}], ui, kind: "digest" | "ask", question}: a document of the library made
-                              of those notes, in its folder of records: the overview the model writes of them (without a
-                              model, the notes alone), or a question's answer (503 no-model without one); {paper, lang, title}
+                              of those notes, in its folder of records, as a job (the sidebar shows it being written; its
+                              pid once done): the overview the model writes of them (without a model, the notes alone), or
+                              a question's answer (503 no-model at once without one)
   GET  /api/record/<id>/obsidian  the same as Markdown for Obsidian, kept as it was made ({name, text})
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
@@ -247,6 +248,34 @@ class Jobs:
             return None
         Path(file).unlink(missing_ok=True)
         return self.submit(pid, lang, False)
+
+    def record(self, items, ui, kind, question, title):
+        """A document made of notes picked (record.make), on a thread of its own: its model's call waits on the
+        network beside any generation. Listed with the jobs, so the sidebar shows it being written; stopped, nothing
+        is kept."""
+        job = {"id": uuid.uuid4().hex[:10], "kind": "record", "pid": "", "lang": "", "force": False, "status": "running",
+               "stage": "write", "done": 0, "total": 0, "error": "", "log": [], "created": time.time(), "finished": None, "title": title}
+        self.items[job["id"]] = job
+        self.stops[job["id"]] = stop = threading.Event()
+
+        def run():
+            try:
+                try:
+                    spec = models.ask_spec()
+                except RuntimeError:   # none: the notes alone
+                    spec = None
+                pid, name = record.make(items, ui, kind, question, spec, stop=stop)
+                job.update(pid=pid, title=name, status="done", stage="done")
+            except llm.Stopped:
+                job.update(status="stopped")
+            except record.NoModel:
+                job.update(status="error", error="no-model")
+            except Exception as e:   # the model failed: nothing is kept, the reader can ask again
+                job.update(status="error", error=str(e)[:600])
+                job["log"].append(traceback.format_exc()[-2000:])
+            job["finished"] = time.time()
+        threading.Thread(target=run, daemon=True).start()
+        return job
 
     def install_engine(self):
         return self._same(kind="install") or self._new(self.eq, kind="install", title="PDF engine")
@@ -960,20 +989,17 @@ def make_handler(jobs):
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
                 if u.path == "/api/record":
+                    kind, question, ui = "ask" if body.get("kind") == "ask" else "digest", str(body.get("question") or ""), str(body.get("ui") or "en")
                     try:
-                        spec = models.ask_spec()
-                    except RuntimeError:   # no model: the notes alone, and no question answered
-                        spec = None
-                    try:
-                        pid, title = record.make(body.get("items"), str(body.get("ui") or "en"), "ask" if body.get("kind") == "ask" else "digest",
-                                                 str(body.get("question") or ""), spec)
-                    except record.NoModel:
-                        return self.json({"error": "no-model"}, 503)
+                        title = record.planned(body.get("items"), ui, kind, question)
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
-                    except Exception as e:   # the model failed: nothing is kept, the reader can ask again
-                        return self.json({"error": str(e)[:600]}, 502)
-                    return self.json({"paper": pid, "lang": store.text_lang(pid), "title": title})
+                    if kind == "ask":
+                        try:
+                            models.ask_spec()
+                        except RuntimeError:   # a question, and no model to answer it: said at once
+                            return self.json({"error": "no-model"}, 503)
+                    return self.json(jobs.record(body.get("items"), ui, kind, question, title))
                 if u.path == "/api/ask/stop":
                     notes.stop(str(body.get("req") or "")[:40])
                     return self.json({"ok": True})

@@ -131,6 +131,21 @@ class Record(unittest.TestCase):
         self.assertEqual(title3, "How do they shrink a network? · 2026-11-01 to 2026-11-03")
         self.assertIn("## What I asked", store.read_text(store.pdir(pid3) / "source.md"))
 
+    def test_the_title_shown_while_written_and_a_stop_keeps_nothing(self):
+        self.assertEqual(record.planned(self.items(), "en"), "Reading record · 2026-11-01 to 2026-11-03")
+        self.assertEqual(record.planned(self.items(), "en", "ask", "Why?"), "Why? · 2026-11-01 to 2026-11-03")
+        with self.assertRaises(ValueError):
+            record.planned([], "en")
+        import threading
+        stop = threading.Event()
+        stop.set()
+        before = set(p["id"] for p in store.papers())
+        reply = {"opening": "x", "texts": [], "closing": {"line": "", "body": ""}}
+        with mock.patch.object(llm, "call", return_value=({"out": reply}, False)), mock.patch.object(llm, "label", return_value="m"):
+            with self.assertRaises(llm.Stopped):
+                record.make(self.items(), "en", "digest", "", {"id": "m"}, stop=stop)
+        self.assertEqual(set(p["id"] for p in store.papers()), before)
+
     def test_a_question_asked_of_the_notes(self):
         reply = {"answer": "Pruning keeps the large weights [1], and loses little only on small models [2]. Distillation "
                            "copies a teacher [3]. Nothing says which is faster [9].", "takeaway": "Two ways to shrink a network."}

@@ -139,7 +139,7 @@
   // the library (/api/record), in the folder of records, opened from the sidebar: the overview (the first suggestion)
   // or a question's answer, every claim linked to its note or section. Nothing goes on here as a conversation: the
   // document is read, and asked further, in the reader ──
-  let made = null, madeFor = '', showPicked = false;   // what was made of these notes: {pending | error | paper, lang, title}, and the question
+  let makes = [], showPicked = false;   // what this page has had made, the latest first: its job ({id, title, status, pid, error})
   const scope = () => (picked.size ? data.notes.filter((n) => picked.has(key(n))) : listed());
   const chosen = () => picked.size > 0 || (view === 'cal' && days.size > 0);
   const scopeItems = () => scope().map((n) => ({ paper: n.paper, note: n.id }));
@@ -160,24 +160,33 @@
       (said ? `<button type="button" class="nb-ico nb-undays" ${tipped(T.nb_clear_days)}>${I.x}</button>` : '') + '</div>';
   }
   const SUGS = () => [['digest', T.nb_sug_digest], ['ask', T.nb_sug_links], ['ask', T.nb_sug_focus], ['ask', T.nb_sug_open]];
+  // what was asked, being written or written: no waiting here, the sidebar shows it being written; once it is, to
+  // open, to name, to export
   function madeHtml() {
-    if (!made || madeFor !== scopeSig()) return '';
-    if (made.pending) return `<div class="nb-made"><span class="nb-spin" aria-hidden="true"></span><span>${esc(T.nb_writing.replace('{q}', made.q))}</span></div>`;
-    if (made.error) return `<div class="nb-made bad">${esc(made.error)}</div>`;
-    return `<div class="nb-made">${I.sum}<span>${esc(T.nb_made.replace('{t}', made.title))}</span>` +
-      `<a class="nb-btn nb-openmade" href="/p/${esc(made.paper)}?lang=${esc(made.lang)}">${esc(T.nb_open_made)}</a>` +
-      `<button type="button" class="nb-btn nb-obs" data-paper="${esc(made.paper)}">${esc(T.nb_obsidian)}</button><span class="nb-said" role="status"></span></div>`;
+    return makes.slice(0, 3).map((m, i) => {
+      if (m.status === 'queued' || m.status === 'running') {
+        return `<div class="nb-made"><span class="nb-spin" aria-hidden="true"></span><span>${esc(T.nb_writing.replace('{q}', m.title))}</span></div>`;
+      }
+      if (m.status !== 'done') {
+        const why = m.status === 'stopped' ? T.nb_stopped_made : m.error === 'no-model' ? T.nb_no_model_ask : T.nb_failed.replace('{e}', m.error || '');
+        return `<div class="nb-made bad"><span>${esc(why)}</span><button type="button" class="nb-ico nb-madex" data-i="${i}" ${tipped(T.nb_close)}>${I.x}</button></div>`;
+      }
+      return `<div class="nb-made">${I.sum}<span>${esc(T.nb_made.replace('{t}', m.title))}</span>` +
+        `<a class="nb-btn" href="/p/${esc(m.pid)}">${esc(T.nb_open_made)}</a>` +
+        `<button type="button" class="nb-btn nb-rename" data-paper="${esc(m.pid)}">${esc(T.nb_rename)}</button>` +
+        `<button type="button" class="nb-btn nb-obs" data-paper="${esc(m.pid)}">${esc(T.nb_obsidian)}</button>` +
+        `<button type="button" class="nb-ico nb-madex" data-i="${i}" ${tipped(T.nb_close)}>${I.x}</button><span class="nb-said" role="status"></span></div>`;
+    }).join('');
   }
   function panelHtml() {
-    const busy = made && made.pending && madeFor === scopeSig();
-    return `<div class="nb-panel"><form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off"${busy ? ' disabled' : ''}>` +
-      `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}${busy ? ' disabled' : ''}>${esc(T.nb_ask_go)}</button></form>` +
-      `<div class="nb-sugs">${SUGS().map(([k, q], i) => `<button type="button" class="nb-sug${k === 'digest' ? ' nb-sug1' : ''}" data-sug="${i}"${busy ? ' disabled' : ''}>${esc(q)}</button>`).join('')}</div>` +
+    return `<div class="nb-panel"><form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off">` +
+      `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}>${esc(T.nb_ask_go)}</button></form>` +
+      `<div class="nb-sugs">${SUGS().map(([k, q], i) => `<button type="button" class="nb-sug${k === 'digest' ? ' nb-sug1' : ''}" data-sug="${i}">${esc(q)}</button>`).join('')}</div>` +
       madeHtml() + '</div>';
   }
   function renderAsk() {
     const n = scope().length, box = $('nb-ask'), typed = box.querySelector('.nb-askq'), was = typed ? [typed.value, document.activeElement === typed] : null;
-    box.innerHTML = !data.notes.length ? '' : scopeHtml() + (n && chosen() ? panelHtml() : '');
+    box.innerHTML = !data.notes.length ? '' : scopeHtml() + (n && chosen() ? panelHtml() : makes.length ? `<div class="nb-panel nb-only">${madeHtml()}</div>` : '');
     const q = box.querySelector('.nb-askq');
     if (q && was) { q.value = was[0]; if (was[1]) q.focus(); }
   }
@@ -188,18 +197,34 @@
     if (!r.ok) throw new Error(got.error || r.status);
     return got;
   };
-  // what is asked made a document; the sidebar lists it at once (app.js: tf-library)
+  // what is asked made a document, as a job: the sidebar shows it being written (app.js: tf-jobs) and lists it once
+  // written (tf-library); the page goes on meanwhile, another can be asked
+  let watching = null;
   async function makeIt(kind, question) {
-    const sig = scopeSig(), items = scopeItems();
-    made = { pending: true, q: question }; madeFor = sig; renderAsk();
     try {
-      const got = await postJson('/api/record', { items, ui, kind, question });
-      made = { ...got, q: question };
-      document.dispatchEvent(new CustomEvent('tf-library', { detail: { paper: got.paper } }));
+      const job = await postJson('/api/record', { items: scopeItems(), ui, kind, question });
+      makes.unshift(job);
+      document.dispatchEvent(new CustomEvent('tf-jobs'));
+      if (!watching) watching = setTimeout(watchMakes, 1200);
     } catch (err) {
-      made = { q: question, error: err.message === 'no-model' ? T.nb_no_model_ask : T.nb_failed.replace('{e}', err.message) };
+      makes.unshift({ status: 'error', title: question, error: err.message });
     }
-    if (madeFor === sig) renderAsk();
+    renderAsk();
+  }
+  async function watchMakes() {
+    watching = null;
+    try {
+      const all = new Map((await fetch('/api/jobs').then((r) => r.json())).map((j) => [j.id, j]));
+      let changed = false;
+      for (const m of makes) {
+        const j = m.id && all.get(m.id);
+        if (!j || j.status === m.status) continue;
+        Object.assign(m, j); changed = true;
+        if (j.status === 'done') document.dispatchEvent(new CustomEvent('tf-library', { detail: { paper: j.pid } }));
+      }
+      if (changed) renderAsk();
+    } catch { /* the server restarted: the next look */ }
+    if (makes.some((m) => m.status === 'queued' || m.status === 'running')) watching = setTimeout(watchMakes, 1500);
   }
   // a file saved where the reader says (the app's own dialog, the browser's, else a download), as the reader saves
   async function saveFile(name, text) {
@@ -233,6 +258,8 @@
     if (b.matches('.nb-undays')) { days = new Set(); anchor = null; return picks(); }
     if (b.matches('.nb-tgx')) { for (const k of [...picked]) if (k.startsWith(`${b.dataset.pid}|`)) picked.delete(k); return renderList(); }
     if (b.matches('.nb-tix')) { picked.delete(b.closest('.nb-ti').dataset.key); return renderList(); }
+    if (b.matches('.nb-madex')) { makes.splice(+b.dataset.i, 1); return renderAsk(); }
+    if (b.matches('.nb-rename')) { document.dispatchEvent(new CustomEvent('tf-rename', { detail: { paper: b.dataset.paper } })); return; }
     if (b.matches('.nb-obs')) {
       b.disabled = true;
       try {

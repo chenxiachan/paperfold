@@ -520,11 +520,20 @@ class NoModel(Exception):
     """A question asked, and no model to answer it."""
 
 
-def make(items, ui="en", kind="digest", question="", spec=None, when=None):
+def planned(items, ui="en", kind="digest", question=""):
+    """The title a document make() would make has (the sidebar shows it while it is written); ValueError: no notes."""
+    W = WORDS.get(ui) or WORDS["en"]
+    period = _period(_picked(items), W)
+    if kind == "ask":
+        return W["q_title"].replace("{q}", _flat(question)[:2000]).replace("{period}", period)
+    return W["title"].format(period=period)
+
+
+def make(items, ui="en", kind="digest", question="", spec=None, when=None, stop=None):
     """What the notes page makes of the notes picked: a document of the library, in the folder of records, with the
     same as Markdown for Obsidian kept beside it (obsidian.md, the notes as they were then): the overview the model
     writes of them (kind "digest"; without a model, the notes alone), or a question's answer (kind "ask", the question
-    its title; NoModel without one). Its id and title."""
+    its title; NoModel without one). Its id and title. stop: an Event set by the reader, after which nothing is kept."""
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
     qa, dg, title = [], None, None
@@ -536,6 +545,8 @@ def make(items, ui="en", kind="digest", question="", spec=None, when=None):
         title = W["q_title"].replace("{q}", got["question"].replace("{", "(").replace("}", ")"))
     elif spec is not None:
         dg = digest(items, spec, ui)
+    if stop is not None and stop.is_set():   # (stopped while the model wrote: nothing is kept)
+        raise llm.Stopped()
     pid = record(items, ui, when, qa=qa, digest=dg, title=title)
     name, text = obsidian(items, ui, when, qa=qa, digest=dg, title=title)
     store.put_asset(pid, "obsidian.md", text.encode("utf-8"))

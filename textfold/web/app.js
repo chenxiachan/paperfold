@@ -83,6 +83,10 @@
     document.dispatchEvent(new Event('tf-lang'));   // (what else speaks it: the app's update)
   }
   let papers = BOOT.papers || [];
+  // a job started elsewhere on the page (a record being written, notes.js): the sidebar shows it at once
+  document.addEventListener('tf-jobs', () => { api('/api/jobs').then((j) => { jobs = j; renderSidebar(); startPolling(); }).catch(() => {}); });
+  // a document of the library to be named (notes.js: one just made), in the sidebar, as its menu's Rename does
+  document.addEventListener('tf-rename', (e) => { const pid = e.detail && e.detail.paper; if (!pid) return; setCollapsed(false); if (folders.of[pid]) folded.delete(folders.of[pid]); editDocName(pid); });
   // a document made elsewhere on the page (the notes page's records, notes.js): the library again, the new one shown
   document.addEventListener('tf-library', (e) => {
     Promise.all([api('/api/papers'), api('/api/folders')]).then(([p, f]) => {
@@ -141,13 +145,15 @@
   const live = (j) => j.status === 'queued' || j.status === 'running';
   function jobFor(pid) { return jobs.find((j) => j.pid === pid && live(j)); }
   function pct(j) { return j.total ? Math.round((100 * j.done) / j.total) : (j.stage === 'done' ? 100 : 6); }
+  const ind = (j) => j.kind === 'record' && live(j);   // (a record being written: no steps to count, the bar runs)
   // where a job is: its stage and count, or that it is stopping
   const stageOf = (j, T) => {
     const st = j.stage === 'convert' && j.file && !/\.pdf$/i.test(j.file) ? 'convert-file' : j.stage;   // a Word file, a picture
+    if (j.kind === 'record' && !j.stopping) return T.nb_stage_write;
     return j.stopping ? T.stopping : `${T.stages[st] || (T.pstages || {})[st] || st}${j.total ? ` ${j.done}/${j.total}` : ''}`;
   };
   const stopBtn = (j, T) => `<button type="button" class="sb-stop" data-stop="${j.id}" title="${esc(T.stop)}" aria-label="${esc(T.stop)}"${j.stopping ? ' disabled' : ''}><i></i></button>`;
-  const progress = (j, T) => `<span class="sb-prog"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(stageOf(j, T))}${j.lang ? ` · ${esc(nameOf(j.lang))}` : ''}</span>`;
+  const progress = (j, T) => `<span class="sb-prog${ind(j) ? ' ind' : ''}"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(stageOf(j, T))}${j.lang ? ` · ${esc(nameOf(j.lang))}` : ''}</span>`;
   const jobName = (j, T) => (j.kind === 'install' ? T.engine : j.title || j.pid);
   let lastSidebar = '';
   function renderSidebar() {
@@ -768,6 +774,11 @@
         if (before.get(j.id) !== j.status && (j.status === 'done' || j.status === 'error' || j.status === 'stopped')) finished = true;
       }
       if (finished) papers = await api('/api/papers');
+      for (const j of jobs) {   // (a record just written: the library again, its folder open, it shown)
+        if (j.kind === 'record' && j.status === 'done' && j.pid && before.get(j.id) && before.get(j.id) !== 'done') {
+          document.dispatchEvent(new CustomEvent('tf-library', { detail: { paper: j.pid } }));
+        }
+      }
       if (menu) stale = true; else renderSidebar();   // (a menu stays open while a job goes on)
     } catch { /* the server restarted; try again */ }
     if (jobs.some(live) || watchers.size) polling = setTimeout(poll, 1200);
