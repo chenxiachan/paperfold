@@ -193,9 +193,10 @@
   function panelHtml() {
     return `<div class="nb-panel"><form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph2)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off">` +
       `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}>${esc(T.nb_ask_go)}</button></form>` +
-      `<div class="nb-sugs">${tpls.map((t) => `<button type="button" class="nb-sug${t.id === 'recap' ? ' nb-sug1' : ''}${t.own ? ' nb-own' : ''}" data-tpl="${esc(t.id)}"` +
-        `${t.own ? ` ${tipped(t.prompt.slice(0, 140))}` : ''}><span>${esc(t.name)}</span>${t.own ? `<i class="nb-tpled" data-ed="${esc(t.id)}" ${tipped(T.nb_tpl_edit)}>${PEN}</i>` : ''}</button>`).join('')}` +
-      `<button type="button" class="nb-sug nb-addtpl" ${tipped(T.nb_tpl_add)}>＋</button>` +
+      // (each says in a tip what it writes: the built-in ones in words of the page, one's own in its own)
+      `<div class="nb-sugs"><span class="nb-lead">${esc(T.nb_tpl_lead)}</span>${tpls.map((t) => `<button type="button" class="nb-sug${t.id === 'recap' ? ' nb-sug1' : ''}${t.own ? ' nb-own' : ''}" data-tpl="${esc(t.id)}"` +
+        ` data-tip="${esc(t.own ? t.prompt.slice(0, 140) : T[`nb_tip_${t.id}`] || '')}"><span>${esc(t.name)}</span>${t.own ? `<i class="nb-tpled" data-ed="${esc(t.id)}" ${tipped(T.nb_tpl_edit)}>${PEN}</i>` : ''}</button>`).join('')}` +
+      `<button type="button" class="nb-sug nb-addtpl" ${tipped(T.nb_tpl_add_tip)}>${esc(T.nb_tpl_add)}</button>` +
       `<button type="button" class="nb-rawbtn" ${tipped(T.nb_raw_tip)}>${I.down}<span>${esc(T.nb_raw)}</span></button></div>${editorHtml()}<div class="nb-rawsaid nb-said" role="status"></div>` +
       madeHtml() + '</div>';
   }
