@@ -1,5 +1,20 @@
 [
   {
+    "version": "0.10.47",
+    "en": [
+      ["🚀 Your notes, all in one place (beta)", "Every highlight, note and question you've left in your texts now gathers under Notes, at the bottom of the sidebar. Wondering \"What did I read today?\" or \"What have I been chewing on this month?\" Click a day or a month on the calendar, or drag across a stretch of days, and there it is."],
+      ["✨ Let your notes recap for you", "Pick some notes and choose Recap: TextFold writes you a short recap of what each text says, what caught your eye, and what you seem drawn to lately. It can also sort them by theme, draft a paragraph for your own writing, follow a template you write yourself, or just answer a question. The recap shows up in the sidebar, every sentence linking back to its source, and it exports to Obsidian; to take the notes themselves, export them as they are. It uses the model you set for questions."],
+      ["🔍 Zoom the original PDF", "Reading beside the original, the PDF now zooms: use − and + at its top, or hold ⌘ (Ctrl on Windows) and scroll, or pinch."],
+      ["🧪 Still in testing", "Tell us on GitHub what feels right and what doesn't."]
+    ],
+    "zh": [
+      ["🚀 笔记功能升级（测试版）", "你在各个文本里留下的高光、批注和提问，现在都汇总到侧栏底部的“笔记”里，可以统一管理了。想知道“我今天都读了什么？”“这个月我在琢磨什么？”，在日历上点一天、点一个月，或者拖出一段日子，马上就能看到。"],
+      ["✨ 让笔记帮你回顾", "选好笔记，点“回顾”，TextFold 会帮你写一篇简短的阅读回顾：每篇讲了什么，你在意了哪些地方，最近你好像在关注什么。也可以按主题整理、写成论文里能用的段落、用你自己写的模板，或者直接提问。回顾写好后会出现在侧栏，每句话都能跳回原文，也能导出到 Obsidian；只想要笔记本身，可以原样导出。总结和提问用的是你在设置里为提问选的模型。"],
+      ["🔍 原文 PDF 可以放大了", "和原文对照着读时，PDF 现在可以放大缩小：点上方的 − 和 +，或者按住 ⌘（Windows 上是 Ctrl）滚动滚轮，或者双指捏合。"],
+      ["🧪 还在测试中", "用起来哪里顺手、哪里别扭，欢迎到 GitHub 上告诉我们。"]
+    ]
+  },
+  {
     "version": "0.10.45",
     "en": [
       ["Wide content fits the column", "A wide picture, table, formula or long link no longer makes the page scroll sideways. Beside the PDF, the text no longer slides under it."],
