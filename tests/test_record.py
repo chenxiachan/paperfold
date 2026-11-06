@@ -199,6 +199,32 @@ class Record(unittest.TestCase):
         pid = record.record(self.items(), "en", when="2026-11-05 09:00", digest=got)
         self.assertIn("Lately: smaller networks", store.read_text(store.pdir(pid) / "source.md"))
 
+    def test_templates_built_in_and_of_ones_own(self):
+        self.assertEqual([t["id"] for t in record.templates("en")], ["recap", "themes", "related"])
+        own = record.save_template("put", "", "For a colleague", "Three bullets for a colleague new to the field.")
+        tid = own[0]["id"]
+        self.assertEqual(record.templates("zh")[3], {"id": tid, "name": "For a colleague", "prompt": "Three bullets for a colleague new to the field.", "own": True})
+        with self.assertRaises(ValueError):
+            record.save_template("put", "", "", "x")
+        self.assertEqual(record.planned(self.items(), "en", "template", "", tid), "For a colleague · 2026-11-01 to 2026-11-03")
+        reply = {"opening": "", "parts": [{"heading": "Smaller networks", "line": "Both shrink a network.", "body": "Pruning drops weights [1]; a student copies a teacher [3][T2.1][8]."}],
+                 "closing": "Neither says which is cheaper."}
+        with mock.patch.object(llm, "call", return_value=({"out": reply}, False)) as call, mock.patch.object(llm, "label", return_value="m"):
+            pid, title = record.make(self.items(), "en", "template", "", {"id": "m"}, when="2026-11-06 09:00", template=tid)
+        self.assertIn("What to write (For a colleague): Three bullets for a colleague new to the field.", call.call_args[0][0])
+        self.assertEqual(title, "For a colleague · 2026-11-01 to 2026-11-03")
+        md = store.read_text(store.pdir(pid) / "source.md")
+        self.assertIn("## For a colleague", md)
+        self.assertIn("### Smaller networks", md)
+        self.assertNotIn("[8]", md)   # (a note that is not there: left out)
+        self.assertIn("## For a colleague", record.obsidian_of(pid)[1])
+        with self.assertRaises(record.NoModel):
+            record.make(self.items(), "en", "template", "", None, template="themes")
+        record.save_template("delete", tid)
+        self.assertEqual(len(record.templates("en")), 3)
+        with self.assertRaises(LookupError):
+            record.planned(self.items(), "en", "template", "", tid)
+
     def test_the_notes_as_they_are_for_obsidian(self):
         with mock.patch.object(llm, "call", side_effect=AssertionError("no model")):
             name, md = record.raw(self.items(), "en", when="2026-11-06 09:00")

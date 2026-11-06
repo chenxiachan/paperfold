@@ -60,6 +60,8 @@
                               a question's answer (503 no-model at once without one)
   GET  /api/record/<id>/obsidian  the same as Markdown for Obsidian, kept as it was made ({name, text})
   POST /api/record/raw        {items, ui}: the notes themselves, as they are, Markdown for Obsidian ({name, text}); no model
+  GET  /api/record/templates  ?ui=: the ways to write from notes: three built in, then the reader's own ([{id, name, prompt?, own}])
+  POST /api/record/templates  {op: "put", id?, name, prompt} | {op: "delete", id}: one of the reader's own kept or taken out; the list
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
@@ -250,7 +252,7 @@ class Jobs:
         Path(file).unlink(missing_ok=True)
         return self.submit(pid, lang, False)
 
-    def record(self, items, ui, kind, question, title):
+    def record(self, items, ui, kind, question, title, template=""):
         """A document made of notes picked (record.make), on a thread of its own: its model's call waits on the
         network beside any generation. Listed with the jobs, so the sidebar shows it being written; stopped, nothing
         is kept."""
@@ -265,7 +267,7 @@ class Jobs:
                     spec = models.ask_spec()
                 except RuntimeError:   # none: the notes alone
                     spec = None
-                pid, name = record.make(items, ui, kind, question, spec, stop=stop)
+                pid, name = record.make(items, ui, kind, question, spec, stop=stop, template=template)
                 job.update(pid=pid, title=name, status="done", stage="done")
             except llm.Stopped:
                 job.update(status="stopped")
@@ -732,6 +734,8 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
+                if u.path == "/api/record/templates":
+                    return self.json(record.templates((parse_qs(u.query).get("ui") or ["en"])[0]))
                 m = re.fullmatch(r"/api/record/([\w.-]+)/obsidian", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     try:
@@ -989,6 +993,12 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
+                if u.path == "/api/record/templates":
+                    try:
+                        record.save_template(str(body.get("op") or "put"), str(body.get("id") or ""), body.get("name"), body.get("prompt"))
+                    except ValueError as e:
+                        return self.json({"error": str(e)}, 400)
+                    return self.json(record.templates(str(body.get("ui") or "en")))
                 if u.path == "/api/record/raw":
                     try:
                         name, text = record.raw(body.get("items"), str(body.get("ui") or "en"))
@@ -996,17 +1006,20 @@ def make_handler(jobs):
                         return self.json({"error": str(e)}, 400)
                     return self.json({"name": name, "text": text})
                 if u.path == "/api/record":
-                    kind, question, ui = "ask" if body.get("kind") == "ask" else "digest", str(body.get("question") or ""), str(body.get("ui") or "en")
+                    kind, question, ui = body.get("kind") if body.get("kind") in ("ask", "template") else "digest", str(body.get("question") or ""), str(body.get("ui") or "en")
+                    template = str(body.get("template") or "")
+                    if kind == "template" and template == "recap":   # (the recap is the overview)
+                        kind = "digest"
                     try:
-                        title = record.planned(body.get("items"), ui, kind, question)
-                    except ValueError as e:
+                        title = record.planned(body.get("items"), ui, kind, question, template)
+                    except (ValueError, LookupError) as e:
                         return self.json({"error": str(e)}, 400)
-                    if kind == "ask":
+                    if kind in ("ask", "template"):
                         try:
                             models.ask_spec()
                         except RuntimeError:   # a question, and no model to answer it: said at once
                             return self.json({"error": "no-model"}, 503)
-                    return self.json(jobs.record(body.get("items"), ui, kind, question, title))
+                    return self.json(jobs.record(body.get("items"), ui, kind, question, title, template))
                 if u.path == "/api/ask/stop":
                     notes.stop(str(body.get("req") or "")[:40])
                     return self.json({"ok": True})

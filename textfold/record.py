@@ -16,6 +16,7 @@ import calendar
 import json
 import re
 import time
+import uuid
 
 from . import fold, langs, ladder, library, llm, local, notes, store
 from .tokens import plain
@@ -25,13 +26,15 @@ WORDS = {
            "got": "What I got", "attend": "What I attended to", "to": "to", "notes": "{n} notes",
            "intro": "Made on {when} from {n} notes in {d} texts. Each entry is a copy made then: \"there\" opens it as it is now.",
            "appendix": "The notes picked", "q_title": "{q} · {period}", "raw_title": "Notes · {period}",
-           "wrote": "I wrote: ", "asked": "I asked: ",
+           "wrote": "I wrote: ", "asked": "I asked: ", "t_recap": "Recap", "t_themes": "By theme", "t_related": "For writing",
+           "piece_by": "(Written by {m} from these notes and the texts, as asked ({t}): a number is a note, § a section of a text.)",
            "answer": "Answer: ", "there": "there", "open": "open", "folder": "Reading records", "whole": "the whole text",
            "made_with": "Made with TextFold", "mine": "What I asked", "by": "(Answered by {m} from these notes; each number is a note it rests on.)",
            "digest": "Overview", "closing": "Altogether", "extend": "Further: ",
            "digest_by": "(Written by {m} from these notes and the texts: a number is a note, § a section of the text, and \"further\" the model's own knowledge.)"},
     "zh": {"title": "阅读记录 · {period}", "read": "读了什么", "curious": "好奇什么", "got": "得到了什么", "attend": "关注的点",
            "to": "至", "notes": "{n} 条笔记", "intro": "{when} 生成，依据 {d} 篇文本里的 {n} 条笔记。每一条都是当时的快照，点“原处”打开它现在的样子。", "appendix": "所选的笔记", "q_title": "{q} · {period}", "raw_title": "笔记 · {period}", "wrote": "我写：", "asked": "我问：",
+           "t_recap": "回顾", "t_themes": "按主题", "t_related": "写作素材", "piece_by": "（由 {m} 依据这些笔记和原文按“{t}”写成：编号是笔记，§ 是原文的节。）",
            "answer": "回答：", "there": "原处", "open": "打开", "folder": "阅读记录", "whole": "整篇文本", "made_with": "用 TextFold 生成",
            "mine": "我问的", "by": "（这段回答由 {m} 依据这些笔记写成，编号是它依据的笔记。）",
            "digest": "总结", "closing": "总的来看", "extend": "拓展：",
@@ -43,6 +46,7 @@ WORDS["zh-Hant"] = {**WORDS["zh"], "title": "閱讀記錄 · {period}", "read": 
                     "answer": "回答：", "there": "原處", "open": "開啟", "folder": "閱讀記錄", "whole": "整篇文本", "made_with": "用 TextFold 生成",
                     "mine": "我問的", "by": "（這段回答由 {m} 依據這些筆記寫成，編號是它依據的筆記。）",
                     "digest": "總結", "closing": "總的來看", "extend": "拓展：", "raw_title": "筆記 · {period}", "wrote": "我寫：", "asked": "我問：",
+                    "t_recap": "回顧", "t_themes": "按主題", "t_related": "寫作素材", "piece_by": "（由 {m} 依據這些筆記和原文按「{t}」寫成：編號是筆記，§ 是原文的節。）",
                     "digest_by": "（這篇總結由 {m} 依據這些筆記和原文寫成：編號是筆記，§ 是原文的節，「拓展」是模型自己的一般知識。）"}
 MOST = 400   # notes in one record
 
@@ -96,7 +100,7 @@ def _local_day(stamp):
 
 def _words(W, s):
     """A line the reader's own words end, ended."""
-    return s if re.search(r"[.!?。！？…]$", s) else s + ("。" if re.search(r"[　-鿿]$", s) else ".")
+    return s if re.search(r"[.!?。！？…)）]$", s) else s + ("。" if re.search(r"[\u3000-\u9fff]$", s) else ".")
 
 
 def _picked(items):
@@ -268,6 +272,17 @@ def _first(text):
     return (text[:m.end()].strip(), text[m.end():].strip()) if m else (text, "")
 
 
+def _lead(text):
+    """A paragraph of the model's as its line (its first sentence, bare) and the rest, which keeps the first sentence's
+    citations in front: a part folds to its line, and no source of it is lost."""
+    first, rest = _first(text)
+    named = " ".join(m.group(0) for m in CITES.finditer(first))
+    return _bare(first), f"{named} {rest}".strip()
+
+
+CITES = re.compile(r"\[(?:T\d{1,2}\.)?\d{1,3}\]")
+
+
 def _bare(line):
     """A line its citations left out (a line is what a part folds to; its sources are in the part)."""
     return re.sub(r"\s*\[(?:T\d{1,2}\.)?\d{1,3}\]", "", line).strip()
@@ -286,7 +301,18 @@ def _digest_in(d):
     return out if out["opening"] or parts else None
 
 
-def record_md(items, W, when, qa=(), digest=None, title=None):
+def _piece_in(d):
+    """A piece written to a template (compose()'s), as kept: its strings cut to length; None if not one."""
+    if not isinstance(d, dict):
+        return None
+    cut = lambda x, n=6000: str(x or "")[:n].strip()  # noqa: E731
+    parts = [{k: cut(x.get(k)) for k in ("heading", "line", "body")} for x in d.get("parts") or [] if isinstance(x, dict)][:40]
+    out = {"name": cut(d.get("name"), 200), "opening": cut(d.get("opening")), "parts": [x for x in parts if x["line"] or x["body"]],
+           "closing": cut(d.get("closing")), "model": _flat(d.get("model"))[:200]}
+    return out if out["opening"] or out["parts"] else None
+
+
+def record_md(items, W, when, qa=(), digest=None, title=None, piece=None):
     """The record as TextFold reads it: a heading a question, a paragraph an entry, each opening with its line (what
     the levels fold it to: lines, below). digest: the overview the model wrote of these notes, first; qa: the
     questions the reader asked of them, answered, next."""
@@ -307,21 +333,39 @@ def record_md(items, W, when, qa=(), digest=None, title=None):
     if digest:   # (each part a paragraph, opening with its line; an answer's list a run of clauses: it folds as one)
         out += [f"## {W['digest']}", ""]
         if digest["opening"]:
-            first, rest = _first(flat(digest["opening"]))
-            para(_bare(first), cite(rest))
+            line, rest = _lead(flat(digest["opening"]))
+            para(line, cite(rest))
         tno = {k: pid for k, pid in enumerate(texts, 1)}
         for x in digest["texts"]:
             pid = tno.get(x["t"])
             if not pid:
                 continue
             out += [f"### {_md(texts[pid]['title'])}", ""]
-            para(_bare(x["line"]) or texts[pid]["title"], cite(flat(x["body"])))
+            para(_bare(x["line"]) or texts[pid]["title"], cite(" ".join([m.group(0) for m in CITES.finditer(x["line"])] + [flat(x["body"])]).strip()))
             if x["extend"]:
                 para(W["extend"] + flat(x["extend"]), "")
         if digest["closing"]["line"] or digest["closing"]["body"]:
             out += [f"### {W['closing']}", ""]
-            para(_bare(digest["closing"]["line"]) or W["closing"], cite(flat(digest["closing"]["body"])))
+            para(_bare(digest["closing"]["line"]) or W["closing"],
+                 cite(" ".join([m.group(0) for m in CITES.finditer(digest["closing"]["line"])] + [flat(digest["closing"]["body"])]).strip()))
         para(W["digest_by"].format(m=digest["model"] or "a model"), "")
+    if piece:   # (a part a paragraph, under its heading when it has one, opening with its line)
+        out += [f"## {_md(piece['name'])}", ""]
+        if piece["opening"]:
+            line, rest = _lead(flat(piece["opening"]))
+            para(line, cite(rest))
+        for x in piece["parts"]:
+            if x["heading"]:
+                out += [f"### {_md(_bare(x['heading']))}", ""]
+            if x["line"]:
+                para(_bare(x["line"]), cite(" ".join([m.group(0) for m in CITES.finditer(x["line"])] + [flat(x["body"])]).strip()))
+            else:
+                line, rest = _lead(flat(x["body"]))
+                para(line, cite(rest))
+        if piece["closing"]:
+            line, rest = _lead(flat(piece["closing"]))
+            para(line, cite(rest))
+        para(W["piece_by"].format(m=piece["model"] or "a model", t=piece["name"]), "")
     if qa:
         out += [f"## {W['mine']}", ""]
         for x in qa:
@@ -329,7 +373,7 @@ def record_md(items, W, when, qa=(), digest=None, title=None):
 
     src = lambda e: f"({_md(e['title'])}{' · ' + _md(e['section']) if e['section'] else ''}, {e['day']}, [{W['there']}]({_there(e)}))"  # noqa: E731
     h = "##"
-    if digest or qa:   # (then the four parts are the notes themselves, under one heading)
+    if digest or qa or piece:   # (then the four parts are the notes themselves, under one heading)
         out += [f"## {W['appendix']}", ""]
         h = "###"
     out += [f"{h} {W['read']}", ""]
@@ -386,13 +430,13 @@ def fold_lines(pid, lines, lang, made):
     store.save_en(doc, "")
 
 
-def record(items, ui="en", when=None, qa=(), digest=None, title=None):
+def record(items, ui="en", when=None, qa=(), digest=None, title=None, piece=None):
     """The reading record of the notes picked ([{paper, note}]) as a document of the library, in the folder of
     records: its id. digest: the overview written of them; qa: the questions asked of them, answered; title: its own
     ({period} in it), else a record's."""
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
-    title, md, lines, picked = record_md(items, W, when, _questions(qa), _digest_in(digest), title)
+    title, md, lines, picked = record_md(items, W, when, _questions(qa), _digest_in(digest), title, _piece_in(piece))
     t, html, meta = local._read_md(md, "record.md")
     meta["label"] = t
     pid = local.make_id(t, md)
@@ -519,28 +563,143 @@ def digest(items, spec, ui="en", timeout=900):
     return {**got, **_refs(every, entries, secs)}
 
 
+BUILTIN = {
+    "themes": "Group what the reader read and noted into two to four themes that run across the texts, not text by text. "
+              "For each theme (a part): a heading naming it in a few words, a line saying what the reader seems to make of it, "
+              "and a body tying together the texts and notes it shows in. Close with one sentence on what links the themes, or "
+              "what is still open.",
+    "related": "Draft one or two paragraphs the reader could put into the related-work or background section of a paper "
+               "they are writing: what each text contributes and how the texts relate, in the reader's own terms where their "
+               "notes give them. Plain academic prose, each part a paragraph with no heading. Close with one sentence on what "
+               "the notes suggest is missing in this work, or leave the closing empty.",
+}
+COMPOSE_SCHEMA = {"type": "object", "properties": {
+    "opening": {"type": "string"},
+    "parts": {"type": "array", "items": {"type": "object", "properties": {"heading": {"type": "string"}, "line": {"type": "string"},
+                                                                          "body": {"type": "string"}}, "required": ["heading", "line", "body"]}},
+    "closing": {"type": "string"}}, "required": ["opening", "parts", "closing"]}
+COMPOSE_PROMPT = """A reader picked notes they made while reading, from {period}, and asks for a piece written from them.
+
+What to write ({name}): {instruction}
+
+Shape: an opening (one or two sentences, or empty); parts, each with a heading (a few words, or empty), a line (one \
+sentence the part comes to) and a body (a few sentences); a closing (one or two sentences, or empty). Keep the whole \
+within about {words} words (about {chars} characters in Chinese or Japanese).
+
+Whatever is asked: anything said to be in the texts or the notes rests on them and is cited, a note as [4] and a section \
+of a text as [T1.3]; what you add from your own knowledge is said to be yours. Keep the reader's own qualifiers (may, only \
+when, but). Write in {language}, in sentences, no quotes longer than a few words.
+
+Texts:
+{texts}
+
+Notes:
+{notes}
+"""
+
+
+def _tfile():
+    return store.library_root() / "record-templates.json"
+
+
+def templates(ui="en"):
+    """The ways a piece is written from notes, for the page: the three built in (the recap is the overview), then the
+    reader's own: [{id, name, prompt?, own}]."""
+    W = WORDS.get(ui) or WORDS["en"]
+    own = []
+    try:
+        own = [t for t in json.loads(store.read_text(_tfile())).get("templates") or [] if isinstance(t, dict) and t.get("id")]
+    except (OSError, ValueError):
+        pass
+    return [{"id": "recap", "name": W["t_recap"], "own": False}, {"id": "themes", "name": W["t_themes"], "own": False},
+            {"id": "related", "name": W["t_related"], "own": False}] + [{"id": t["id"], "name": t.get("name") or "", "prompt": t.get("prompt") or "", "own": True} for t in own]
+
+
+def save_template(op, tid="", name="", prompt=""):
+    """A way of the reader's own kept (op "put": a name and what to write; a new one has no id yet), or taken out
+    (op "delete"): the reader's own after it."""
+    f = _tfile()
+    try:
+        own = [t for t in json.loads(store.read_text(f)).get("templates") or [] if isinstance(t, dict) and t.get("id")]
+    except (OSError, ValueError):
+        own = []
+    if op == "delete":
+        own = [t for t in own if t["id"] != tid]
+    else:
+        name, prompt = _flat(name)[:80], str(prompt or "").strip()[:4000]
+        if not name or not prompt:
+            raise ValueError("a template needs a name and what to write")
+        t = next((t for t in own if t["id"] == tid), None)
+        if t:
+            t.update(name=name, prompt=prompt)
+        else:
+            own.append({"id": "t-" + uuid.uuid4().hex[:8], "name": name, "prompt": prompt})
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({"templates": own}, ensure_ascii=False, indent=1), encoding="utf-8")
+    return own
+
+
+def _template(tid, ui):
+    """A template's name and what it asks for; LookupError: no such template."""
+    W = WORDS.get(ui) or WORDS["en"]
+    if tid in BUILTIN:
+        return W[f"t_{tid}"], BUILTIN[tid]
+    t = next((t for t in templates(ui) if t["id"] == tid and t["own"]), None)
+    if not t:
+        raise LookupError(tid)
+    return t["name"], t["prompt"]
+
+
+def compose(items, spec, ui, name, instruction, timeout=900):
+    """A piece the model writes of the notes picked as a template asks: {name, opening, parts: [{heading, line, body}],
+    closing, model, notes, sections}; kept short, every claim cited, a citation that names nothing left out."""
+    W = WORDS.get(ui) or WORDS["en"]
+    picked, texts, _, _, _ = gather(items, W)
+    tl, nl, entries, secs = _material(picked, texts)
+    words = min(600, 90 + 70 * len(texts))
+    prompt = COMPOSE_PROMPT.format(period=_period(picked, W), name=name, instruction=instruction, words=words, chars=2 * words,
+                                   language=langs.name(ui) if ui in langs.LANGS else "English", texts="\n".join(tl), notes="\n".join(nl))
+    cache = store.library_root() / "record-cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    rec, _ = llm.call(prompt, COMPOSE_SCHEMA, spec, cache, timeout=timeout, system=SYSTEM_DIGEST)
+    out = rec["out"] if isinstance(rec.get("out"), dict) else {}
+    clean = lambda x: _cited(str(x or "").strip(), entries, lambda k, e: f"[{k}]", secs, lambda code, c: f"[{code}]")  # noqa: E731
+    parts = [{k: clean(x.get(k)) for k in ("heading", "line", "body")} for x in out.get("parts") or [] if isinstance(x, dict)]
+    got = {"name": name, "opening": clean(out.get("opening")), "parts": parts, "closing": clean(out.get("closing")), "model": llm.label(spec)}
+    return {**got, **_refs([got["opening"], got["closing"]] + [x[k] for x in parts for k in ("line", "body")], entries, secs)}
+
+
 class NoModel(Exception):
     """A question asked, and no model to answer it."""
 
 
-def planned(items, ui="en", kind="digest", question=""):
-    """The title a document make() would make has (the sidebar shows it while it is written); ValueError: no notes."""
+def planned(items, ui="en", kind="digest", question="", template=""):
+    """The title a document make() would make has (the sidebar shows it while it is written); ValueError: no notes;
+    LookupError: no such template."""
     W = WORDS.get(ui) or WORDS["en"]
     period = _period(_picked(items), W)
+    if kind == "template":
+        return f"{_template(template, ui)[0]} · {period}"
     if kind == "ask":
         return W["q_title"].replace("{q}", _flat(question)[:2000]).replace("{period}", period)
     return W["title"].format(period=period)
 
 
-def make(items, ui="en", kind="digest", question="", spec=None, when=None, stop=None):
+def make(items, ui="en", kind="digest", question="", spec=None, when=None, stop=None, template=""):
     """What the notes page makes of the notes picked: a document of the library, in the folder of records, with the
     same as Markdown for Obsidian kept beside it (obsidian.md, the notes as they were then): the overview the model
     writes of them (kind "digest"; without a model, the notes alone), or a question's answer (kind "ask", the question
     its title; NoModel without one). Its id and title. stop: an Event set by the reader, after which nothing is kept."""
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
-    qa, dg, title = [], None, None
-    if kind == "ask":
+    qa, dg, title, pc = [], None, None, None
+    if kind == "template":   # (a piece written as a template asks, the template's name its title)
+        if spec is None:
+            raise NoModel()
+        name, instruction = _template(template, ui)
+        pc = compose(items, spec, ui, name, instruction)
+        title = name.replace("{", "(").replace("}", ")") + " · {period}"
+    elif kind == "ask":
         if spec is None:
             raise NoModel()
         got = ask(items, question, spec, ui)
@@ -550,8 +709,8 @@ def make(items, ui="en", kind="digest", question="", spec=None, when=None, stop=
         dg = digest(items, spec, ui)
     if stop is not None and stop.is_set():   # (stopped while the model wrote: nothing is kept)
         raise llm.Stopped()
-    pid = record(items, ui, when, qa=qa, digest=dg, title=title)
-    name, text = obsidian(items, ui, when, qa=qa, digest=dg, title=title)
+    pid = record(items, ui, when, qa=qa, digest=dg, title=title, piece=pc)
+    name, text = obsidian(items, ui, when, qa=qa, digest=dg, title=title, piece=pc)
     store.put_asset(pid, "obsidian.md", text.encode("utf-8"))
     meta = json.loads(store.read_text(store.pdir(pid) / "meta.json"))
     meta["summary"]["obsidian"] = name
@@ -608,9 +767,9 @@ def _file(pid, title):
     return re.sub(r'[\\/:*?"<>|]+', " ", f"{pid} {title}")[:90].strip()
 
 
-def obsidian(items, ui="en", when=None, qa=(), digest=None, title=None):
-    """The reading record as Markdown for Obsidian: (file name, text). qa, digest, title: as record()'s."""
-    qa, digest = _questions(qa), _digest_in(digest)
+def obsidian(items, ui="en", when=None, qa=(), digest=None, title=None, piece=None):
+    """The reading record as Markdown for Obsidian: (file name, text). qa, digest, title, piece: as record()'s."""
+    qa, digest, piece = _questions(qa), _digest_in(digest), _piece_in(piece)
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
     picked, texts, asked, wrote, marked = gather(items, W)
@@ -649,6 +808,11 @@ def obsidian(items, ui="en", when=None, qa=(), digest=None, title=None):
         if digest["closing"]["line"] or digest["closing"]["body"]:
             out += [f"### {W['closing']}", "", f"**{ocite(digest['closing']['line'])}**", "", ocite(digest["closing"]["body"]), ""]
         out += [f"*{W['digest_by'].format(m=digest['model'] or 'a model')}*", ""]
+    if piece:
+        out += [f"## {piece['name']}", ""] + ([ocite(piece["opening"]), ""] if piece["opening"] else [])
+        for x in piece["parts"]:
+            out += ([f"### {_bare(x['heading'])}", ""] if x["heading"] else []) + ([f"**{_bare(x['line'])}**", ""] if x["line"] else []) + [ocite(x["body"]), ""]
+        out += ([ocite(piece["closing"]), ""] if piece["closing"] else []) + [f"*{W['piece_by'].format(m=piece['model'] or 'a model', t=piece['name'])}*", ""]
     if qa:
         out += [f"## {W['mine']}", ""]
         for x in qa:

@@ -159,7 +159,19 @@
     return `<div class="nb-scope"><span class="nb-scopel">${esc(said || T.nb_scope_all)}</span><b class="nb-cnt">${listed().length}</b>` +
       (said ? `<button type="button" class="nb-ico nb-undays" ${tipped(T.nb_clear_days)}>${I.x}</button>` : '') + '</div>';
   }
-  const SUGS = () => [['digest', T.nb_sug_digest], ['ask', T.nb_sug_links], ['ask', T.nb_sug_focus], ['ask', T.nb_sug_open]];
+  // the ways to write from the notes (/api/record/templates): the recap (the overview), by theme, for writing, then the
+  // reader's own, each a name and what to write, kept in the library's folder; one is made and changed here
+  let tpls = [], editing = null;
+  const loadTpls = () => fetch(`/api/record/templates?ui=${encodeURIComponent(ui)}`).then((r) => r.json()).then((t) => { tpls = t; renderAsk(); }).catch(() => {});
+  const PEN = svg('<path d="M4 16l1-4 8-8 3 3-8 8-4 1z"/>');
+  function editorHtml() {
+    if (!editing) return '';
+    return `<form class="nb-tplform"><input class="nb-tplname" type="text" maxlength="80" placeholder="${esc(T.nb_tpl_name)}" aria-label="${esc(T.nb_tpl_name)}" value="${esc(editing.name)}">` +
+      `<textarea class="nb-tplprompt" rows="4" placeholder="${esc(T.nb_tpl_prompt)}" aria-label="${esc(T.nb_tpl_prompt)}">${esc(editing.prompt)}</textarea>` +
+      `<p class="nb-tplnote">${esc(T.nb_tpl_note)}</p><div class="nb-tplacts">` +
+      (editing.id ? `<button type="button" class="nb-btn nb-tpldel">${esc(T.nb_tpl_delete)}</button>` : '') +
+      `<button type="button" class="nb-btn nb-tplcancel">${esc(T.nb_tpl_cancel)}</button><button type="submit" class="nb-go">${esc(T.nb_tpl_save)}</button></div></form>`;
+  }
   // what was asked, being written or written: no waiting here, the sidebar shows it being written; once it is, to
   // open, to name, to export
   function madeHtml() {
@@ -179,14 +191,18 @@
     }).join('');
   }
   function panelHtml() {
-    return `<div class="nb-panel"><form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off">` +
+    return `<div class="nb-panel"><form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph2)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off">` +
       `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}>${esc(T.nb_ask_go)}</button></form>` +
-      `<div class="nb-sugs">${SUGS().map(([k, q], i) => `<button type="button" class="nb-sug${k === 'digest' ? ' nb-sug1' : ''}" data-sug="${i}">${esc(q)}</button>`).join('')}` +
-      `<button type="button" class="nb-rawbtn" ${tipped(T.nb_raw_tip)}>${I.down}<span>${esc(T.nb_raw)}</span></button></div><div class="nb-rawsaid nb-said" role="status"></div>` +
+      `<div class="nb-sugs">${tpls.map((t) => `<button type="button" class="nb-sug${t.id === 'recap' ? ' nb-sug1' : ''}${t.own ? ' nb-own' : ''}" data-tpl="${esc(t.id)}"` +
+        `${t.own ? ` ${tipped(t.prompt.slice(0, 140))}` : ''}><span>${esc(t.name)}</span>${t.own ? `<i class="nb-tpled" data-ed="${esc(t.id)}" ${tipped(T.nb_tpl_edit)}>${PEN}</i>` : ''}</button>`).join('')}` +
+      `<button type="button" class="nb-sug nb-addtpl" ${tipped(T.nb_tpl_add)}>＋</button>` +
+      `<button type="button" class="nb-rawbtn" ${tipped(T.nb_raw_tip)}>${I.down}<span>${esc(T.nb_raw)}</span></button></div>${editorHtml()}<div class="nb-rawsaid nb-said" role="status"></div>` +
       madeHtml() + '</div>';
   }
   function renderAsk() {
     const n = scope().length, box = $('nb-ask'), typed = box.querySelector('.nb-askq'), was = typed ? [typed.value, document.activeElement === typed] : null;
+    const tn = box.querySelector('.nb-tplname'), tp = box.querySelector('.nb-tplprompt');
+    if (editing && tn) { editing.name = tn.value; editing.prompt = tp.value; }
     box.innerHTML = !data.notes.length ? '' : scopeHtml() + (n && chosen() ? panelHtml() : makes.length ? `<div class="nb-panel nb-only">${madeHtml()}</div>` : '');
     const q = box.querySelector('.nb-askq');
     if (q && was) { q.value = was[0]; if (was[1]) q.focus(); }
@@ -201,9 +217,9 @@
   // what is asked made a document, as a job: the sidebar shows it being written (app.js: tf-jobs) and lists it once
   // written (tf-library); the page goes on meanwhile, another can be asked
   let watching = null;
-  async function makeIt(kind, question) {
+  async function makeIt(kind, question, template) {
     try {
-      const job = await postJson('/api/record', { items: scopeItems(), ui, kind, question });
+      const job = await postJson('/api/record', { items: scopeItems(), ui, kind, question, template });
       makes.unshift(job);
       document.dispatchEvent(new CustomEvent('tf-jobs'));
       if (!watching) watching = setTimeout(watchMakes, 1200);
@@ -243,8 +259,14 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     return name;
   }
-  $('nb-ask').addEventListener('submit', (e) => {
+  $('nb-ask').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (e.target.matches('.nb-tplform')) {   // a template of one's own, kept
+      const name = e.target.querySelector('.nb-tplname').value.trim(), prompt = e.target.querySelector('.nb-tplprompt').value.trim();
+      if (!name || !prompt) return;
+      try { tpls = await postJson('/api/record/templates', { op: 'put', id: editing && editing.id, name, prompt, ui }); editing = null; } catch { /* (kept as typed) */ }
+      return renderAsk();
+    }
     const input = e.target.querySelector('.nb-askq'), question = input.value.trim();
     if (!question) return;
     input.value = '';
@@ -253,7 +275,17 @@
   $('nb-ask').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.sug !== undefined) { const [k, q] = SUGS()[+b.dataset.sug]; return makeIt(k, q); }
+    if (b.dataset.tpl !== undefined) {
+      const ed = e.target.closest('.nb-tpled'), t = tpls.find((x) => x.id === b.dataset.tpl);
+      if (ed && t) { editing = { id: t.id, name: t.name, prompt: t.prompt }; renderAsk(); const n = $('nb-ask').querySelector('.nb-tplprompt'); if (n) n.focus(); return; }
+      return t && makeIt(t.id === 'recap' ? 'digest' : 'template', t.name, t.id);
+    }
+    if (b.matches('.nb-addtpl')) { editing = { name: '', prompt: '' }; renderAsk(); const n = $('nb-ask').querySelector('.nb-tplname'); if (n) n.focus(); return; }
+    if (b.matches('.nb-tplcancel')) { editing = null; return renderAsk(); }
+    if (b.matches('.nb-tpldel')) {
+      try { tpls = await postJson('/api/record/templates', { op: 'delete', id: editing.id, ui }); editing = null; } catch { /* (kept as it was) */ }
+      return renderAsk();
+    }
     if (b.matches('.nb-scopebtn')) { showPicked = !showPicked; return renderAsk(); }
     if (b.matches('.nb-unpickall')) { picked.clear(); showPicked = false; return renderList(); }
     if (b.matches('.nb-undays')) { days = new Set(); anchor = null; return picks(); }
@@ -561,6 +593,7 @@
     };
   }
   labels();
-  document.addEventListener('tf-lang', () => { setLang(); labels(); calSig = ''; render(); });
+  document.addEventListener('tf-lang', () => { setLang(); labels(); calSig = ''; render(); loadTpls(); });
+  loadTpls();
   load().catch(() => { $('nb-list').innerHTML = `<p class="nb-empty">${esc(T.nb_none)}</p>`; });
 })();

@@ -171,6 +171,18 @@ a.nb-btn { text-decoration: none; display: inline-flex; align-items: center; }
 .nb-sug { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); font: 550 13.5px var(--sans); border-radius: 999px; padding: 6px 13px; cursor: pointer; }
 .nb-sug:hover { border-color: var(--accent); color: var(--accent-deep); }
 .nb-sug.nb-sug1 { border-color: var(--accent); color: var(--accent-deep); font-weight: 650; }
+.nb-sug.nb-own { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; }
+.nb-tpled { display: inline-flex; padding: 1px; border-radius: 4px; color: var(--faint); }
+.nb-tpled svg { width: 13px; height: 13px; }
+.nb-tpled:hover { color: var(--accent); background: var(--line-2); }
+.nb-sug.nb-addtpl { padding: 6px 11px; color: var(--muted); }
+.nb-tplform { margin-top: 10px; padding: 12px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; display: grid; gap: 8px; }
+.nb-tplname, .nb-tplprompt { font: 14px/1.5 var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+.nb-tplname:focus, .nb-tplprompt:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.nb-tplnote { margin: 0; font-size: 12.5px; color: var(--muted); }
+.nb-tplacts { display: flex; gap: 8px; justify-content: flex-end; }
+.nb-tplacts .nb-tpldel { margin-right: auto; }
+.nb-tplacts .nb-tpldel:hover { color: var(--r-limitation); border-color: currentColor; }
 .nb-rawbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--muted);
   font: 550 13px var(--sans); padding: 6px 4px; cursor: pointer; }   /* (no model: the notes as they are, to a file) */
 .nb-rawbtn svg { width: 15px; height: 15px; }
