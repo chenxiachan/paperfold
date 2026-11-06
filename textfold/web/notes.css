@@ -171,6 +171,11 @@ a.nb-btn { text-decoration: none; display: inline-flex; align-items: center; }
 .nb-sug { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); font: 550 13.5px var(--sans); border-radius: 999px; padding: 6px 13px; cursor: pointer; }
 .nb-sug:hover { border-color: var(--accent); color: var(--accent-deep); }
 .nb-sug.nb-sug1 { border-color: var(--accent); color: var(--accent-deep); font-weight: 650; }
+.nb-rawbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--muted);
+  font: 550 13px var(--sans); padding: 6px 4px; cursor: pointer; }   /* (no model: the notes as they are, to a file) */
+.nb-rawbtn svg { width: 15px; height: 15px; }
+.nb-rawbtn:hover { color: var(--accent-deep); }
+.nb-rawsaid:not(:empty) { margin-top: 6px; }
 .nb-cite.nb-sec { background: var(--line-2); color: var(--ink-2); }
 .nb-cite.nb-sec:hover { background: var(--ink-2); color: var(--card); }
 .nb-qa1 { position: relative; }

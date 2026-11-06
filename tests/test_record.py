@@ -112,8 +112,8 @@ class Record(unittest.TestCase):
         self.assertIn("> [!question] Why a teacher?", md)
 
     def test_what_the_page_makes_is_a_document_with_its_obsidian_beside_it(self):
-        reply = {"opening": "Two texts. Mostly smaller networks [1].", "texts": [{"t": 1, "line": "Prune with care.", "about": "It prunes [T1.1].",
-                 "noticed": "You marked a but [2].", "meaning": "A condition [2].", "extend": ""}], "closing": {"line": "Smaller networks.", "body": "[1][3]"}}
+        reply = {"opening": "Two texts. Mostly smaller networks [1].", "texts": [{"t": 1, "line": "Prune with care.", "body": "It prunes [T1.1]. You marked a but [2].",
+                 "extend": ""}], "closing": {"line": "Smaller networks.", "body": "[1][3]"}}
         with mock.patch.object(llm, "call", return_value=({"out": reply}, False)), mock.patch.object(llm, "label", return_value="test-model"):
             pid, title = record.make(self.items(), "en", "digest", "", {"id": "test-model"}, when="2026-11-05 09:00")
         self.assertEqual(title, "Reading record · 2026-11-01 to 2026-11-03")
@@ -171,10 +171,10 @@ class Record(unittest.TestCase):
 
     def test_an_overview_a_part_a_text_every_claim_cited(self):
         reply = {"opening": "You read two texts over three days. Mostly about making networks smaller [1].",
-                 "texts": [{"t": 2, "line": "A teacher passes on what it learned [3].", "about": "A student matches a teacher [T2.1].",
-                            "noticed": "You asked why a teacher is needed [3].", "meaning": "Knowledge moves by outputs [3][7].", "extend": ""},
-                           {"t": 1, "line": "Prune, but mind the model's size.", "about": "It removes small weights [T1.1] and reports a loss [T1.2][T1.9].",
-                            "noticed": "You wrote it needs no retraining [1] and marked a but [2].", "meaning": "The result has a condition [2].",
+                 "texts": [{"t": 2, "line": "A teacher passes on what it learned [3].",
+                            "body": "A student matches a teacher [T2.1]. You asked why a teacher is needed [3]; knowledge moves by outputs [3][7].", "extend": ""},
+                           {"t": 1, "line": "Prune, but mind the model's size.",
+                            "body": "It removes small weights [T1.1] and reports a loss [T1.2][T1.9]. You wrote it needs no retraining [1] and marked a but [2].",
                             "extend": "Lottery-ticket work asks the same question."}],
                  "closing": {"line": "Lately: smaller networks, and what they keep.", "body": "Both texts shrink a network [1][3]."}}
         with mock.patch.object(llm, "call", return_value=({"out": reply}, False)) as call, mock.patch.object(llm, "label", return_value="test-model"):
@@ -183,8 +183,9 @@ class Record(unittest.TestCase):
         self.assertIn("  [T1.1] Method", prompt)
         self.assertIn("[1] (T1, in T1.1 Method, 2026-11-01)", prompt)
         self.assertEqual([x["t"] for x in got["texts"]], [1, 2])   # (in the order of the texts)
-        self.assertNotIn("[T1.9]", got["texts"][0]["about"])     # (a section that is not there: left out)
-        self.assertNotIn("[7]", got["texts"][1]["meaning"])
+        self.assertNotIn("[T1.9]", got["texts"][0]["body"])     # (a section that is not there: left out)
+        self.assertNotIn("[7]", got["texts"][1]["body"])
+        self.assertIn("within about 230 words (about 460 characters", prompt)   # (two texts: a short page)
         self.assertEqual({x["code"] for x in got["sections"]}, {"T1.1", "T1.2", "T2.1"})
         title, md, lines, _ = record.record_md(self.items(), record.WORDS["en"], "2026-11-05 09:00", (), record._digest_in(got))
         self.assertTrue(md.index("## Overview") < md.index("## What I read"))
@@ -197,6 +198,17 @@ class Record(unittest.TestCase):
         self.assertIn(f"textfold://open?paper={self.a}&s=", ob)
         pid = record.record(self.items(), "en", when="2026-11-05 09:00", digest=got)
         self.assertIn("Lately: smaller networks", store.read_text(store.pdir(pid) / "source.md"))
+
+    def test_the_notes_as_they_are_for_obsidian(self):
+        with mock.patch.object(llm, "call", side_effect=AssertionError("no model")):
+            name, md = record.raw(self.items(), "en", when="2026-11-06 09:00")
+        self.assertEqual(name, "Notes · 2026-11-01 to 2026-11-03.md")
+        self.assertIn(f"## [[{self.a} Pruning|Pruning]]", md)
+        self.assertIn(f"**2026-11-01 · Method** · [there](textfold://open?paper={self.a}&n=n-1&lang=en)", md)
+        self.assertIn("> the weights whose magnitude is smallest", md)
+        self.assertIn("I wrote: Magnitude only, no retraining.", md)
+        self.assertIn("I asked: Why a teacher? → The teacher's outputs carry its knowledge.", md)
+        self.assertLess(md.index("Pruning|Pruning"), md.index("Distillation|Distillation"))   # (the text noted first, first)
 
     def test_a_copy_stays_as_it_was(self):
         pid = record.record(self.items(), "en", when="2026-11-05 09:00")

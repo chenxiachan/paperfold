@@ -59,6 +59,7 @@
                               pid once done): the overview the model writes of them (without a model, the notes alone), or
                               a question's answer (503 no-model at once without one)
   GET  /api/record/<id>/obsidian  the same as Markdown for Obsidian, kept as it was made ({name, text})
+  POST /api/record/raw        {items, ui}: the notes themselves, as they are, Markdown for Obsidian ({name, text}); no model
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
@@ -988,6 +989,12 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
+                if u.path == "/api/record/raw":
+                    try:
+                        name, text = record.raw(body.get("items"), str(body.get("ui") or "en"))
+                    except ValueError as e:
+                        return self.json({"error": str(e)}, 400)
+                    return self.json({"name": name, "text": text})
                 if u.path == "/api/record":
                     kind, question, ui = "ask" if body.get("kind") == "ask" else "digest", str(body.get("question") or ""), str(body.get("ui") or "en")
                     try:

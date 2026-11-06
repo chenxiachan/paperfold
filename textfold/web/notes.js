@@ -34,7 +34,7 @@
     out: svg('<path d="M8 4h8v8"/><path d="M16 4l-9 9"/><path d="M13 16H4V7"/>'), trash: svg('<path d="M4 6h12M8 6V4h4v2M6 6l1 10h6l1-10"/>'),
     sum: svg('<path d="M5 3.5h10v13H5z"/><path d="M7.5 7h5M7.5 10h5M7.5 13h3"/>'),
     list: svg('<path d="M4 5h12M4 10h12M4 15h12"/>'), cal: svg('<rect x="3.5" y="4.5" width="13" height="12" rx="2"/><path d="M3.5 8.5h13M7 3v3M13 3v3"/>'),
-    minus: svg('<path d="M5 10h10"/>'), plus: svg('<path d="M5 10h10M10 5v10"/>'),
+    minus: svg('<path d="M5 10h10"/>'), plus: svg('<path d="M5 10h10M10 5v10"/>'), down: svg('<path d="M10 3v10m-4-4 4 4 4-4M4 16h12"/>'),
   };
   const tipped = (tip) => `data-tip="${esc(tip)}" aria-label="${esc(tip)}"`;
   const VIEW = 'textfold.notes.view';
@@ -181,7 +181,8 @@
   function panelHtml() {
     return `<div class="nb-panel"><form class="nb-askform"><input class="nb-askq" type="text" placeholder="${esc(T.nb_ask_ph)}" aria-label="${esc(T.nb_ask_ph)}" autocomplete="off">` +
       `<button type="submit" class="nb-go" ${tipped(T.nb_ask_tip)}>${esc(T.nb_ask_go)}</button></form>` +
-      `<div class="nb-sugs">${SUGS().map(([k, q], i) => `<button type="button" class="nb-sug${k === 'digest' ? ' nb-sug1' : ''}" data-sug="${i}">${esc(q)}</button>`).join('')}</div>` +
+      `<div class="nb-sugs">${SUGS().map(([k, q], i) => `<button type="button" class="nb-sug${k === 'digest' ? ' nb-sug1' : ''}" data-sug="${i}">${esc(q)}</button>`).join('')}` +
+      `<button type="button" class="nb-rawbtn" ${tipped(T.nb_raw_tip)}>${I.down}<span>${esc(T.nb_raw)}</span></button></div><div class="nb-rawsaid nb-said" role="status"></div>` +
       madeHtml() + '</div>';
   }
   function renderAsk() {
@@ -259,6 +260,17 @@
     if (b.matches('.nb-tgx')) { for (const k of [...picked]) if (k.startsWith(`${b.dataset.pid}|`)) picked.delete(k); return renderList(); }
     if (b.matches('.nb-tix')) { picked.delete(b.closest('.nb-ti').dataset.key); return renderList(); }
     if (b.matches('.nb-madex')) { makes.splice(+b.dataset.i, 1); return renderAsk(); }
+    if (b.matches('.nb-rawbtn')) {   // the notes picked, as they are: no model, straight to a file
+      b.disabled = true;
+      const said = $('nb-ask').querySelector('.nb-rawsaid');
+      try {
+        const got = await postJson('/api/record/raw', { items: scopeItems(), ui });
+        const where = await saveFile(got.name, got.text);
+        if (where && said) said.textContent = T.nb_saved.replace('{name}', typeof where === 'string' ? where : got.name);
+      } catch (x) { if (said) { said.className = 'nb-rawsaid nb-said bad'; said.textContent = T.nb_failed.replace('{e}', x.message); } }
+      b.disabled = false;
+      return;
+    }
     if (b.matches('.nb-rename')) { document.dispatchEvent(new CustomEvent('tf-rename', { detail: { paper: b.dataset.paper } })); return; }
     if (b.matches('.nb-obs')) {
       b.disabled = true;

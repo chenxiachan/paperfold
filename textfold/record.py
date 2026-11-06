@@ -24,13 +24,14 @@ WORDS = {
     "en": {"title": "Reading record · {period}", "read": "What I read", "curious": "What I was curious about",
            "got": "What I got", "attend": "What I attended to", "to": "to", "notes": "{n} notes",
            "intro": "Made on {when} from {n} notes in {d} texts. Each entry is a copy made then: \"there\" opens it as it is now.",
-           "appendix": "The notes picked", "q_title": "{q} · {period}",
+           "appendix": "The notes picked", "q_title": "{q} · {period}", "raw_title": "Notes · {period}",
+           "wrote": "I wrote: ", "asked": "I asked: ",
            "answer": "Answer: ", "there": "there", "open": "open", "folder": "Reading records", "whole": "the whole text",
            "made_with": "Made with TextFold", "mine": "What I asked", "by": "(Answered by {m} from these notes; each number is a note it rests on.)",
            "digest": "Overview", "closing": "Altogether", "extend": "Further: ",
            "digest_by": "(Written by {m} from these notes and the texts: a number is a note, § a section of the text, and \"further\" the model's own knowledge.)"},
     "zh": {"title": "阅读记录 · {period}", "read": "读了什么", "curious": "好奇什么", "got": "得到了什么", "attend": "关注的点",
-           "to": "至", "notes": "{n} 条笔记", "intro": "{when} 生成，依据 {d} 篇文本里的 {n} 条笔记。每一条都是当时的快照，点“原处”打开它现在的样子。", "appendix": "所选的笔记", "q_title": "{q} · {period}",
+           "to": "至", "notes": "{n} 条笔记", "intro": "{when} 生成，依据 {d} 篇文本里的 {n} 条笔记。每一条都是当时的快照，点“原处”打开它现在的样子。", "appendix": "所选的笔记", "q_title": "{q} · {period}", "raw_title": "笔记 · {period}", "wrote": "我写：", "asked": "我问：",
            "answer": "回答：", "there": "原处", "open": "打开", "folder": "阅读记录", "whole": "整篇文本", "made_with": "用 TextFold 生成",
            "mine": "我问的", "by": "（这段回答由 {m} 依据这些笔记写成，编号是它依据的笔记。）",
            "digest": "总结", "closing": "总的来看", "extend": "拓展：",
@@ -41,7 +42,7 @@ WORDS["zh-Hant"] = {**WORDS["zh"], "title": "閱讀記錄 · {period}", "read": 
                     "intro": "{when} 生成，依據 {d} 篇文本裡的 {n} 條筆記。每一條都是當時的快照，點「原處」打開它現在的樣子。", "appendix": "所選的筆記",
                     "answer": "回答：", "there": "原處", "open": "開啟", "folder": "閱讀記錄", "whole": "整篇文本", "made_with": "用 TextFold 生成",
                     "mine": "我問的", "by": "（這段回答由 {m} 依據這些筆記寫成，編號是它依據的筆記。）",
-                    "digest": "總結", "closing": "總的來看", "extend": "拓展：",
+                    "digest": "總結", "closing": "總的來看", "extend": "拓展：", "raw_title": "筆記 · {period}", "wrote": "我寫：", "asked": "我問：",
                     "digest_by": "（這篇總結由 {m} 依據這些筆記和原文寫成：編號是筆記，§ 是原文的節，「拓展」是模型自己的一般知識。）"}
 MOST = 400   # notes in one record
 
@@ -277,7 +278,7 @@ def _digest_in(d):
     if not isinstance(d, dict):
         return None
     cut = lambda x, n=6000: str(x or "")[:n].strip()  # noqa: E731
-    parts = [{"t": x.get("t"), **{k: cut(x.get(k)) for k in ("line", "about", "noticed", "meaning", "extend")}}
+    parts = [{"t": x.get("t"), **{k: cut(x.get(k)) for k in ("line", "body", "extend")}}
              for x in d.get("texts") or [] if isinstance(x, dict) and isinstance(x.get("t"), int)][:100]
     closing = d.get("closing") if isinstance(d.get("closing"), dict) else {}
     out = {"opening": cut(d.get("opening")), "texts": parts, "closing": {"line": cut(closing.get("line")), "body": cut(closing.get("body"))},
@@ -314,7 +315,7 @@ def record_md(items, W, when, qa=(), digest=None, title=None):
             if not pid:
                 continue
             out += [f"### {_md(texts[pid]['title'])}", ""]
-            para(_bare(x["line"]) or texts[pid]["title"], cite(" ".join(flat(x[k]) for k in ("about", "noticed", "meaning") if x[k])))
+            para(_bare(x["line"]) or texts[pid]["title"], cite(flat(x["body"])))
             if x["extend"]:
                 para(W["extend"] + flat(x["extend"]), "")
         if digest["closing"]["line"] or digest["closing"]["body"]:
@@ -453,23 +454,24 @@ def ask(items, question, spec, ui="en", timeout=600):
 DIGEST_SCHEMA = {"type": "object", "properties": {
     "opening": {"type": "string"},
     "texts": {"type": "array", "items": {"type": "object", "properties": {
-        "t": {"type": "integer"}, "line": {"type": "string"}, "about": {"type": "string"}, "noticed": {"type": "string"},
-        "meaning": {"type": "string"}, "extend": {"type": "string"}}, "required": ["t", "line", "about", "noticed", "meaning", "extend"]}},
+        "t": {"type": "integer"}, "line": {"type": "string"}, "body": {"type": "string"}, "extend": {"type": "string"}},
+        "required": ["t", "line", "body", "extend"]}},
     "closing": {"type": "object", "properties": {"line": {"type": "string"}, "body": {"type": "string"}}, "required": ["line", "body"]}},
     "required": ["opening", "texts", "closing"]}
-DIGEST_PROMPT = """A reader picked notes they made while reading, from {period}. Write them an overview of what they read \
-and thought, to read through quickly: an opening, one part for each text in the order below, and a closing.
+DIGEST_PROMPT = """A reader picked notes they made while reading, from {period}. Write them a short overview of what they \
+read and thought, to take in at a glance: an opening, one part for each text in the order below, and a closing. Keep \
+the whole within about {words} words (about {chars} characters in Chinese or Japanese): the more texts, the shorter each \
+part.
 
-opening: two sentences: how many texts over which days, and what the reader was mostly thinking about.
+opening: one or two sentences: how many texts over which days, and what the reader was mostly thinking about.
 For each text (t: its number):
 - line: one sentence on what the text was for the reader: its point and what they made of it;
-- about: what the text says, in two or three sentences, from its own lines below; cite its sections as [T1.3];
-- noticed: what the reader marked, wrote and asked in it, and why it may have mattered to them; cite the notes as [4];
-- meaning: what these notes add up to, in a sentence or two, citing what it rests on;
-- extend: one or two sentences beyond the notes and the text (context, a related idea, a question worth following), \
-from your own knowledge and never put as if the text said it; empty when nothing is worth adding.
-closing.line: one sentence naming what the reader seems interested in lately, two to four things; closing.body: a few \
-sentences on them and how they connect, each citing the notes it shows in.
+- body: two or three sentences at most: what the text says, from its own lines below (cite its sections as [T1.3]), \
+and what the reader marked, wrote or asked in it and why it may matter (cite the notes as [4]);
+- extend: at most one sentence beyond the notes and the text (context, a related idea, a question worth following), \
+from your own knowledge and never put as if the text said it; empty unless it is really worth adding.
+closing.line: one sentence naming what the reader seems interested in lately, two to four things; closing.body: one or \
+two sentences on how they connect, each citing the notes it shows in.
 
 Anything said to be in the texts or the notes rests on them and is cited. Keep the reader's own qualifiers (may, only \
 when, but); where notes disagree, or a later one revises an earlier one, say so. Write in {language}, plainly, in \
@@ -488,14 +490,15 @@ SYSTEM_DIGEST = ("You write a reader an overview of their own reading from their
 
 
 def digest(items, spec, ui="en", timeout=900):
-    """The overview the model writes of the notes picked: {opening, texts: [{t, pid, title, line, about, noticed, meaning,
-    extend}], closing: {line, body}, model, notes, sections} (notes and sections: those it names, for the links); a
-    citation that names nothing is left out."""
+    """The overview the model writes of the notes picked, kept short (its length grows with the texts, to a cap):
+    {opening, texts: [{t, pid, title, line, body, extend}], closing: {line, body}, model, notes, sections} (notes and
+    sections: those it names, for the links); a citation that names nothing is left out."""
     W = WORDS.get(ui) or WORDS["en"]
     picked, texts, _, _, _ = gather(items, W)
     tl, nl, entries, secs = _material(picked, texts)
+    words = min(600, 90 + 70 * len(texts))   # (a few texts: a short page; many: shorter parts, not a longer page)
     prompt = DIGEST_PROMPT.format(period=_period(picked, W), language=langs.name(ui) if ui in langs.LANGS else "English",
-                                  texts="\n".join(tl), notes="\n".join(nl))
+                                  words=words, chars=2 * words, texts="\n".join(tl), notes="\n".join(nl))
     cache = store.library_root() / "record-cache"
     cache.mkdir(parents=True, exist_ok=True)
     rec, _ = llm.call(prompt, DIGEST_SCHEMA, spec, cache, timeout=timeout, system=SYSTEM_DIGEST)
@@ -507,12 +510,12 @@ def digest(items, spec, ui="en", timeout=900):
         if isinstance(x, dict) and isinstance(x.get("t"), int) and 1 <= x["t"] <= len(pids):
             pid = pids[x["t"] - 1]
             parts.append({"t": x["t"], "pid": pid, "title": texts[pid]["title"], "lang": texts[pid]["lang"],
-                          **{k: clean(x.get(k)) for k in ("line", "about", "noticed", "meaning", "extend")}})
+                          **{k: clean(x.get(k)) for k in ("line", "body", "extend")}})
     parts.sort(key=lambda x: x["t"])
     closing = out.get("closing") if isinstance(out.get("closing"), dict) else {}
     got = {"opening": clean(out.get("opening")), "texts": parts, "closing": {"line": clean(closing.get("line")), "body": clean(closing.get("body"))},
            "model": llm.label(spec)}
-    every = [got["opening"], got["closing"]["line"], got["closing"]["body"]] + [x[k] for x in parts for k in ("line", "about", "noticed", "meaning", "extend")]
+    every = [got["opening"], got["closing"]["line"], got["closing"]["body"]] + [x[k] for x in parts for k in ("line", "body", "extend")]
     return {**got, **_refs(every, entries, secs)}
 
 
@@ -565,6 +568,41 @@ def obsidian_of(pid):
     return name, store.asset(pid, "obsidian.md").decode("utf-8")
 
 
+def raw(items, ui="en", when=None):
+    """The notes picked as they are, for Obsidian, no model: (file name, text). A text a heading ([[the note TextFold's
+    reader saves for it]]), its notes in the order they were made: when, its section, the passage quoted, what the
+    reader wrote, what they asked and the answer's line, a link back to the place in TextFold."""
+    W = WORDS.get(ui) or WORDS["en"]
+    when = when or time.strftime("%Y-%m-%d %H:%M")
+    picked, texts, _, _, _ = gather(items, W)
+    period = _period(picked, W)
+    title = W["raw_title"].format(period=period)
+    q = lambda s: json.dumps(str(s), ensure_ascii=False)  # noqa: E731
+    out = ["---", f"title: {q(title)}", "type: textfold/notes", f"period: {q(period)}", f"exported: {q(when)}",
+           f"texts: [{', '.join(q('[[' + _file(p, t['title']) + ']]') for p, t in texts.items())}]",
+           f"notes: {len(picked)}", "tags: [textfold, notes]", "---", "", f"# {title}", ""]
+    for pid, t in texts.items():
+        out += [f"## [[{_file(pid, t['title'])}|{t['title']}]]", "", f"*{W['notes'].format(n=t['n'])} · {_span(t['days'], W)}*", ""]
+        for p, _, n in picked:
+            if p != pid:
+                continue
+            a = n.get("anchor") or {}
+            sec = t["where"].get(a.get("unit")) or {}
+            link = f"textfold://open?paper={pid}&n={n['id']}" + (f"&lang={a['lang']}" if a.get("lang") else "")
+            head = " · ".join(x for x in (_local_day(n.get("created")), _flat(sec.get("title"))) if x)
+            out += [f"**{head}** · [{W['there']}]({link})", ""]
+            quote = _flat((a.get("quote") or {}).get("exact"))
+            if quote:
+                out += [f"> {quote}", ""]
+            if _flat(n.get("text")):
+                out += [W["wrote"] + _flat(n["text"]), ""]
+            for turn in notes.turns(n)[:4]:
+                if _flat(turn.get("q")):
+                    out += [W["asked"] + _flat(turn["q"]) + (f" → {_flat(turn.get('takeaway'))}" if _flat(turn.get("takeaway")) else ""), ""]
+    out += ["---", "", f"*{W['made_with']} · {when}*", ""]
+    return re.sub(r'[\\/:*?"<>|]+', " ", title).strip() + ".md", "\n".join(out)
+
+
 def _file(pid, title):
     """The name the reader's own Markdown for Obsidian gives a text's notes (reader.js fileName), so [[it]] links there."""
     return re.sub(r'[\\/:*?"<>|]+', " ", f"{pid} {title}")[:90].strip()
@@ -605,7 +643,7 @@ def obsidian(items, ui="en", when=None, qa=(), digest=None, title=None):
                 continue
             pid = pids[x["t"] - 1]
             out += [f"### {link(pid)}", ""] + ([f"**{ocite(x['line'])}**", ""] if x["line"] else [])
-            out += [ocite(" ".join(x[k] for k in ("about", "noticed", "meaning") if x[k])), ""]
+            out += [ocite(x["body"]), ""]
             if x["extend"]:
                 out += [f"*{W['extend']}{x['extend']}*", ""]
         if digest["closing"]["line"] or digest["closing"]["body"]:
