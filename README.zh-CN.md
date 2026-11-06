@@ -385,6 +385,20 @@ TextFold 只是一个工具，它的许可证只管代码。分享文件时，�
 
 欢迎贡献：先看 [CONTRIBUTING.md](https://github.com/chenxiachan/textfold/blob/main/CONTRIBUTING.md)。
 
+## 引用
+
+如果你在研究中用到 TextFold，可以这样引用：
+
+```bibtex
+@software{chen_textfold_2026,
+  author  = {Chen, Xia},
+  title   = {{TextFold}: Language Models as Reading Interfaces},
+  year    = {2026},
+  url     = {https://github.com/chenxiachan/textfold},
+  license = {Apache-2.0}
+}
+```
+
 <br>
 
 <div align="center">
