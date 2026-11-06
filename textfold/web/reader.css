@@ -999,6 +999,11 @@ html.compare footer.zoom, html.app.compare footer.zoom { left: calc(var(--rail, 
 .pp-n { font-variant-numeric: tabular-nums; }
 .pp-x { width: 28px; height: 28px; border: 0; border-radius: 7px; background: none; font: 400 20px/1 var(--sans); color: var(--muted); cursor: pointer; }
 .pp-x:hover { background: var(--line); color: var(--ink); }
+.pp-z, .pp-zl { height: 26px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; font: 550 14px/1 var(--sans); }
+.pp-z { width: 26px; font-size: 17px; }
+.pp-zl { min-width: 46px; padding: 0 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pp-z:hover, .pp-zl:hover { background: var(--line); color: var(--ink); }
+.pdfpane.zoomed .pp-scroll { align-items: flex-start; }   /* (wider than the pane: from its left edge, so all of it scrolls into view) */
 /* its width, at its right edge (reader.js, gripFor): as the sidebar's (app.css, .sb-resize) */
 .pp-grip { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; cursor: col-resize; touch-action: none; z-index: 1; }
 .pp-grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: var(--accent); opacity: 0; transition: opacity .15s; }

@@ -3720,18 +3720,35 @@ math { font-size: 1.05em; }
     const keep = unitAtReading();
     const pane = h('aside', 'pdfpane'), bar = h('div', 'pp-bar'), title = h('span', 'pp-t'), count = h('span', 'pp-n');
     const x = h('button', 'pp-x', '×'), scroller = h('div', 'pp-scroll');
+    const zo = h('button', 'pp-z', '−'), zl = h('button', 'pp-zl'), zi = h('button', 'pp-z', '+');
+    for (const [b, t] of [[zo, T[ui].nb_zoom_out], [zl, T[ui].pp_fit], [zi, T[ui].nb_zoom_in]]) { b.type = 'button'; b.title = t; b.setAttribute('aria-label', t); }
     x.type = 'button';
     x.setAttribute('aria-label', T[ui].close);
     pane.setAttribute('aria-label', T[ui].compare_tip);
     const src = { pmc: 'PubMed Central', ppr: 'Preprint', biorxiv: 'bioRxiv', medrxiv: 'medRxiv' }[D.meta.id.match(/^[a-z]+/)?.[0]];
     const own = D.meta.id.startsWith('pdf-');   // a PDF read through the engine: the file itself, not one fetched for it
     title.textContent = own ? (D.meta.label || 'PDF') : src ? `${src} · PDF` : `arXiv · PDF ${D.meta.version || ''}`.trim();
-    bar.append(title, count, x);
+    bar.append(title, zo, zl, zi, count, x);
     pane.append(bar, scroller, gripFor(pane));
     if (keptWidth()) setPdfWidth(keptWidth());
     document.body.append(pane);
-    cmp = { pane, scroller, count, pages: [], words: [], grams: null, spans: new Map(), current: null, follow: null, epoch: 0 };
+    cmp = { pane, scroller, count, pages: [], words: [], grams: null, spans: new Map(), current: null, follow: null, epoch: 0, zoom: 1, zl };
     x.addEventListener('click', closeCompare);
+    zo.addEventListener('click', () => zoomPdf(cmp.zoom / 1.25));
+    zi.addEventListener('click', () => zoomPdf(cmp.zoom * 1.25));
+    zl.addEventListener('click', () => zoomPdf(1));
+    zoomLabel();
+    // ⌘/Ctrl and the wheel, or a pinch, over the pages: the PDF zooms around the pointer, not the text's levels
+    pane.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault(); e.stopPropagation();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+      zoomPdf(cmp.zoom * Math.exp(-e.deltaY * unit * 0.004), { x: e.clientX, y: e.clientY });   // (a notch of a mouse wheel: about half again)
+    }, { passive: false });
+    let pz = 1;   // (Safari's pinch)
+    pane.addEventListener('gesturestart', (e) => { e.preventDefault(); e.stopPropagation(); pz = cmp.zoom; });
+    pane.addEventListener('gesturechange', (e) => { e.preventDefault(); e.stopPropagation(); zoomPdf(pz * e.scale, { x: e.clientX, y: e.clientY }); });
+    pane.addEventListener('gestureend', (e) => { e.preventDefault(); e.stopPropagation(); });
     scroller.addEventListener('scroll', () => requestAnimationFrame(pageCount), { passive: true });
     scroller.addEventListener('click', onPageClick);
     document.documentElement.classList.add('compare');
@@ -3864,7 +3881,7 @@ math { font-size: 1.05em; }
   }
   function sizePages() {
     const width = cmp.scroller.clientWidth - 24, widest = Math.max(...cmp.pages.map((p) => p.vp.width));
-    cmp.scale = Math.max(0.3, width / widest);
+    cmp.scale = Math.max(0.3, width / widest) * (cmp.zoom || 1);   // (1: the pane's width; zoomed in, the pages scroll sideways too)
     cmp.epoch++;
     for (const p of cmp.pages) {
       p.el.style.width = `${Math.round(p.vp.width * cmp.scale)}px`;
@@ -3884,6 +3901,29 @@ math { font-size: 1.05em; }
     p.task = null;
     paintMarks(p);
   }
+  // the PDF zoomed (1: fit the pane's width; from half to four times that), around a point of the pane (else its
+  // middle): the pages take their new size at once, stretched, and are drawn again sharp once the zoom rests
+  function zoomPdf(z, at) {
+    if (!cmp) return;
+    z = Math.max(0.5, Math.min(4, z));
+    if (Math.abs(z - cmp.zoom) < 0.002 || !cmp.pages.length) { cmp.zoom = cmp.pages.length ? cmp.zoom : z; zoomLabel(); return; }
+    const sc = cmp.scroller, r = sc.getBoundingClientRect();
+    const ax = at ? at.x - r.left : sc.clientWidth / 2, ay = at ? at.y - r.top : sc.clientHeight / 2;
+    const fx = (sc.scrollLeft + ax) / sc.scrollWidth, fy = (sc.scrollTop + ay) / sc.scrollHeight;
+    cmp.zoom = z;
+    cmp.pane.classList.toggle('zoomed', z > 1.001);
+    sizePages();
+    sc.scrollLeft = fx * sc.scrollWidth - ax;
+    sc.scrollTop = fy * sc.scrollHeight - ay;
+    zoomLabel();
+    pageCount();
+    clearTimeout(cmp.zoomTimer);
+    cmp.zoomTimer = setTimeout(() => {
+      if (!cmp) return;
+      for (const p of cmp.pages) if (p.el.offsetTop < sc.scrollTop + sc.clientHeight + 800 && p.el.offsetTop + p.el.offsetHeight > sc.scrollTop - 800) drawPage(p);
+    }, 180);
+  }
+  function zoomLabel() { if (cmp && cmp.zl) cmp.zl.textContent = `${Math.round(cmp.zoom * 100)}%`; }
   function pageCount() {
     if (!cmp || !cmp.pages.length) return;
     const top = cmp.scroller.scrollTop + cmp.scroller.clientHeight * 0.3;
