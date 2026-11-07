@@ -240,6 +240,11 @@ html[data-font="sans"] { --text: var(--sans); }
 .u img { max-width: 100%; height: auto; }
 [data-id] { transform-origin: 0 0; }
 
+/* WebKit leaves native MathML at its intrinsic width. An inline flex box scrolls it
+   while aligning short formulas to the surrounding text. */
+.inline-math { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
+.inline-math > math { flex: none; }
+
 .paper-head { margin: 28px 0 34px; position: relative; overflow-wrap: anywhere; }
 .hd { overflow-wrap: anywhere; }
 .paper-head h1 { font-family: var(--sans); font-size: calc(34px * var(--fs)); line-height: 1.15; letter-spacing: -.025em; font-weight: 700; margin: 0 0 12px; text-wrap: balance; }

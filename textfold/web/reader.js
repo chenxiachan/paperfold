@@ -395,7 +395,11 @@
       try { return katexLib.renderToString(attrText(src[1]), { displayMode: /\bdisplay="block"/.test(attrs), throwOnError: false }); } catch { return m; }
     });
   }
-  for (const a of Object.values(A)) if (a.kind === 'math') a.html = drawTex(a.html);
+  for (const a of Object.values(A)) {
+    if (a.kind !== 'math') continue;
+    const html = drawTex(a.html);
+    a.html = html === a.html ? `<span class="inline-math">${html}</span>` : html;
+  }
   for (const b of D.blocks) { if (b.html) b.html = drawTex(b.html); if (b.title) b.title = drawTex(b.title); }   // (a box's title too)
   // a section's title keeps its MathML, which mathify reads for the formulas of its translations: drawn as it is shown
   const drawnTitles = new Map();
