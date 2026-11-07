@@ -519,8 +519,14 @@ def _rpc(args, requests, timeout=30, cwd=None):
     return got
 
 
+# Codex without its plugins and apps, which TextFold never uses: each start of a Codex with them fetches the remote
+# plugin catalog anew (Codex 0.163: megabytes a start, and a document starts one a passage, #120). As -c, not --disable:
+# a Codex that does not know one of these features ignores it, where --disable stops at once.
+CODEX_LEAN = [x for f in ("plugins", "remote_plugin", "apps") for x in ("-c", f"features.{f}=false")]
+
+
 def _codex_models(path, cmd=None):
-    got = _rpc([*(cmd or argv(path)), "app-server"], [
+    got = _rpc([*(cmd or argv(path)), *CODEX_LEAN, "app-server"], [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize",
          "params": {"clientInfo": {"name": "textfold", "title": "TextFold", "version": "0.4"}, "capabilities": None}},
         {"jsonrpc": "2.0", "method": "initialized"},
@@ -754,7 +760,7 @@ def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=N
         sf, of = Path(tmp) / "schema.json", Path(tmp) / "out.txt"
         sf.write_text(json.dumps(_strict(schema)), encoding="utf-8")
         # (tools: its web search too; the sandbox stays read-only)
-        args = [*cmd, *(["--search"] if tools else []), "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
+        args = [*cmd, *(["--search"] if tools else []), "exec", *CODEX_LEAN, "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
                 "-m", model, "--output-schema", str(sf), "-o", str(of)]
         # off is "none" (gpt-5.5 takes it, and refuses "minimal"); a model that refuses "none" runs at "low"
         for level in (["none", "low"] if effort == "off" else [effort]):
