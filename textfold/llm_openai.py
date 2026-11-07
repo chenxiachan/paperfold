@@ -22,6 +22,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import __version__
+
+# every request to a provider says it is TextFold's (its /models too: providers.probe): a front such as Cloudflare's
+# refuses Python's own "Python-urllib/3.x" (error 1010, as Atlas Cloud's does, #115)
+UA = {"User-Agent": f"TextFold/{__version__}"}
 _WORKED = {}   # (base, model, level) -> index of the request shape that was accepted
 WAITS = (5, 15, 30, 45)   # seconds before asking again when rate-limited (free models: 20 requests a minute)
 
@@ -43,7 +48,7 @@ def auth(base, api_key):
 
 
 def _post(url, body, headers, timeout):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={**UA, **headers})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         kind = r.headers.get("Content-Type") or ""
         raw = r.read()

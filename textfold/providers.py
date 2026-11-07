@@ -157,7 +157,7 @@ def ollama_models(base="http://localhost:11434", strict=False):
 
 def probe(base, api_key, timeout=15):
     """GET {base}/models (ThoughtDAG server.mjs:799-824): [{id, created?, vision?, contextLength?}]."""
-    req = urllib.request.Request(f"{base.rstrip('/')}/models", headers=llm_openai.auth(base, api_key))
+    req = urllib.request.Request(f"{base.rstrip('/')}/models", headers={**llm_openai.UA, **llm_openai.auth(base, api_key)})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             body = json.loads(r.read())
