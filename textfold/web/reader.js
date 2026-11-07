@@ -212,8 +212,24 @@
     return out;
   }
 
-  // A citation can list many works; a link can be an unbroken URL. Both may wrap within the column.
-  const atCls = (t) => (t.a ? (A[t.a].wrap ??= A[t.a].kind === 'ref' || A[t.a].html.includes('ltx_cite')) ? ' at wrap' : ' at' : t.x ? ' at' : '');
+  // A citation joins the paragraph's line boxes. Other links can still wrap inside their own box.
+  const atCls = (t) => {
+    if (!t.a) return t.x ? ' at' : '';
+    const a = A[t.a];
+    if (a.kind === 'cite') return ' at wrap citation';
+    return a.kind === 'ref' ? ' at wrap' : ' at';
+  };
+  // The animation can draw a paragraph at its measured width when a citation spans multiple lines.
+  function splitCitation(tx) {
+    if (!tx) return false;
+    for (const el of tx.querySelectorAll('.tk.citation')) {
+      const rects = el.getClientRects(), first = rects[0];
+      if (first && [...rects].some((r) => Math.abs(r.top - first.top) > first.height / 2)) {
+        return tx.getClientRects().length === 1;
+      }
+    }
+    return false;
+  }
   // a piece's highlight (pieces(): hl): marked at Full or Brief, the same more lightly (another language), marked at
   // Key, marked at Takeaway
   const HL = ['', ' hl', ' hl hls', ' hl hlk', ' hl hlt'];
@@ -799,7 +815,8 @@
     const styles = new Map();   // one computed style per (container, class): pieces of a unit share their looks
     for (const box of docEl.querySelectorAll(BOXES)) {
       if (!near(visibleRect(box), M)) continue;
-      const items = box.matches('[data-id]') ? [box] : box.querySelectorAll('[data-id]');
+      const whole = splitCitation(box._tx) ? box._tx : null;
+      const items = whole ? [whole] : box.matches('[data-id]') ? [box] : box.querySelectorAll('[data-id]');
       for (const el of items) {
         const r = visibleRect(el);
         if (!near(r, M)) continue;
@@ -810,7 +827,14 @@
           st = { font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} / ${cs.lineHeight} ${cs.fontFamily}`, color: cs.color, bg: cs.backgroundColor };
           styles.set(key, st);
         }
-        snap.set(el, { r, ...st });
+        const record = { r, ...st };
+        if (whole) {
+          const copy = el.cloneNode(true);
+          copy.dataset.l = box.dataset.l;
+          for (const child of copy.querySelectorAll('[id]')) child.removeAttribute('id');
+          record.copy = copy;
+        }
+        snap.set(el, record);
       }
     }
     return snap;
@@ -842,7 +866,7 @@
     const after = new Map(), arrived = [], anims = [];
     for (const box of docEl.querySelectorAll(BOXES)) {
       if (!near(visibleRect(box), M)) continue;
-      if (box._mode === 'txt') { arrived.push(box._tx); continue; }   // drawn as text: it fades in whole
+      if (box._mode === 'txt' || splitCitation(box._tx)) { arrived.push(box._tx); continue; }   // drawn as text: it fades in whole
       const items = box.matches('[data-id]') ? [box] : box.querySelectorAll('[data-id]');
       for (const el of items) { const r = visibleRect(el); if (near(r, M)) after.set(el, r); }
     }
@@ -877,7 +901,7 @@
     for (const [el, a] of before) {
       if (after.has(el)) continue;   // (no rect read here: it would force a layout after the animations start)
       if (!near(a.r, 0) || ghosts > 600) continue;
-      const g = el.cloneNode(true);
+      const g = a.copy || el.cloneNode(true);
       g.removeAttribute('data-id');
       Object.assign(g.style, { left: `${a.r.left}px`, top: `${a.r.top}px`, width: `${a.r.width}px`, height: `${a.r.height}px`, font: a.font, color: a.color, backgroundColor: a.bg, transform: 'none', overflow: 'hidden' });
       frag.append(g); ghosts++;
@@ -1216,7 +1240,12 @@
       if (!inRange(r)) continue;
       U.set(uid, rectOf(r));
       deco(u, `d:u:${uid}`, uid, `u|${u.className}`);
-      for (const el of u.querySelectorAll('[data-id]')) piece(el, el.dataset.id, uid, el.classList.contains('dot') ? 'b' : 't', u.className);
+      const tx = u._tx;
+      const whole = splitCitation(tx);
+      if (whole) piece(tx, `cite:${L}:${uid}`, uid, 'b', u.className);
+      for (const el of u.querySelectorAll('[data-id]')) {
+        if (!whole || !tx.contains(el)) piece(el, el.dataset.id, uid, el.classList.contains('dot') ? 'b' : 't', u.className);
+      }
     }
     for (const sec of root.querySelectorAll('section.chunk')) deco(sec, `d:c:${sec.id}`, `h:${sec.id}`, `c|${sec.className}`);
     for (const bx of root.querySelectorAll('.box')) { const f = bx.querySelector('.u'); deco(bx, `d:b:${bx.id}`, f && f.dataset.u, `b|${bx.className}`); }
@@ -1262,6 +1291,7 @@
         el.style.cssText = `${p.st.css};width:${p.w}px;height:${p.h}px;opacity:0`;
       } else {
         el = p.take ? p.el : p.el.cloneNode(true);
+        if (el.classList.contains('tx')) el.dataset.l = p.el.closest('.u').dataset.l;
         el.removeAttribute('data-id'); el.removeAttribute('id');
         for (const x of el.querySelectorAll('[id]')) x.removeAttribute('id');
         el.classList.remove('flash');
