@@ -674,6 +674,24 @@ describe("tool rows fold at the level", () => {
 		expect(draw()).toEqual(["", " a", " b", " c", " d", ""]);
 	});
 
+	test("an error keeps what Points keeps at Outline and Gist", async () => {
+		const textfold = await load();
+		const mk = makePi();
+		textfold(mk.pi);
+		const { base } = builtIn();
+		const wrapped = mk.toolRenderers[0]!("bash", () => base) as typeof base & {
+			renderResult: (r: unknown, o: { expanded: boolean }, t: unknown, c: any) => Comp;
+		};
+		const draw = (isError: boolean) =>
+			wrapped.renderResult({}, { expanded: false }, theme, { state: {}, lastComponent: undefined, isPartial: false, isError }).render(80);
+
+		await setLevel(mk, 5);
+		expect(draw(true)).toEqual([" a", " b", "… (2 more lines · Alt+1)"]);
+		expect(draw(false)).toEqual([]);
+		await setLevel(mk, 4);
+		expect(draw(true)).toEqual([" a", " b", "… (2 more lines · Alt+1)"]);
+	});
+
 	test("the call line stays Pi's, and only the result renderer is wrapped", async () => {
 		const textfold = await load();
 		const mk = makePi();

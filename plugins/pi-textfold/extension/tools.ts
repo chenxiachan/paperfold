@@ -10,17 +10,19 @@
  *
  * The rule is the fold's rule: remove, never invent. Full and Brief are Pi's own
  * row; Points keeps the first lines and names the rest; Outline and Gist keep the
- * call line and no result body, so the turn still reads as what happened.
+ * call line and no result body, so the turn still reads as what happened. A result
+ * that is an error keeps what Points keeps at Outline and Gist too: a failed step is
+ * what a reader at Gist most needs to see.
  */
 
 /** Result lines kept at a level: Pi's own row at Full and Brief, two at Points,
  *  none at Outline and Gist. An unknown level keeps everything: a corrupt level
  *  must not hide output. */
 export function toolResultKeep(level: number): number {
-	if (level <= 2) return 5; // Pi's own preview (bash: 5, read: 10) is Brief already
+	if (level === 1 || level === 2) return 5; // Pi's own preview (bash: 5, read: 10) is Brief already
 	if (level === 3) return 2;
 	if (level === 4 || level === 5) return 0;
-	return 5;
+	return Infinity;
 }
 
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -29,14 +31,15 @@ const ANSI = /\x1b\[[0-9;]*m/g;
  * The result lines to draw at `level`.
  *
  * Levels 1 and 2 return the very array Pi's renderer produced, so the row is
- * byte-identical to Pi's own. Above that, the blank lines a component pads with
- * are dropped and only non-empty lines count: hiding output must not leave the
- * height the output took. Whatever is left out is named in one marker line, the
- * same "… (N more lines)" the fold uses.
+ * byte-identical to Pi's own; so does anything that is not a level (6, NaN, 2.5).
+ * At 3, 4 and 5 the blank lines a component pads with are dropped and only
+ * non-empty lines count: hiding output must not leave the height the output took.
+ * Whatever is left out is named in one marker line, the same "… (N more lines)"
+ * the fold uses. An error (`isError`) is never folded below Points.
  */
-export function foldToolLines(lines: readonly string[], level: number): string[] {
-	if (level <= 2) return lines as string[];
-	const keep = toolResultKeep(level);
+export function foldToolLines(lines: readonly string[], level: number, isError = false): string[] {
+	if (level !== 3 && level !== 4 && level !== 5) return lines as string[];
+	const keep = isError ? Math.max(toolResultKeep(level), toolResultKeep(3)) : toolResultKeep(level);
 	const content = lines.filter((line) => line.replace(ANSI, "").trim() !== "");
 	if (keep === 0) return [];
 	const shown = content.slice(0, keep);

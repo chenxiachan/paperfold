@@ -124,7 +124,7 @@ export default function textfoldFold(pi: ExtensionAPI) {
 					render: (width: number): string[] => {
 						const lines = inner.render(width);
 						if (expanded) return lines;
-						const folded = foldToolLines(lines, level);
+						const folded = foldToolLines(lines, level, ctx.isError === true);
 						if (folded.length !== lines.length) {
 							// One line per row shape, not per frame: the row re-renders often.
 							const key = `${toolName}:${level}:${folded.length}:${lines.length}`;

@@ -56,8 +56,8 @@ Consequences for the design:
 A new pure module `extension/tools.ts`:
 
 ```
-toolResultKeep(level) -> 5 for Full and Brief, 2 for Points, 0 for Outline and Gist
-foldToolLines(lines, level) -> string[]   // non-empty lines only, plus "… (N more lines)"
+toolResultKeep(level) -> 5 for Full and Brief, 2 for Points, 0 for Outline and Gist, everything otherwise
+foldToolLines(lines, level, isError) -> string[]   // non-empty lines only, plus "… (N more lines)"; an error keeps Points' two
 ```
 
 - **Full (1) and Brief (2):** Pi's own row, untouched. Brief is what Pi already does — a preview
