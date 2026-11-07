@@ -7,11 +7,13 @@
 // Run from the repository without a payload (`npm start`), it uses the python3 on the PATH (python on Windows) and the
 // repository itself. textfold:// links open a document of the library in the window (links.js).
 const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, session, shell } = require('electron');
-const { spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const net = require('net');
 const os = require('os');
 const path = require('path');
+const { Transform } = require('stream');
+const { StringDecoder } = require('string_decoder');
 const links = require('./links');
 
 const WIN = process.platform === 'win32';
@@ -131,6 +133,44 @@ async function waitReady(port, tries = 160) {
   return false;
 }
 
+// the log's lines, each with when it was written (the computer's time, to the second): a report then says when
+// what it shows happened, and which start of the app it was
+const stamp = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+function stamped() {
+  const text = new StringDecoder('utf8');   // (a character split between two chunks is kept whole)
+  let rest = '';
+  const lines = (s) => s.map((l) => `${stamp()} ${l}\n`).join('');
+  return new Transform({
+    transform(chunk, _enc, done) {
+      const all = (rest + text.write(chunk)).split('\n');
+      rest = all.pop();
+      done(null, lines(all));
+    },
+    flush(done) {
+      const last = rest + text.end();
+      done(null, last ? lines([last]) : '');
+    },
+  });
+}
+
+// The server stopped before the installer runs, on Windows with every process it started: the installer replaces
+// the bundled Python, and a file a process still has open cannot be replaced. Resolved once it has exited (or after
+// ten seconds, so that an update is never held up by it).
+function stopServer() {
+  const p = server;
+  if (!p || p.exitCode !== null || p.signalCode !== null) return Promise.resolve();   // (gone already)
+  return new Promise((resolve) => {
+    const done = setTimeout(resolve, 10000);
+    p.once('exit', () => { clearTimeout(done); resolve(); });
+    if (WIN) execFile('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true }, (err) => { if (err) p.kill(); });
+    else p.kill();
+  });
+}
+
 function startServer(port) {
   // A GUI app starts with a bare PATH: the usual install places are added so that the server finds node and npx
   // (the ChatGPT bridge) at once; on a Mac it also asks the login shell for the agents' places (textfold/agents.py).
@@ -152,10 +192,11 @@ function startServer(port) {
     PYTHONUTF8: '1',
   };
   const log = fs.createWriteStream(path.join(app.getPath('userData'), 'server.log'), { flags: 'a' });
+  log.write(`${stamp()} TextFold ${app.getVersion()} starts (${process.platform} ${process.arch})\n`);
   // (windowsHide: no console window beside the app's own)
   server = spawn(PYTHON, ['-s', '-u', '-m', 'textfold', 'serve', '--port', String(port)], { cwd: CODE, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-  server.stdout.pipe(log);
-  server.stderr.pipe(log);
+  server.stdout.pipe(stamped()).pipe(log, { end: false });
+  server.stderr.pipe(stamped()).pipe(log, { end: false });
   server.stdout.on('data', heard);
   server.on('exit', (code) => { server = null; if (code && win && !win.isDestroyed()) win.webContents.send?.('server-exit', code); });
   registerHost(env, log);
@@ -169,8 +210,8 @@ function registerHost(env, log) {
   if (!app.isPackaged && !process.env.TEXTFOLD_REGISTER_HOST) return;
   if (process.execPath.includes('/AppTranslocation/')) return;   // (a Mac's copy of an app not yet moved out of Downloads: gone when it quits)
   const p = spawn(PYTHON, ['-s', '-m', 'textfold', 'capture', 'install', '--app'], { cwd: CODE, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-  p.stdout.pipe(log, { end: false });
-  p.stderr.pipe(log, { end: false });
+  p.stdout.pipe(stamped()).pipe(log, { end: false });
+  p.stderr.pipe(stamped()).pipe(log, { end: false });
   p.on('error', () => {});   // (said in the log; the app itself goes on)
 }
 
@@ -332,9 +373,9 @@ function setupUpdates() {
       tell({ kind: 'failed', version: update.version });
     });
   });
-  ipcMain.handle('update:install', () => {
+  ipcMain.handle('update:install', async () => {
     if (!update || update.kind !== 'ready') return;
-    if (server) server.kill();   // (Windows: the installer replaces the bundled Python, which must not be running)
+    await stopServer();   // (Windows: the installer replaces the bundled Python, which must not be running)
     updater.quitAndInstall(true, true);   // on Windows silently, and the new version opens
   });
 }
