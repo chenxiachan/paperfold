@@ -230,21 +230,25 @@ html[data-font="sans"] { --text: var(--sans); }
 .doc[data-level="0"] { max-width: 1280px; }
 .tk { display: inline-block; max-width: 100%; overflow-wrap: anywhere; transform-origin: 0 0; white-space: pre-wrap; }
 .tk.at { white-space: nowrap; }
-/* MathML and KaTeX scroll inside themselves; other unbreakable HTML needs an outer scroll box. */
-.tk.at:not(.wrap):not(:has(math, .katex)) { display: inline-flex; overflow-x: auto; align-items: baseline; }
+/* MathML and KaTeX scroll inside themselves; other unbreakable HTML needs an outer scroll box. Each of these boxes in a
+   line scrolls across and never up and down: overflow-x alone makes overflow-y auto as well, and a formula a few pixels
+   taller than its box then drew a scrollbar beside it wherever scrollbars take room, as on Windows and Linux (#117). */
+.tk.at:not(.wrap):not(:has(math, .katex)) { display: inline-flex; overflow-x: auto; overflow-y: hidden; align-items: baseline; }
 .tk.at.wrap { white-space: normal; }
 .wg { display: inline-block; max-width: 100%; white-space: normal; }
 .tk.at.citation, .wg:has(> .tk.citation) { display: inline; }
 /* An unusually long inline formula scrolls as a formula too. Scrolling an outer inline-block would move the
    baseline of every ordinary formula; keep the scroll box on the MathML (and its inline zoom copy). */
-:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; }
-:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
+:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+/* (KaTeX ends a sub- or superscript in a 2 px strut past its own box, katex.css .vlist-s against .vlist-t2's -2px: room
+   for it, or each x_i would scroll by 2 px) */
+:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden; align-items: baseline; padding-right: 2px; }
 .u img { max-width: 100%; height: auto; }
 [data-id] { transform-origin: 0 0; }
 
 /* WebKit leaves native MathML at its intrinsic width. An inline flex box scrolls it
    while aligning short formulas to the surrounding text. */
-.inline-math { display: inline-flex; max-width: 100%; overflow-x: auto; align-items: baseline; }
+.inline-math { display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden; align-items: baseline; }
 .inline-math > math { flex: none; }
 
 .paper-head { margin: 28px 0 34px; position: relative; overflow-wrap: anywhere; }
