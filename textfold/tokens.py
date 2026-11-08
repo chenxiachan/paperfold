@@ -124,10 +124,23 @@ def lcs_pairs(a, b):
     n, m = len(a), len(b)
     if not n or not m:
         return []
-    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    # dp[i][j] is the LCS length of a[i:] and b[j:]; each row is built right to left from the row below it
+    below = [0] * (m + 1)
+    dp = [below] * (n + 1)
     for i in range(n - 1, -1, -1):
-        for j in range(m - 1, -1, -1):
-            dp[i][j] = dp[i + 1][j + 1] + 1 if a[i] and a[i] == b[j] else max(dp[i + 1][j], dp[i][j + 1])
+        word = a[i]
+        if not word:   # a row whose word never matches equals the row below it
+            dp[i] = below
+            continue
+        row, right = [0], 0
+        for other, down, diag in zip(reversed(b), reversed(below[:m]), reversed(below)):
+            if word == other:
+                right = diag + 1
+            elif down > right:
+                right = down
+            row.append(right)
+        row.reverse()
+        dp[i] = below = row
     out, i, j = [], 0, 0
     while i < n and j < m:
         if a[i] and a[i] == b[j]:
