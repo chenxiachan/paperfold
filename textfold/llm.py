@@ -144,9 +144,7 @@ def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, syste
     except Exception as e:
         # A reasoning level is a request, never a condition: whatever went wrong with it set (a flag or field an API no
         # longer takes, a level a model does not have), the call is made once more the model's own way.
-        fixed_effort = (spec.get("runtime") == "agy" or spec.get("protocol") == "agy") and bool(
-            re.search(r"-(low|medium|high|xhigh|max)$", spec.get("model") or ""))
-        if not effort or fixed_effort or isinstance(e, subprocess.TimeoutExpired):
+        if not effort:
             raise
         note = f"reasoning level {effort} dropped: {str(e)[:200]}"
         out, cost = _once(prompt, schema, {**spec, "effort": None}, timeout, system)
@@ -193,7 +191,7 @@ def _once(prompt, schema, spec, timeout, system):
                 raise RuntimeError(f"{spec['agent']}: {spec['command'].split()[0]} was not found on this computer")
             if spec["protocol"] == "claude-code":
                 return _claude(prompt, schema, spec["model"], effort, timeout, system, tools, cmd=found[0])
-            run = agents.run_codex if spec["protocol"] == "codex" else (agents.run_agy if spec["protocol"] == "agy" else agents.run_pi)
+            run = {"codex": agents.run_codex, "agy": agents.run_agy}.get(spec["protocol"], agents.run_pi)
             return run(spec["model"], prompt, schema, system, effort, timeout, tools, cmd=found[0])
         if spec["runtime"] == "claude-code":
             return _claude(prompt, schema, spec["model"], effort, timeout, system, tools)

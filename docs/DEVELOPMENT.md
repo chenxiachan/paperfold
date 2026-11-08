@@ -76,8 +76,8 @@ takes the gallery from there. The repository's own Pages keeps its old address, 
 Models (⚙ Model & API), ported from ThoughtDAG's model access:
 
 - **Agents on this computer**, found at startup (and on Rescan) on PATH, the login shell's PATH, the usual install
-  directories and the node version managers. Claude Code, Codex, Pi and CodeBuddy run generations, each listing its own models
-  (Pi brings whatever providers it is configured with; CodeBuddy, WorkBuddy's copy of it first, the account's); Gemini CLI, Qwen Code, opencode, Cursor Agent, Kimi CLI, Amp,
+  directories and the node version managers. Claude Code, Codex, Pi, CodeBuddy and Antigravity run generations, each listing its own models
+  (Pi brings whatever providers it is configured with; CodeBuddy, WorkBuddy's copy of it first, the account's; Antigravity, `agy models`); Gemini CLI, Qwen Code, opencode, Cursor Agent, Kimi CLI, Amp,
   Goose, Crush, Droid, Copilot CLI, iFlow and Aider are reported when present. Claude Code is called without the
   user's settings and CLAUDE.md (`--setting-sources project,local` in a scratch folder; again with them if that fails
   to sign in). CodeBuddy is called the same way, but with its user settings (without them it has no sign-in and
@@ -87,7 +87,10 @@ Models (⚙ Model & API), ported from ThoughtDAG's model access:
   so it is looked for widely and checked (`agents.locate_codebuddy`): WorkBuddy where it runs (the process list), its
   usual places, where Windows' installer recorded it or a Mac's Spotlight knows it; CodeBuddy inside it by name; the
   first copy that answers `--version` (on the app's program, else on node), else a codebuddy installed on its own;
-  CodeBuddy's own sign-in when WorkBuddy's settings have none.
+  CodeBuddy's own sign-in when WorkBuddy's settings have none. Antigravity (Google's `agy`, #81) runs an agent of
+  TextFold's own, written into the scratch folder for the call (our system prompt, the `finish` tool alone, no MCP
+  servers, rules or skills of the user's), with `--output-format stream-json`: the answer is the `finish` call's or the
+  result's, and the call ends once it is in, since agy goes on with work of its own after it (`agents.run`'s `done`).
 - **Two easy ways in** (`textfold/bridges.py`, as in ThoughtDAG):
   - **ChatGPT plan, local bridge**: openai-oauth (npm) serves the plan as an OpenAI-compatible endpoint on
     127.0.0.1:10531, signed in with Codex's login (or a browser sign-in). Running, it joins the providers on its own
@@ -183,7 +186,8 @@ is on: in a passage's question and its follow-ups, and in **Ask the whole text**
 text is opened, shown only where questions go to an agent: `app.js` askAgent; `/api/ask` `tools`, `models.ask_spec`).
 Then the agent looks it up on the web with its own tools, and nothing else (`agents.py`): Claude Code with
 `--tools WebSearch,WebFetch`, allowed without asking and no MCP server; CodeBuddy the same, with its StructuredOutput;
-Codex with `--search` in its read-only sandbox; Pi with `--no-builtin-tools`, its extensions' tools alone. None of them
+Codex with `--search` in its read-only sandbox; Pi with `--no-builtin-tools`, its extensions' tools alone; Antigravity
+with `search_web` and `read_url_content` beside `finish`, in its sandbox. None of them
 changes a file (Claude Code, CodeBuddy and Pi read none and run no command either; Codex may read, in its sandbox); each
 keeps its own system prompt, ours appended. The prompt adds that what
 comes from outside the paper ends with [[?]], each page drawn on given as a Markdown link (the reader draws links in

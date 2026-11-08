@@ -2,24 +2,28 @@
 
 The server scans for them at startup (and on demand): every mainstream agent CLI is looked for on PATH,
 on the login shell's PATH, in the usual install directories and under the node version managers, as
-ThoughtDAG's where.cjs does. Four can run a generation, the three ThoughtDAG drives and CodeBuddy:
+ThoughtDAG's where.cjs does. Five can run a generation, the three ThoughtDAG drives, CodeBuddy and Antigravity:
 
   claude-code  claude -p, structured output by --json-schema        models: fable, opus, sonnet, haiku
   codex        codex exec, structured output by --output-schema      models: `codex app-server` model/list
   pi           pi -p --mode json, JSON asked for in the prompt       models: `pi --mode rpc` get_available_models
   codebuddy    codebuddy -p, structured output by --json-schema      models: the account's, as its --help lists them
+  agy          agy --agent, the answer its finish tool's (stream-json) models: `agy models`
 
 CodeBuddy is Tencent's CLI, and WorkBuddy carries a copy of it (cli/bin/codebuddy in the app), which runs on the app's
 own Electron and the WorkBuddy sign-in, as WorkBuddy runs it: no node needed, the reader's WorkBuddy models.
+Antigravity is Google's CLI (agy), on the reader's Google sign-in.
 
 The others are reported when found, but not driven yet. A command the reader adds in the settings (a custom agent:
 `mirasim claude`, which runs Claude Code under another name) is run by the driver of the one it speaks as. A model id is ThoughtDAG's:
-`claude/claude-code/opus`, `codex/codex/<model>`, `pi/<provider>/<model>`; CodeBuddy's `codebuddy/codebuddy/<model>`.
+`claude/claude-code/opus`, `codex/codex/<model>`, `pi/<provider>/<model>`; CodeBuddy's `codebuddy/codebuddy/<model>`,
+Antigravity's `agy/<model>`.
 Agents run here as one-shot text generators: no tools, no session, a scratch working directory. A question about a
 text can be looked up on the web (tools=True: the switch beside a question; models.ask_spec): the agent's own web
 tools, its own system prompt with ours after it, and nothing that changes a file (Claude Code and CodeBuddy: WebSearch
 and WebFetch alone, no MCP server; Pi: its extensions' tools, none of its own; Codex: its web search, in the read-only
-sandbox it always runs in, where it may read but writes nothing). Still no session, and the scratch directory to start in.
+sandbox it always runs in, where it may read but writes nothing; Antigravity: its web search and page reading, in its
+sandbox). Still no session, and the scratch directory to start in.
 """
 import glob
 import json
@@ -264,17 +268,20 @@ def child_env():
     return env
 
 
-def run(args, *, stop=None, timeout=None, input=None, **kw):
+def run(args, *, stop=None, timeout=None, input=None, done=None, **kw):
     """subprocess.run for an agent's call, which the reader's Stop ends at once: stop (a threading.Event; else the one
     this thread's calls are made under, llm.stoppable) set while it runs ends the call's whole process tree (an agent
     starts its own: node, a sandbox) and raises llm.Stopped. What that call had written is lost; the calls already
     answered stay in the cache. With no stop at all, subprocess.run as it is. (After #70, Shuhao Li's: the input from
     a file and the process watched, the tree its own process group; on Windows taskkill /T, as the desktop app ends
-    the server.)"""
+    the server.) done: asked as it runs (its output in a file, which done reads); once the answer is in, the call ends
+    there, its tree with it, and returns as if it had ended: an agent that goes on with work of its own once it has
+    answered (Antigravity names the conversation)."""
     from .llm import Stopped, stop_now
     stop = stop or stop_now()
-    if stop is None:
+    if stop is None and done is None:
         return subprocess.run(args, input=input, timeout=timeout, **kw)
+    stop = stop or threading.Event()
     if stop.is_set():
         raise Stopped()
     if kw.pop("capture_output", False):
@@ -293,6 +300,9 @@ def run(args, *, stop=None, timeout=None, input=None, **kw):
                 except subprocess.TimeoutExpired:
                     if stop.is_set():
                         raise Stopped()
+                    if done is not None and done():
+                        _end_tree(p)
+                        return subprocess.CompletedProcess(args, p.returncode, None, None)
                     if deadline is not None and time.monotonic() > deadline:
                         raise subprocess.TimeoutExpired(args, timeout)
         except BaseException:
@@ -632,27 +642,27 @@ def _codebuddy_models(path):
              "model": n, "efforts": efforts, "defaultEffort": None} for n in names]
 
 
+AGY_SIGNED_OUT = re.compile(r"(?i)not logged in|sign in|authenticate|unauthenticated|login")
+AGY_OFFLINE = re.compile(r"(?i)timeout|timed out|connect|network|unreachable|eof|proxy|reset by peer")
+
+
+def _agy_error(said, otherwise):
+    """What agy said, as the reader can act on it: not signed in, or Google out of reach (in mainland China, a proxy)."""
+    if AGY_SIGNED_OUT.search(said):
+        return RuntimeError("Antigravity CLI is not signed in: run agy in a terminal to sign in (Antigravity CLI 没有登录：请在终端运行 agy 登录)")
+    if AGY_OFFLINE.search(said):
+        return RuntimeError(f"Antigravity CLI could not reach Google (a proxy is needed in mainland China / 国内需开启代理连接 Google): {said[:200]}")
+    return RuntimeError(f"{otherwise}: {said[:800]}" if said else otherwise)
+
+
 def _agy_models(path, cmd=None):
+    """The account's models, as `agy models` lists them: an id and its name, a tab between."""
     r = _run([*(cmd or argv(path)), "models"], 20, env_for(path))
-    said = (r.stderr or r.stdout).strip()
-    if r.returncode != 0:
-        if re.search(r"(?i)not logged in|sign in|authenticate|unauthenticated|login", said):
-            raise RuntimeError("Antigravity CLI is not signed in: run agy in a terminal to sign in (Antigravity CLI 没有登录：请在终端运行 agy 登录)")
-        if re.search(r"(?i)timeout|timed out|connect|network|unreachable|eof|proxy|reset by peer", said):
-            raise RuntimeError(f"Antigravity CLI could not reach Google (a proxy is needed in mainland China / 国内需开启代理连接 Google): {said[:200]}")
-        raise RuntimeError(said[:200] or f"agy models exited {r.returncode}")
-    out = []
-    for line in r.stdout.splitlines():
-        if "\t" not in line:
-            continue
-        mid, name = [x.strip() for x in line.split("\t", 1)]
-        if mid:
-            out.append({"id": f"agy/{mid}", "name": f"Antigravity · {name or mid}", "runtime": "agy",
-                        "model": mid, "efforts": [], "defaultEffort": None})
-    if not out:
-        if re.search(r"(?i)not logged in|sign in|authenticate|unauthenticated|login", said):
-            raise RuntimeError("Antigravity CLI is not signed in: run agy in a terminal to sign in (Antigravity CLI 没有登录：请在终端运行 agy 登录)")
-        raise RuntimeError(said[:200] or "agy models returned no models")
+    rows = [[x.strip() for x in line.split("\t", 1)] for line in r.stdout.splitlines() if "\t" in line]
+    out = [{"id": f"agy/{mid}", "name": f"Antigravity · {name or mid}", "runtime": "agy", "model": mid, "efforts": [], "defaultEffort": None}
+           for mid, name in rows if mid]
+    if r.returncode or not out:
+        raise _agy_error((r.stderr or r.stdout).strip(), f"agy models exited {r.returncode}" if r.returncode else "agy models listed none")
     return out
 
 
@@ -962,180 +972,77 @@ def _pi_once(args, body, schema, timeout):
         raise ValueError(str(e))
 
 
-def _agy_transcript_finish(cid):
-    """Fallback: read the `finish` tool call's arguments from Antigravity's session transcript on disk when the CLI
-    already completed the tool call but hung in background tasks (such as title generation) before printing `result`."""
-    if not cid:
-        return None
-    for sub in ("antigravity-cli", "antigravity"):
-        tf = HOME / ".gemini" / sub / "brain" / cid / ".system_generated" / "logs" / "transcript_full.jsonl"
-        if not tf.is_file():
-            continue
-        try:
-            lines = tf.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            continue
-        for line in reversed(lines):
-            try:
-                d = json.loads(line)
-            except ValueError:
-                continue
-            for tc in reversed(d.get("tool_calls") or []):
-                if isinstance(tc, dict) and tc.get("name") == "finish" and isinstance(tc.get("args"), dict):
-                    return tc["args"]
-    return None
-
-
-def _agy_once(cmd, model, body, schema, agent_md, effort, timeout):
-    err = tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace")
-    cid, res, finish_out, finished_at = None, None, None, None
-    text_chunks, raw_lines = [], []
-    timed_out, token_cutoffs = False, 0
-    code = None
-    try:
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:   # a scratch cwd: isolated agent, no MCP, no project files
-            sf = Path(tmp) / "schema.json"
-            sf.write_text(json.dumps(schema), encoding="utf-8")
-            ag_dir = Path(tmp) / ".agents" / "agents"
-            ag_dir.mkdir(parents=True, exist_ok=True)
-            (ag_dir / "textfold.md").write_text(agent_md, encoding="utf-8")
-            args = [*cmd, *([] if "--agent" in cmd else ["--agent", "textfold"]),
-                    "--output-format", "stream-json", "--disable-slash-commands", "--sandbox",
-                    "--model", model, "--json-schema", str(sf)]
-            if effort and not re.search(r"-(low|medium|high|xhigh|max)$", model):
-                args += ["--effort", "low" if effort == "off" else effort]
-            p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err,
-                                 text=True, encoding="utf-8", errors="replace", env=child_env(), cwd=tmp)
-            lines = queue.Queue()
-            threading.Thread(target=lambda: [*map(lines.put, p.stdout), lines.put(None)], daemon=True).start()
-            try:
-                p.stdin.write(body)
-                p.stdin.close()
-                t0 = time.time()
-                last_disk = t0
-                while time.time() - t0 < timeout:
-                    try:
-                        line = lines.get(timeout=0.5)
-                    except queue.Empty:
-                        if finished_at is not None and time.time() - finished_at >= 5.0:
-                            break
-                        if cid and finished_at is None and time.time() - last_disk >= 2.0:
-                            last_disk = time.time()
-                            disk_out = _agy_transcript_finish(cid)
-                            if isinstance(disk_out, dict):
-                                finish_out = disk_out
-                                finished_at = time.time()
-                        continue
-                    if line is None:
-                        break
-                    raw_lines.append(line)
-                    if "exceeded the output token limit" in line:
-                        token_cutoffs += 1
-                        if token_cutoffs >= 2 and re.search(r"-(medium|high|xhigh|max)$", model):
-                            break
-                    try:
-                        d = json.loads(line)
-                    except ValueError:
-                        continue
-                    if not isinstance(d, dict):
-                        continue
-                    if d.get("conversation_id") and not cid:
-                        cid = d["conversation_id"]
-                    ev = d.get("event")
-                    if ev == "step_update":
-                        su = d.get("step_update") or {}
-                        if su.get("conversation_id") and not cid:
-                            cid = su["conversation_id"]
-                        if su.get("step_type") == "agent_response" and su.get("text_delta"):
-                            text_chunks.append(su["text_delta"])
-                        if su.get("tool_name") == "finish":
-                            params = (su.get("tool_info") or {}).get("parameters")
-                            if isinstance(params, dict):
-                                finish_out = params
-                                finished_at = finished_at or time.time()
-                        if su.get("step_type") == "finish" and su.get("state") == "DONE":
-                            finished_at = finished_at or time.time()
-                    elif ev == "result":
-                        res = d.get("result") if isinstance(d.get("result"), dict) else d
-                        break
-                    elif "status" in d and ("response" in d or "structured_output" in d or "error" in d):
-                        res = d
-                        break
-                else:
-                    timed_out = True
-            finally:
-                code = p.poll()
-                if code is None:
-                    try:
-                        code = p.wait(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        if WIN:
-                            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
-                        p.kill()
-                        code = p.poll()
-                if p.stdout:
-                    p.stdout.close()
-        err.seek(0)
-        err_text = err.read()
-    finally:
-        err.close()
-    out = (res.get("structured_output") if isinstance(res, dict) else None) or finish_out or _agy_transcript_finish(cid)
-    return out, res, text_chunks, raw_lines, err_text, code, timed_out, token_cutoffs, args
+# ── Antigravity ───────────────────────────────────────────────────────
+AGY_TIER = re.compile(r"-(low|medium|high|xhigh|max)$")   # (a model whose name sets its reasoning: gemini-3.8-flash-high)
 
 
 def run_agy(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
-    """(cmd: the command that starts it, a custom agent's; else the Antigravity CLI found here)"""
+    """Google's Antigravity CLI on the reader's sign-in (#81; Ekuboh's #98): an agent of our own for the call, written
+    into the scratch directory it runs in, with our system prompt and the finish tool alone (tools: its web search and
+    page reading too), and none of the reader's MCP servers, rules or skills; its events as stream-json. The answer is
+    the finish call's, or the result's; once it is in, the call ends there, since agy goes on with work of its own.
+    (cmd: the command that starts it, a custom agent's; else the one found here)"""
     if cmd is None:
         path = path_of("agy")
         if not path:
             raise RuntimeError("Antigravity CLI (agy) was not found on this computer")
         cmd = argv(path)
     allowed = ["finish", "search_web", "read_url_content"] if tools else ["finish"]
-    sys_body = (system or "").replace("answer with JSON only", "answer by calling the finish tool with the JSON object only")
-    agent_md = (
-        "---\n"
-        "name: textfold\n"
-        "description: TextFold structured output generator\n"
-        "tools:\n" + "".join(f"  - {t}\n" for t in allowed) +
-        "inheritMcp: false\n"
-        "inheritCustomizations: false\n"
-        "---\n"
-        f"{sys_body}\n\n"
-        "Always submit your final JSON response by calling the `finish` tool directly. Never output raw JSON as plain text. "
-        "Keep your thinking brief (do NOT draft or list individual units in your thinking block, or you will exceed the output token limit).\n"
-    )
-    if tools:
-        tail = ("\n\nIMPORTANT: Do NOT call run_command, view_file, write_to_file, or any file or shell tool, "
-                "and do NOT output plain text. Keep thinking brief and call the `finish` tool directly once with the JSON object matching the schema.")
-    else:
-        tail = ("\n\nIMPORTANT: Do NOT call run_command, search_web, view_file, write_to_file, or any other tool, "
-                "and do NOT output plain text. Keep your thinking brief (do NOT draft individual units in thinking) "
-                "and directly call the `finish` tool once with the JSON object matching the schema.")
-    body = f"{prompt}{tail}"
-    # A section with 220+ units needs >22k tokens for the finish JSON alone; -high thinking (~45k tokens) overflows the 65k output cap.
-    run_model = re.sub(r"-(medium|high|xhigh|max)$", "-low", model) if re.search(r"\[U220\]|\nU220\b", prompt) else model
-    out, res, text_chunks, raw_lines, err_text, code, timed_out, token_cutoffs, args = _agy_once(
-        cmd, run_model, body, schema, agent_md, effort, timeout)
-    if not isinstance(out, dict) and token_cutoffs and re.search(r"-(medium|high|xhigh|max)$", run_model):
-        low_model = re.sub(r"-(medium|high|xhigh|max)$", "-low", run_model)
-        out, res, text_chunks, raw_lines, err_text, code, timed_out, token_cutoffs, args = _agy_once(
-            cmd, low_model, body, schema, agent_md, effort, timeout)
-    if isinstance(out, dict):
-        return out, None
-    said = (err_text or "".join(raw_lines)).strip()[-800:]
-    if re.search(r"(?i)not logged in|sign in|authenticate|unauthenticated", said):
-        raise RuntimeError("Antigravity CLI is not signed in: run agy in a terminal to sign in (Antigravity CLI 没有登录：请在终端运行 agy 登录)")
-    if isinstance(res, dict) and (res.get("status") == "ERROR" or res.get("error") or res.get("is_error")):
-        msg = str(res.get("error") or res.get("response") or said)[:800]
-        if re.search(r"(?i)timeout|timed out|connect|network|unreachable|eof|proxy|reset by peer", msg):
-            raise RuntimeError(f"Antigravity CLI could not reach Google (a proxy is needed in mainland China / 国内需开启代理连接 Google): {msg}")
-        raise RuntimeError(f"agy error: {msg}")
-    if timed_out:
-        raise subprocess.TimeoutExpired(args, timeout)
-    raw = (res.get("response") if isinstance(res, dict) else "") or "".join(text_chunks)
+    agent = ("---\nname: textfold\ndescription: TextFold's one answer\ntools:\n" + "".join(f"  - {t}\n" for t in allowed) +
+             f"inheritMcp: false\ninheritCustomizations: false\n---\n{system}\n\nAnswer by calling the finish tool once, with the JSON object.\n")
+    got = {"seen": 0, "rest": b"", "finish": None, "result": None, "text": []}
+
+    def answered(last=False):
+        with open(events, "rb") as f:
+            f.seek(got["seen"])
+            chunk = f.read()
+        got["seen"] += len(chunk)
+        *lines, got["rest"] = (got["rest"] + chunk).split(b"\n")
+        for line in lines + ([got["rest"]] if last else []):
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(d, dict):
+                continue
+            step = d.get("step_update") if isinstance(d.get("step_update"), dict) else {}
+            params = (step.get("tool_info") or {}).get("parameters")
+            if step.get("tool_name") == "finish" and isinstance(params, dict) and all(k in params for k in schema.get("required", [])):
+                got["finish"] = params   # (whole: a call under way may list fewer)
+            elif step.get("step_type") == "agent_response" and step.get("text_delta"):
+                got["text"].append(step["text_delta"])
+            elif d.get("event") == "result":
+                got["result"] = d["result"] if isinstance(d.get("result"), dict) else d
+            elif "status" in d and any(k in d for k in ("response", "structured_output", "error")):
+                got["result"] = d
+        return got["finish"] is not None or got["result"] is not None
+
+    tmp = tempfile.mkdtemp()   # (a scratch cwd, no project; removed with what is left in it: 3.9 has no ignore_cleanup_errors)
+    try:
+        folder = Path(tmp) / ".agents" / "agents"
+        folder.mkdir(parents=True)
+        (folder / "textfold.md").write_text(agent, encoding="utf-8")
+        sf, events = Path(tmp) / "schema.json", Path(tmp) / "events.jsonl"
+        sf.write_text(json.dumps(schema), encoding="utf-8")
+        args = [*cmd, "--agent", "textfold", "--output-format", "stream-json", "--disable-slash-commands", "--sandbox",
+                "--model", model, "--json-schema", str(sf)]
+        if effort and not AGY_TIER.search(model):
+            args += ["--effort", "low" if effort == "off" else effort]   # (no level off: the least)
+        with open(events, "wb") as out, tempfile.TemporaryFile(dir=tmp) as err:
+            r = run(args, input=prompt, stdout=out, stderr=err, timeout=timeout, env=child_env(), cwd=tmp, done=answered)
+            answered(last=True)
+            err.seek(0)
+            said = err.read().decode("utf-8", errors="replace").strip()[-800:]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    res = got["result"] or {}
+    if got["finish"] is not None:
+        return got["finish"], None
+    if isinstance(res.get("structured_output"), dict):
+        return res["structured_output"], None
+    if res.get("status") == "ERROR" or res.get("error") or res.get("is_error"):
+        raise _agy_error(str(res.get("error") or res.get("response") or said), "agy error")
+    raw = res.get("response") or "".join(got["text"])
     if raw:
         return parse_json(raw, schema), None
-    if re.search(r"(?i)timeout|timed out|connect|network|unreachable|eof|proxy|reset by peer", said):
-        raise RuntimeError(f"Antigravity CLI could not reach Google (a proxy is needed in mainland China / 国内需开启代理连接 Google): {said}")
-    raise RuntimeError(f"agy exited {code}: {said}")
-
+    raise _agy_error(said, f"agy exited {r.returncode}")
