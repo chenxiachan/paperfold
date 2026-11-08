@@ -14,12 +14,13 @@ A reply is written whole, to a .tmp beside it and then moved onto its name, and 
 reply (half of one, when a process died in the middle of writing it) is dropped and asked for again:
 the rule forget() already applies to a reply its caller could not read.
 """
+import contextlib
 import hashlib
 import json
 import os
 import re
-import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 from . import agents
@@ -75,7 +76,29 @@ def units_of(out):
 
 
 class Stopped(Exception):
-    """The reader stopped a generation: the calls not yet made are skipped; those under way finish and stay cached."""
+    """The reader stopped a generation: the calls not yet made are skipped, and an agent's call under way is ended
+    (agents.run; what it had written is lost). An API's call under way finishes and stays cached. What was answered
+    before stays cached, so the same generation started again goes on from there."""
+
+
+_STOPS = threading.local()
+
+
+@contextlib.contextmanager
+def stoppable(stop):
+    """The calls made on this thread within it end at once when stop (a threading.Event, or None) is set: an agent's
+    process tree (agents.run). The caller's stop reaches the agent without passing through every signature between."""
+    before = getattr(_STOPS, "event", None)
+    _STOPS.event = stop
+    try:
+        yield
+    finally:
+        _STOPS.event = before
+
+
+def stop_now():
+    """The stop this thread's calls are made under (stoppable), or None."""
+    return getattr(_STOPS, "event", None)
 
 
 def label(model):
@@ -116,6 +139,8 @@ def call(prompt, schema, model, cache_dir: Path, force=False, timeout=900, syste
     note = None
     try:
         out, cost = _once(prompt, schema, spec, timeout, system)
+    except Stopped:
+        raise
     except Exception as e:
         # A reasoning level is a request, never a condition: whatever went wrong with it set (a flag or field an API no
         # longer takes, a level a model does not have), the call is made once more the model's own way.
@@ -204,11 +229,11 @@ def _claude(prompt, schema, model, effort, timeout, system=SYSTEM, tools=False, 
     # and a default effort meant for coding); a scratch folder has no project ones. Where Claude Code needs the user
     # settings to sign in, the call is made again with them.
     with tempfile.TemporaryDirectory() as tmp:   # (looking it up on the web: with the user's own settings at once)
-        r = subprocess.run(cmd + ([] if tools else ["--setting-sources", "project,local"]), input=prompt, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=timeout, env=env, cwd=tmp)
+        r = agents.run(cmd + ([] if tools else ["--setting-sources", "project,local"]), input=prompt, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=timeout, env=env, cwd=tmp)
         if r.returncode and not tools:
-            r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=timeout, env=env, cwd=tmp)
+            r = agents.run(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=timeout, env=env, cwd=tmp)
     if r.returncode:
         raise RuntimeError(f"claude -p exited {r.returncode}: {(r.stderr or r.stdout)[-1500:]}")
     d = json.loads(r.stdout)

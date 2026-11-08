@@ -703,20 +703,21 @@ def make(items, ui="en", kind="digest", question="", spec=None, when=None, stop=
     W = WORDS.get(ui) or WORDS["en"]
     when = when or time.strftime("%Y-%m-%d %H:%M")
     qa, dg, title, pc = [], None, None, None
-    if kind == "template":   # (a piece written as a template asks, the template's name its title)
-        if spec is None:
-            raise NoModel()
-        name, instruction = _template(template, ui)
-        pc = compose(items, spec, ui, name, instruction)
-        title = name.replace("{", "(").replace("}", ")") + " · {period}"
-    elif kind == "ask":
-        if spec is None:
-            raise NoModel()
-        got = ask(items, question, spec, ui)
-        qa = [{"q": got["question"], "answer": got["answer"], "model": got["model"]}]
-        title = W["q_title"].replace("{q}", got["question"].replace("{", "(").replace("}", ")"))
-    elif spec is not None:
-        dg = digest(items, spec, ui)
+    with llm.stoppable(stop):   # (stopped while the model writes: an agent's call ends there)
+        if kind == "template":   # (a piece written as a template asks, the template's name its title)
+            if spec is None:
+                raise NoModel()
+            name, instruction = _template(template, ui)
+            pc = compose(items, spec, ui, name, instruction)
+            title = name.replace("{", "(").replace("}", ")") + " · {period}"
+        elif kind == "ask":
+            if spec is None:
+                raise NoModel()
+            got = ask(items, question, spec, ui)
+            qa = [{"q": got["question"], "answer": got["answer"], "model": got["model"]}]
+            title = W["q_title"].replace("{q}", got["question"].replace("{", "(").replace("}", ")"))
+        elif spec is not None:
+            dg = digest(items, spec, ui)
     if stop is not None and stop.is_set():   # (stopped while the model wrote: nothing is kept)
         raise llm.Stopped()
     pid = record(items, ui, when, qa=qa, digest=dg, title=title, piece=pc)

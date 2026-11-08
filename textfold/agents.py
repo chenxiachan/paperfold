@@ -263,6 +263,60 @@ def child_env():
     return env
 
 
+def run(args, *, stop=None, timeout=None, input=None, **kw):
+    """subprocess.run for an agent's call, which the reader's Stop ends at once: stop (a threading.Event; else the one
+    this thread's calls are made under, llm.stoppable) set while it runs ends the call's whole process tree (an agent
+    starts its own: node, a sandbox) and raises llm.Stopped. What that call had written is lost; the calls already
+    answered stay in the cache. With no stop at all, subprocess.run as it is. (After #70, Shuhao Li's: the input from
+    a file and the process watched, the tree its own process group; on Windows taskkill /T, as the desktop app ends
+    the server.)"""
+    from .llm import Stopped, stop_now
+    stop = stop or stop_now()
+    if stop is None:
+        return subprocess.run(args, input=input, timeout=timeout, **kw)
+    if stop.is_set():
+        raise Stopped()
+    if kw.pop("capture_output", False):
+        kw["stdout"] = kw["stderr"] = subprocess.PIPE
+    with tempfile.TemporaryFile() as source:   # (a file, not a pipe: nothing to feed while the process is watched)
+        if input is not None:
+            source.write(input.encode(kw.get("encoding") or "utf-8", kw.get("errors") or "strict") if isinstance(input, str) else input)
+            source.seek(0)
+        p = subprocess.Popen(args, stdin=source if input is not None else None, **({} if WIN else {"start_new_session": True}), **kw)
+        deadline = None if timeout is None else time.monotonic() + timeout
+        try:
+            while True:
+                try:
+                    out, err = p.communicate(timeout=.25)
+                    return subprocess.CompletedProcess(args, p.returncode, out, err)
+                except subprocess.TimeoutExpired:
+                    if stop.is_set():
+                        raise Stopped()
+                    if deadline is not None and time.monotonic() > deadline:
+                        raise subprocess.TimeoutExpired(args, timeout)
+        except BaseException:
+            _end_tree(p)
+            raise
+
+
+def _end_tree(p):
+    if p.poll() is None:
+        if WIN:
+            subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        else:
+            try:
+                os.killpg(p.pid, 9)   # (SIGKILL: the group start_new_session made, its id the process's own)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if p.poll() is None:
+            p.kill()
+    try:
+        p.communicate(timeout=5)   # (reaped, its pipes closed)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def locate(binary, extra=()):
     for d in [os.path.expanduser(x) for x in extra] + search_dirs():
         for ext in EXTS:
@@ -767,9 +821,9 @@ def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=N
             of.unlink(missing_ok=True)
             # Codex can panic when its CLI writes to a full nonblocking pipe. Regular files avoid pipe backpressure.
             with tempfile.TemporaryFile(dir=tmp) as stdout, tempfile.TemporaryFile(dir=tmp) as stderr:
-                r = subprocess.run(args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"], input=f"{system}\n\n{prompt}",
-                                   stdout=stdout, stderr=stderr, text=True, encoding="utf-8", errors="replace",
-                                   timeout=timeout, env=child_env(), cwd=tmp)
+                r = run(args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"], input=f"{system}\n\n{prompt}",
+                        stdout=stdout, stderr=stderr, text=True, encoding="utf-8", errors="replace",
+                        timeout=timeout, env=child_env(), cwd=tmp)
                 if not r.returncode and of.exists():
                     return parse_json(of.read_text(encoding="utf-8")), None
                 stream = stderr if stderr.seek(0, os.SEEK_END) else stdout
@@ -829,11 +883,11 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
     env = env_for(path)
     signed_out = lambda r: "Authentication required" in r.stdout + r.stderr   # (it says so at once, exit 0, and does not wait)
     with tempfile.TemporaryDirectory() as tmp:   # a scratch cwd: no project, nothing to read
-        r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=timeout, env=env, cwd=tmp)
+        r = run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=timeout, env=env, cwd=tmp)
         if signed_out(r) and env.pop("CODEBUDDY_CONFIG_DIR", None):   # not in WorkBuddy's settings: CodeBuddy's own sign-in
-            r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=timeout, env=env, cwd=tmp)
+            r = run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    timeout=timeout, env=env, cwd=tmp)
     said = (r.stderr or r.stdout)[-800:]
     if signed_out(r) and workbuddy_lite(path):
         raise RuntimeError(LITE_SIGNED_OUT)
@@ -860,8 +914,8 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
 
 def _pi_once(args, body, schema, timeout):
     with tempfile.TemporaryDirectory() as tmp:
-        r = subprocess.run(args, input=body, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=timeout, env=child_env(), cwd=tmp)
+        r = run(args, input=body, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=timeout, env=child_env(), cwd=tmp)
     text, cost = None, None
     for line in r.stdout.splitlines():
         try:

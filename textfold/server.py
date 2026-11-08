@@ -5,8 +5,9 @@
   GET  /api/papers            the papers on disk, each with when it came in and was last opened (library.py), and its
                               citekey when it was read from a Zotero item that has one (zotero.citekeys)
   GET  /api/jobs              generation jobs (queued, running, recently finished)
-  POST /api/jobs/stop         {id}: stop a job: a queued one is dropped; a running one ends once the model calls under way
-                              return (what they wrote is kept in the cache, so starting it again goes on from there)
+  POST /api/jobs/stop         {id}: stop a job: a queued one is dropped; a running one ends: an agent's calls under way
+                              at once (agents.run), an API's once they return. What was answered before is kept in the
+                              cache, so starting it again goes on from there
   POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time. paper: an arXiv id or
                               link, a PMC or PPR id, a DOI (Europe PMC, epmc.py), or a stored document's id
   POST /api/import            {name, text, id?}: store a Markdown file as a paper (local.py); its id, to generate. With
@@ -1210,7 +1211,7 @@ def serve(port=3017):
 
     def killed(signum, frame):
         # the desktop app's server.kill(): server.json goes, then the server, at once as before (stopping as ^C does
-        # would wait for the model calls under way, since Python's exit waits for a thread pool's work)
+        # would wait for an API's calls under way, since Python's exit waits for a thread pool's work)
         withdraw(f)
         signal.signal(signum, signal.SIG_DFL)
         os.kill(os.getpid(), signum)
@@ -1224,3 +1225,5 @@ def serve(port=3017):
         pass
     finally:
         withdraw(f)
+        for stop in list(jobs.stops.values()):   # (^C: the agents' calls under way end too, and Python's exit need not wait for them)
+            stop.set()
