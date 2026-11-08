@@ -258,7 +258,7 @@
     side.querySelector('.sb-pin').onclick = () => setPinned(!pinned);
     side.querySelector('.rail-open').onclick = () => setCollapsed(false);
     side.querySelectorAll('.sb-settings, .rail-settings').forEach((b) => { b.onclick = openSettings; });
-    side.querySelector('.sb-zotero').onclick = () => openLibrary();
+    side.querySelector('button.sb-zotero').onclick = () => openLibrary();
     side.querySelectorAll('.sb-help, .rail-help').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); window.TFTutorial.open(uiLang); }; });
     side.querySelectorAll('.sb-del').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); deletePaper(b.dataset.del); }; });
     side.querySelectorAll('.sb-stop').forEach((b) => { b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); stopJob(b.dataset.stop); }; });
