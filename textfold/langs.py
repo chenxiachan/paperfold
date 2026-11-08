@@ -8,6 +8,7 @@ its sentences with a space like English (tokens.py cuts it into syllables for th
 Arabic and Hebrew are left out for now: the reader lays text out left to right.
 """
 import re
+from collections import Counter
 
 
 # code: (name used in prompts, native name, script)
@@ -114,11 +115,12 @@ _SMALL = {code: set(words.split()) for code, words in _SMALL.items()}
 def detect(text):
     """The language (a code of LANGS) the text is written in, English when it cannot tell."""
     text = text[:40000]
-    han, kana = len(re.findall(_HAN, text)), len(re.findall(_KANA, text))
-    words = {script: re.findall(rx, text) for script, rx in _SCRIPTS.items()}
+    scan = text if re.search(r"[^\x00-\xff]", text) else ""
+    han, kana = len(re.findall(_HAN, scan)), len(re.findall(_KANA, scan))
+    words = {script: re.findall(rx, text if script == "latin" else scan) for script, rx in _SCRIPTS.items()}
     counts = {script: len(w) for script, w in words.items()}
     counts["cjk"] = (han + kana) / 1.7
-    counts["thai"] = len(re.findall(_THAI_SCRIPT, text)) / 4
+    counts["thai"] = len(re.findall(_THAI_SCRIPT, scan)) / 4
     script = max(counts, key=counts.get)
     if counts[script] < 5:
         return "en"
@@ -138,8 +140,9 @@ def detect(text):
         return "uk" if sum(map(letters.count, "іїєґ")) > 0.01 * len(letters) else "ru"
     latin = [w.lower() for w in words["latin"][:6000]]
     letters = "".join(latin)
-    if sum(c in _VIET for c in letters) > 0.03 * max(1, len(letters)):
+    if sum(map(letters.count, _VIET)) > 0.03 * max(1, len(letters)):
         return "vi"
-    hits = {code: sum(w in small for w in latin) for code, small in _SMALL.items()}
+    seen = Counter(latin)
+    hits = {code: sum(seen[w] for w in small & seen.keys()) for code, small in _SMALL.items()}
     best = max(hits, key=hits.get)
     return best if hits[best] >= 5 else "en"
