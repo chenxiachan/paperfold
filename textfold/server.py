@@ -1114,7 +1114,8 @@ def make_handler(jobs):
                 if u.path == "/api/providers/save":
                     preset = body.get("preset") or "custom"
                     known = providers.PRESETS + [models.ANTHROPIC_PRESET]
-                    name = (body.get("name") or "").strip() or next((p["name"] for p in known if p["id"] == preset), "") or "Custom"
+                    name = (body.get("name") or "").strip() or next((p["name"] for p in known if p["id"] == preset), "") or \
+                        providers.name_of((body.get("base") or "").strip())
                     key = body.get("key") or re.sub(r"[^a-z0-9]+", "-", f"{preset}-{name}".lower()).strip("-")
                     old = next((p for p in s["providers"] if p["key"] == key), {})
                     row = {"key": key, "preset": preset, "name": name, "base": (body.get("base") or "").strip().rstrip("/"),

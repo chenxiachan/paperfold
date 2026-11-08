@@ -1804,6 +1804,8 @@
     dlg.addEventListener('close', () => { settingsOpen = false; });
     const T = () => t();
     const host = (u) => { try { return new URL(u).host; } catch { return u; } };
+    // the name an endpoint of no preset is given when none is written: its host (providers.name_of, #115)
+    const nameOf = (u) => (u ? host(/:\/\//.test(u) ? u : `http://${u}`).toLowerCase().replace(/^(api|www)\./, '') : '');
     const customOf = (g) => (data.customAgents || []).find((a) => `custom/${a.key}` === g);
     const groupName = (g) => (data.agents.find((a) => a.runtime === g) || {}).label || (customOf(g) || {}).name || (data.providers.find((p) => p.key === g) || {}).name || g;
 
@@ -1950,7 +1952,7 @@
           <div class="st-cmd"><code>npx openai-oauth</code><button type="button" class="linkbtn pf-copy">${esc(t.copy)}</button></div>`;
       return `<div class="st-form">
         <label>${esc(t.st_preset)}<select class="pf-preset">${opts}</select></label>${oauth}${minted}${bridge}
-        ${form.preset === 'custom' ? `<label>${esc(t.st_name)}<input class="pf-name" value="${esc(form.name || '')}"></label>` : ''}
+        ${form.preset === 'custom' ? `<label>${esc(t.st_name)}<input class="pf-name" value="${esc(form.name || '')}" placeholder="${esc(nameOf(form.base))}"></label>` : ''}
         <label>${esc(t.base_url)}<input class="pf-base" value="${esc(form.base || '')}" placeholder="https://…/v1"></label>
         ${preset.nokey || form.minted ? '' : `<label><span>${esc(t.api_key)}${preset.keyUrl ? ` · <a href="${preset.keyUrl}" target="_blank" rel="noopener">${esc(host(preset.keyUrl))}</a>` : ''}</span><input class="pf-key" type="password" placeholder="${esc(form.key ? t.st_key_kept : 'sk-…')}"></label>`}
         <div class="st-row"><button type="button" class="st-btn pf-fetch">${esc(t.st_fetch)}</button><span class="pf-err">${esc(form.err || '')}</span></div>
@@ -2175,6 +2177,7 @@
       ps.onchange = () => { const p = data.presets.find((x) => x.id === ps.value); form = { preset: p.id, name: '', base: p.base }; render(); };   // another kind: a new provider, the edited one stays
       const keep = () => { form.base = q('.pf-base').value.trim(); if (q('.pf-name')) form.name = q('.pf-name').value.trim(); if (q('.pf-key') && q('.pf-key').value) form.api_key = q('.pf-key').value.trim(); };
       q('.pf-fetch').onclick = () => fetchModels();
+      if (q('.pf-name')) q('.pf-base').oninput = () => { q('.pf-name').placeholder = nameOf(q('.pf-base').value.trim()); };
       const pick = q('.st-pick'), count = q('.st-count'), search = q('.st-search');
       const recount = () => { if (count && pick) count.textContent = `· ${pick.querySelectorAll('input:checked').length}`; };
       if (pick) { pick.onchange = recount; recount(); }

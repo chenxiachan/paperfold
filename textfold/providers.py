@@ -12,6 +12,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -132,6 +133,13 @@ def ui_providers(settings):
                     "models": [{"id": m["id"], "name": f"{short(m['id'])} ({p.get('name') or p['key']})"}
                                for m in (p.get("models") or [])[:MAX_MODELS]]})
     return out
+
+
+def name_of(base):
+    """A provider's name where the reader gives none, as for an endpoint of no preset: its host, as its base URL names it
+    (https://api.atlascloud.ai/v1 is atlascloud.ai), so that each has a name, and a key, of its own (#115)."""
+    host = urllib.parse.urlsplit(base if "://" in base else f"http://{base}").netloc.rpartition("@")[2]
+    return re.sub(r"^(api|www)\.", "", host.lower()) or "Custom"
 
 
 def unreachable(e):
