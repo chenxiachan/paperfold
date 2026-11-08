@@ -8,6 +8,7 @@
   const readerEl = document.getElementById('paper-data');
   const DATA = readerEl ? JSON.parse(readerEl.textContent) : null;
   const PAPER = DATA ? DATA.meta : null;   // the paper open in the reader, if any
+  const NOTES_PAGE = !!document.getElementById('nb-main');   // the notes page (notes.js), in the app as the landing is
   const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } } };
   // the brightness and the style chosen in a paper's Aa menu (reader.js, textfold.type), on the landing too
   try {
@@ -77,10 +78,26 @@
     tellLang(code);
     renderSidebar();
     if (landing) renderLanding();
+    renderTop();
     if (window.__reader && window.__reader.setUi) window.__reader.setUi(code);
     document.dispatchEvent(new Event('tf-lang'));   // (what else speaks it: the app's update)
   }
   let papers = BOOT.papers || [];
+  // a job started elsewhere on the page (a record being written, notes.js): the sidebar shows it at once
+  document.addEventListener('tf-jobs', () => { api('/api/jobs').then((j) => { jobs = j; renderSidebar(); startPolling(); }).catch(() => {}); });
+  // a document of the library to be named (notes.js: one just made), in the sidebar, as its menu's Rename does
+  document.addEventListener('tf-rename', (e) => { const pid = e.detail && e.detail.paper; if (!pid) return; setCollapsed(false); if (folders.of[pid]) folded.delete(folders.of[pid]); editDocName(pid); });
+  // a document made elsewhere on the page (the notes page's records, notes.js): the library again, the new one shown
+  document.addEventListener('tf-library', (e) => {
+    Promise.all([api('/api/papers'), api('/api/folders')]).then(([p, f]) => {
+      papers = p; folders = f;
+      const pid = e.detail && e.detail.paper, in_ = pid && folders.of[pid];
+      if (in_) folded.delete(in_);
+      renderSidebar();
+      const row = pid && side.querySelector(`.sb-row[data-pid="${CSS.escape(pid)}"] .sb-item`);
+      if (row) { row.classList.add('sb-flash'); row.scrollIntoView({ block: 'nearest' }); setTimeout(() => row.classList.remove('sb-flash'), 2400); }
+    }).catch(() => {});
+  });
   let folders = BOOT.folders || { folders: [], of: {} };   // the reader's folders (each in its parent, or at the top), and which document is in which (library.py)
   let sbQuery = '';        // the sidebar's search, as typed
   let editing = null;      // a folder's name being written: 'new', or the folder's id
@@ -108,6 +125,7 @@
   // ── sidebar ──────────────────────────────────────────────────────────
   const side = document.getElementById('sidebar');
   const MARK = '<svg viewBox="0 0 20 20" aria-hidden="true"><rect class="m1" x="2" y="3" width="16" height="2.4" rx="1.2"/><rect class="m2" x="2" y="8.8" width="11" height="2.4" rx="1.2"/><rect class="m3" x="2" y="14.6" width="5" height="2.4" rx="1.2"/></svg>';
+  const NOTES = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3.5h10v13H5z"/><path d="M7.5 7h5M7.5 10h5M7.5 13h3"/></svg>';   // the notes page (notes.js)
   const BOOKS = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h3v13H4z"/><path d="M8.5 3.5h3v13h-3z"/><path d="M13 4.2l2.8-.7 2.6 12.3-2.8.7z"/></svg>';
   const LIST = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="M7.5 3.5v13"/></svg>';
   const PIN = '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path class="pin-head" d="M7.2 2.8h5.6l-.9 4.6 2.9 3v1.4H5.2v-1.4l2.9-3z"/><path d="M10 11.8v5.4"/></svg>';
@@ -127,13 +145,15 @@
   const live = (j) => j.status === 'queued' || j.status === 'running';
   function jobFor(pid) { return jobs.find((j) => j.pid === pid && live(j)); }
   function pct(j) { return j.total ? Math.round((100 * j.done) / j.total) : (j.stage === 'done' ? 100 : 6); }
+  const ind = (j) => j.kind === 'record' && live(j);   // (a record being written: no steps to count, the bar runs)
   // where a job is: its stage and count, or that it is stopping
   const stageOf = (j, T) => {
     const st = j.stage === 'convert' && j.file && !/\.pdf$/i.test(j.file) ? 'convert-file' : j.stage;   // a Word file, a picture
+    if (j.kind === 'record' && !j.stopping) return T.nb_stage_write;
     return j.stopping ? T.stopping : `${T.stages[st] || (T.pstages || {})[st] || st}${j.total ? ` ${j.done}/${j.total}` : ''}`;
   };
   const stopBtn = (j, T) => `<button type="button" class="sb-stop" data-stop="${j.id}" title="${esc(T.stop)}" aria-label="${esc(T.stop)}"${j.stopping ? ' disabled' : ''}><i></i></button>`;
-  const progress = (j, T) => `<span class="sb-prog"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(stageOf(j, T))}${j.lang ? ` · ${esc(nameOf(j.lang))}` : ''}</span>`;
+  const progress = (j, T) => `<span class="sb-prog${ind(j) ? ' ind' : ''}"><i style="width:${pct(j)}%"></i></span><span class="sb-stage">${esc(stageOf(j, T))}${j.lang ? ` · ${esc(nameOf(j.lang))}` : ''}</span>`;
   const jobName = (j, T) => (j.kind === 'install' ? T.engine : j.title || j.pid);
   let lastSidebar = '';
   function renderSidebar() {
@@ -152,15 +172,18 @@
       const langs = p.langs.map((l) => `<span${l === readLang ? ' class="on"' : ''}>${SHORT[l] || l.toUpperCase()}</span>`).join('');
       const active = PAPER && PAPER.id === p.id;
       const unfinished = !j && !p.langs.length && !p.pending;   // stopped (or failed) before its first language: a click goes on with it
-      return `<div class="sb-row${chosen.has(p.id) ? ' chosen' : ''}" data-pid="${p.id}" data-q="${esc(hay(p))}"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
-        <span class="sb-t">${esc(title)}</span><span class="sb-m"><span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span></span>
+      // a summary of the reader's notes (the notes page, summary.py): its own mark, and when it was made for its id
+      const sum = p.summary, said = sum && T.sb_summary.replace('{when}', (sum.made || '').slice(5));
+      return `<div class="sb-row${chosen.has(p.id) ? ' chosen' : ''}" data-pid="${p.id}" data-q="${esc(hay(p))}"><a class="sb-item${active ? ' active' : ''}${unfinished ? ' unfinished' : ''}${sum ? ' sb-sum' : ''}" href="${unfinished ? '#' : `/p/${p.id}?lang=${pick(p)}`}"${unfinished ? ` data-resume="${p.id}"` : ''} title="${esc(p.title)}">
+        <span class="sb-t">${sum ? NOTES.replace('<svg ', '<svg class="sb-ico" ') : ''}${esc(title)}</span><span class="sb-m">${sum ? `<span class="sb-id">${esc(said)}</span>`
+          : `<span class="sb-id">${p.id}</span><span class="sb-langs">${langs}</span>`}</span>
         ${j ? progress(j, T) : unfinished ? `<span class="sb-stage">${esc(T.unfinished)}</span>` : ''}</a>` +
         (j ? stopBtn(j, T) : chosen.size ? '<span class="sb-check" aria-hidden="true"></span>'
           : `<button type="button" class="sb-del" data-del="${p.id}" title="${esc(T.del_paper)}" aria-label="${esc(T.del_paper)}">×</button>`) + '</div>';
     };
     // papers, Wikipedia articles, GitHub READMEs and documents of one's own, each under its name when there is more than one kind
     // (a file read from a Zotero item is among the papers: Zotero says what it is)
-    const kindOf = (p) => (p.zotero ? 'paper' : /^wiki-/.test(p.id) ? 'wiki' : /^gh-/.test(p.id) ? 'gh' : /^web-/.test(p.id) ? 'web' : /^(md|pdf|doc)-/.test(p.id) ? 'doc' : 'paper');
+    const kindOf = (p) => (p.summary ? 'summary' : p.zotero ? 'paper' : /^wiki-/.test(p.id) ? 'wiki' : /^gh-/.test(p.id) ? 'gh' : /^web-/.test(p.id) ? 'web' : /^(md|pdf|doc)-/.test(p.id) ? 'doc' : 'paper');
     // by kind, or by when each came in or was last opened (one never opened: when it came in), newest first, in
     // folders too; by kind, in the server's order (the latest layer first)
     const order = sortOrder(), when = (p) => (order === 'opened' ? p.opened || p.added : p.added) || p.updated;
@@ -170,7 +193,7 @@
     const today = new Date().setHours(0, 0, 0, 0);
     const since = (p) => { const at = when(p) * 1000; return at >= today ? 0 : Date.now() - at < 7 * 864e5 ? 1 : Date.now() - at < 30 * 864e5 ? 2 : 3; };
     const groups = (order !== 'kind' ? [[0, T.d_today], [1, T.d_week], [2, T.d_month], [3, T.d_older]].map(([k, name]) => [name, loose.filter((p) => since(p) === k)])
-      : [['paper', T.papers], ['wiki', T.g_wiki], ['gh', 'GitHub'], ['web', T.g_web], ['doc', T.g_docs]].map(([k, name]) => [name, loose.filter((p) => kindOf(p) === k)]))
+      : [['paper', T.papers], ['wiki', T.g_wiki], ['gh', 'GitHub'], ['web', T.g_web], ['doc', T.g_docs], ['summary', T.g_summaries]].map(([k, name]) => [name, loose.filter((p) => kindOf(p) === k)]))
       .filter(([, ps]) => ps.length);
     const named = (value) => `<input class="sb-fname-in" value="${esc(value)}" placeholder="${esc(T.f_name)}" aria-label="${esc(T.f_name)}" maxlength="80" spellcheck="false">`;
     const fresh = (parent) => (editing === 'new' && within === parent ? `<div class="sb-folder"><div class="sb-frow">${named('')}</div></div>` : '');
@@ -215,7 +238,7 @@
         `<span class="sb-cn">${esc(T.sel_n.replace('{n}', chosen.size))}</span><button type="button" class="sb-cmove">${esc(T.sel_move)}</button>` +
         `<button type="button" class="sb-cdel">${esc(T.sel_delete)}</button>` +
         `<button type="button" class="sb-cx" title="${esc(T.sel_clear)}" aria-label="${esc(T.sel_clear)}">×</button></div>` : ''}
-      <div class="sb-foot"><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
+      <div class="sb-foot"><a class="sb-zotero sb-notes${NOTES_PAGE ? ' on' : ''}" href="/notes"${NOTES_PAGE ? ' aria-current="page"' : ''}>${NOTES}${esc(T.sb_notes)}</a><button type="button" class="sb-zotero">${BOOKS}${esc(T.z_lib)}</button><button type="button" class="sb-settings">⚙ ${esc(T.settings)}</button>${window.TFTutorial && PAPER ? `<button type="button" class="sb-help">? ${esc(T.tut_open)}</button>` : ''}<div class="sb-model">${esc(modelLabel())}</div></div>
       <div class="sb-resize" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(T.sb_resize)}" aria-label="${esc(T.sb_resize)}"></div>`;
     // polled every second while something generates: drawn again only when it changed, and where it was scrolled to
     const busy = jobs.some(live);
@@ -751,6 +774,11 @@
         if (before.get(j.id) !== j.status && (j.status === 'done' || j.status === 'error' || j.status === 'stopped')) finished = true;
       }
       if (finished) papers = await api('/api/papers');
+      for (const j of jobs) {   // (a record just written: the library again, its folder open, it shown)
+        if (j.kind === 'record' && j.status === 'done' && j.pid && before.get(j.id) && before.get(j.id) !== 'done') {
+          document.dispatchEvent(new CustomEvent('tf-library', { detail: { paper: j.pid } }));
+        }
+      }
       if (menu) stale = true; else renderSidebar();   // (a menu stays open while a job goes on)
     } catch { /* the server restarted; try again */ }
     if (jobs.some(live) || watchers.size) polling = setTimeout(poll, 1200);
@@ -1233,8 +1261,9 @@
     // The Markdown a document was read from, put right by the reader (a PDF's OCR): opened where the words selected
     // are, saved in place of the old text (local.replace_text: the notes stay) and generated again, the model asked only
     // for the sections that changed; or saved only, to be put right in other places first and generated once (the top
-    // bar says it is to be). A Markdown file's and a converted file's; an arXiv paper or a web page has none. span: the
-    // characters of the Markdown to open at, in place of the words (a place of the review)
+    // bar says it is to be). Any document's: a Markdown file's, a converted file's, and an arXiv paper's or a web page's,
+    // written from its page (editable.py). span: the characters of the Markdown to open at, in place of the words (a
+    // place of the review)
     async function editText(words, span = null) {
       const T = t();
       if (jobFor(PAPER.id)) { alert(T.ed_busy); return; }
@@ -1363,7 +1392,7 @@
         submit(PAPER.id, lang, force, update).catch(update.fail);
       },
       fill(lang) { fillGaps(lang, true); },
-      editText: /^(md|pdf|doc)-/.test(PAPER.id) ? editText : null,
+      editText,
       // questions go to an agent on this computer, which can look them up on the web (reader.js: the switch by a question)
       askAgent() {
         const d = modelData, m = d && (d.models || []).find((x) => x.id === (d.askModel || d.selected));
@@ -1390,6 +1419,7 @@
   // ── the landing ──────────────────────────────────────────────────────
   const landing = document.getElementById('landing');
   function renderLanding() {
+    if (!landing) return;   // (another page of the app: the notes page)
     const T = t();
     document.documentElement.lang = I18N.htmlLang(uiLang);
     document.getElementById('h-tagline').textContent = T.hero;
@@ -1443,6 +1473,24 @@
       askName = d.askName || '';
       renderSidebar(); renderLanding();
     };
+  }
+  // on another page of the app (the notes page): the language and the help at its top, as on the landing
+  const topLang = !landing && document.getElementById('ui-lang');
+  function renderTop() {
+    if (!topLang) return;
+    const T = t();
+    topLang.value = uiLang;
+    topLang.setAttribute('aria-label', T.language);
+    document.getElementById('ui-lang-box').title = T.language;
+    document.getElementById('ui-help-t').textContent = T.tut_open;
+    document.getElementById('ui-help').title = T.tut_open;
+  }
+  if (topLang) {
+    for (const code of I18N.CODES) topLang.append(Object.assign(h('option'), { value: code, textContent: I18N.NATIVE[code] }));
+    topLang.onchange = () => setReaderLang(topLang.value);
+    const help = document.getElementById('ui-help');
+    if (window.TFTutorial) help.onclick = () => window.TFTutorial.open(uiLang); else help.hidden = true;
+    renderTop();
   }
   if (landing) {
     const sel = document.getElementById('lang');
@@ -1975,13 +2023,17 @@
         : `<div class="st-item"><div class="st-main st-meta st-desc">${esc(t.engine_off)}</div>${act}</div>`;
       const tier = `<div class="st-item"><label class="st-main" for="st-tier"><b>${esc(t.tier)}</b></label><select class="st-tiersel" id="st-tier">${['fast', 'accurate'].map((k) =>
         `<option value="${k}"${(data.pdfTier || 'fast') === k ? ' selected' : ''}>${esc(t['tier_' + k])}</option>`).join('')}</select></div>`;
+      // a PDF that names its paper online (an arXiv id, a DOI): read there, or read from the file itself (#89)
+      const src = `<div class="st-item"><label class="st-main" for="st-pdfsrc"><b>${esc(t.pdf_src)}</b></label><select class="st-pdfsrc" id="st-pdfsrc">${['online', 'file'].map((k) =>
+        `<option value="${k}"${(data.pdfOnline === false ? 'file' : 'online') === k ? ' selected' : ''}>${esc(t['pdf_src_' + k])}</option>`).join('')}</select></div>`;
       // not installed: the folder it goes into (textfold/engine.py target), beside the library unless the reader chooses
       // an empty one (in the same system dialog as the library's folder)
       const why = engineError ? t[`storage_err_${engineError.code}`] || engineError.message : '';
       const folder = job || e.installed ? '' : `<div class="st-form"><label>${esc(t.storage_destination)}<div class="st-row" style="margin:0"><input class="st-engine-path" style="flex:1;min-width:0" value="${esc(engineDraft ?? e.path ?? '')}" spellcheck="false">${window.desktop?.chooseLibraryFolder ? `<button type="button" class="st-btn st-engine-pick">${esc(t.storage_choose)}</button>` : ''}</div></label>
         <p class="st-note">${esc(t.engine_where)}</p>${why ? `<p class="st-note warn" role="alert">${esc(why)}</p>` : ''}</div>`;
-      box.innerHTML = `<h3>${esc(t.engine)}</h3><div class="st-list">${state}${folder}${tier}</div>`;
+      box.innerHTML = `<h3>${esc(t.engine)}</h3><div class="st-list">${state}${folder}${tier}${src}</div>`;
       box.querySelector('.st-tiersel').onchange = async (ev) => { data = await api('/api/settings', { pdf_tier: ev.target.value }); renderEngine(); };
+      box.querySelector('.st-pdfsrc').onchange = async (ev) => { data = await api('/api/settings', { pdf_online: ev.target.value === 'online' }); renderEngine(); };
       const inst = box.querySelector('.st-engine-in');
       if (inst) inst.onclick = async () => {
         inst.disabled = true; engineError = null;

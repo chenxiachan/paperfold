@@ -5,8 +5,9 @@
   GET  /api/papers            the papers on disk, each with when it came in and was last opened (library.py), and its
                               citekey when it was read from a Zotero item that has one (zotero.citekeys)
   GET  /api/jobs              generation jobs (queued, running, recently finished)
-  POST /api/jobs/stop         {id}: stop a job: a queued one is dropped; a running one ends once the model calls under way
-                              return (what they wrote is kept in the cache, so starting it again goes on from there)
+  POST /api/jobs/stop         {id}: stop a job: a queued one is dropped; a running one ends: an agent's calls under way
+                              at once (agents.run), an API's once they return. What was answered before is kept in the
+                              cache, so starting it again goes on from there
   POST /api/generate          {paper, lang, force}: queue a generation; one runs at a time. paper: an arXiv id or
                               link, a PMC or PPR id, a DOI (Europe PMC, epmc.py), or a stored document's id
   POST /api/import            {name, text, id?}: store a Markdown file as a paper (local.py); its id, to generate. With
@@ -15,8 +16,8 @@
                               set aside ({paper, title, replaced: true, pending: the languages they were in}; not
                               while it is being generated); then /api/generate in each folds it again, asking the model
                               only for the sections that changed
-  GET  /api/text/<id>         {text, original}: the Markdown such a document was read from, for the reader to put
-                              right (a PDF's OCR) and send back to /api/import with its id; original: the text it had
+  GET  /api/text/<id>         {text, original}: a document's text as Markdown (local.text_of), for the reader to put
+                              right (a PDF's OCR, a page's words) and send back to /api/import with its id; original: the text it had
                               when it was last generated, before the edits since (null: none; local.original)
   POST /api/places            {id, spans: [[from, to], ...]}: where each place of that text is read on the page
                               ({places: [{words: [{unit, tokens}], at: {unit, token, after}} | {section} | null]}:
@@ -34,8 +35,10 @@
   POST /api/agents/save       {key?, name, command, protocol, models: [{id, name?, efforts?}]}  ·  POST /api/agents/remove {key}
   POST /api/providers/probe   {base, api_key | key, preset}: a provider's /models
   POST /api/providers/save    {key?, preset, name, base, api_key?, models}  ·  POST /api/providers/remove {key}
-  POST /api/settings          {use_thoughtdag_env}, {pdf_tier}, {lang} (one of langs.py; else 400)  ·  POST /api/settings/test
+  POST /api/settings          {use_thoughtdag_env}, {pdf_tier}, {pdf_online}, {lang} (one of langs.py; else 400)  ·  POST /api/settings/test
                               {model?} or {task: "ask"}: one tiny call
+  GET  /notes                 every note of the library on one page, to pick some and make a reading record of them (record.py)
+  GET  /api/notes             every note of the library: {papers, notes (newest first), summaries, used} (record.everything)
   GET  /api/notes/<id>        the reader's notes on a paper (docs/notes-format.md)
   GET  /api/doc/<id>?lang=xx  the document in the TextFold format (docs/format.md), as `textfold get --json` writes it,
                               from its layers alone: nothing is generated, no model is called
@@ -49,6 +52,17 @@
   POST /api/export            {paper, lang, langs: "current" | "all", kinds: ["hl", "note", "ask"], pdf}: the paper as one
                               HTML file: its levels, the reader's notes of the kinds chosen, and (pdf) its original PDF
                               with PDF.js, for the side-by-side view
+  POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
+                              (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
+  POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
+  POST /api/record            {items: [{paper, note}], ui, kind: "digest" | "ask", question}: a document of the library made
+                              of those notes, in its folder of records, as a job (the sidebar shows it being written; its
+                              pid once done): the overview the model writes of them (without a model, the notes alone), or
+                              a question's answer (503 no-model at once without one)
+  GET  /api/record/<id>/obsidian  the same as Markdown for Obsidian, kept as it was made ({name, text})
+  POST /api/record/raw        {items, ui}: the notes themselves, as they are, Markdown for Obsidian ({name, text}); no model
+  GET  /api/record/templates  ?ui=: the ways to write from notes: three built in, then the reader's own ([{id, name, prompt?, own}])
+  POST /api/record/templates  {op: "put", id?, name, prompt} | {op: "delete", id}: one of the reader's own kept or taken out; the list
   POST /api/ask               {paper, id, question, req, tools}: the model answers a note's question; the answer is stored in it
                               (tools: an agent on this computer looks it up on the web with its own tools: agents.py)
   POST /api/ask/stop          {req}: that question stopped: its answer, when it comes, is not stored
@@ -94,14 +108,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, store, zotero
+from . import __version__, agents, bridges, build, engine, fetch, fold, ids, langs, library, llm, local, models, news, notes, office, pdf, pdfdoc, pdffigs, pdftext, pipeline, providers, record, store, zotero
 
 STATIC = {"app.js": "text/javascript", "app.css": "text/css", "reader.js": "text/javascript",
-          "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript"}
+          "reader.css": "text/css", "i18n.js": "text/javascript", "tutorial.js": "text/javascript", "webmcp.js": "text/javascript",
+          "notes.js": "text/javascript", "notes.css": "text/css"}
 # fonts and KaTeX, kept here so that no page asks another server for them (web/vendor)
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
 VENDOR_TYPES = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".woff2": "font/woff2",
-                ".txt": "text/plain; charset=utf-8"}
+                ".txt": "text/plain; charset=utf-8", ".wasm": "application/wasm"}
 
 
 def vendor_file(rel):
@@ -179,7 +194,7 @@ def models_payload():
                        "hasKey": bool(p["api_key"]) and p["api_key"] not in ("none", "ollama")} for p in provs],
         "presets": providers.PRESETS[:-1] + [models.ANTHROPIC_PRESET, providers.PRESETS[-1]],
         "useThoughtdagEnv": s.get("use_thoughtdag_env", True), "thoughtdagEnv": providers.THOUGHTDAG_ENV.exists(),
-        "pdfTier": s.get("pdf_tier") or "fast", "engine": engine.status(), "storage": store.storage_status(),
+        "pdfTier": s.get("pdf_tier") or "fast", "pdfOnline": s.get("pdf_online") is not False, "engine": engine.status(), "storage": store.storage_status(),
         "lang": s.get("lang") if s.get("lang") in langs.LANGS else None,
     }
 
@@ -237,6 +252,34 @@ class Jobs:
             return None
         Path(file).unlink(missing_ok=True)
         return self.submit(pid, lang, False)
+
+    def record(self, items, ui, kind, question, title, template=""):
+        """A document made of notes picked (record.make), on a thread of its own: its model's call waits on the
+        network beside any generation. Listed with the jobs, so the sidebar shows it being written; stopped, nothing
+        is kept."""
+        job = {"id": uuid.uuid4().hex[:10], "kind": "record", "pid": "", "lang": "", "force": False, "status": "running",
+               "stage": "write", "done": 0, "total": 0, "error": "", "log": [], "created": time.time(), "finished": None, "title": title}
+        self.items[job["id"]] = job
+        self.stops[job["id"]] = stop = threading.Event()
+
+        def run():
+            try:
+                try:
+                    spec = models.ask_spec()
+                except RuntimeError:   # none: the notes alone
+                    spec = None
+                pid, name = record.make(items, ui, kind, question, spec, stop=stop, template=template)
+                job.update(pid=pid, title=name, status="done", stage="done")
+            except llm.Stopped:
+                job.update(status="stopped")
+            except record.NoModel:
+                job.update(status="error", error="no-model")
+            except Exception as e:   # the model failed: nothing is kept, the reader can ask again
+                job.update(status="error", error=str(e)[:600])
+                job["log"].append(traceback.format_exc()[-2000:])
+            job["finished"] = time.time()
+        threading.Thread(target=run, daemon=True).start()
+        return job
 
     def install_engine(self):
         return self._same(kind="install") or self._new(self.eq, kind="install", title="PDF engine")
@@ -469,14 +512,17 @@ def take_file(jobs, data, headers):
 
 def take_pdf(jobs, data, headers):
     """A PDF from the landing, as (reply, status). The paper online when the page found one it names (an arXiv id, a
-    DOI) and it can be read there: faster and truer than a conversion, and the file is kept as its original. Else the
-    file through the PDF engine; without one, it waits for the reader to install it."""
+    DOI) and it can be read there: faster and truer than a conversion, and the file is kept as its original; not when
+    the reader chose in Settings to read a PDF itself (pdf_online). Else the file through the PDF engine (TextFold's own
+    reading without one); a scan without one waits for the reader to install it."""
     if data[:5] != b"%PDF-":
         return {"error": "not-pdf"}, 400
     name, lang = _named(headers)
     try:
         refs = [r for r in json.loads(unquote(headers.get("X-Refs") or "[]")) if isinstance(r, str)][:6]
     except ValueError:
+        refs = []
+    if models.load_settings().get("pdf_online") is False:
         refs = []
     pid = pdfdoc.pid_of(data)
     f = store.DATA / "uploads" / f"{pid}.pdf"
@@ -543,15 +589,27 @@ def listed():
     return rows
 
 
-def landing_page(jobs):
+def app_boot(jobs):
+    """What the app around the reader starts with (app.js): the library, its folders, the jobs, the models."""
     # The agents on this computer are looked for as the server starts, in a second or two: the first page waits that
     # long for them, so it names the model in use rather than asking for one to be connected
     agents.wait_scanned(2)
     data = models_payload()
-    boot = {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data["selectedName"] or "",
+    return {"papers": listed(), "folders": library.folders(), "jobs": jobs.list(), "model": data["selectedName"] or "",
             "askName": data["askName"], "modelData": data,
             "bridge": data["bridge"], "langs": langs.natives()}
+
+
+def landing_page(jobs):
+    boot = app_boot(jobs)
     t = build.app_assets((build.WEB / "app.html").read_text(encoding="utf-8"))
+    return t.replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS)).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
+
+
+def notes_page(jobs):
+    """The notes page, in the app as the landing is: the sidebar beside it, the language at the top."""
+    t = build.app_assets((build.WEB / "notes.html").read_text(encoding="utf-8"))
+    boot = app_boot(jobs)
     return t.replace("{{HEAD}}", build.fonts_head(build.APP_ASSETS)).replace("{{BOOT}}", json.dumps(boot, ensure_ascii=False).replace("</", "<\\/"))
 
 
@@ -589,6 +647,10 @@ def make_handler(jobs):
             try:
                 if u.path == "/":
                     return self.send(200, landing_page(jobs), "text/html; charset=utf-8")
+                if u.path == "/notes":
+                    return self.send(200, notes_page(jobs), "text/html; charset=utf-8")
+                if u.path == "/api/notes":
+                    return self.json(record.everything(listed()))
                 if u.path == "/api/bridge":
                     return self.json(bridges.bridge_status(fresh=True))
                 if u.path == "/api/openrouter/minted":   # the app, waiting while the system browser authorises
@@ -673,6 +735,15 @@ def make_handler(jobs):
                 m = re.fullmatch(r"/api/notes/([\w.-]+)", u.path)
                 if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
                     return self.json(notes.read(m.group(1)))
+                if u.path == "/api/record/templates":
+                    return self.json(record.templates((parse_qs(u.query).get("ui") or ["en"])[0]))
+                m = re.fullmatch(r"/api/record/([\w.-]+)/obsidian", u.path)
+                if m and store.valid_id(m.group(1)) and (store.pdir(m.group(1)) / "meta.json").exists():
+                    try:
+                        name, text = record.obsidian_of(m.group(1))
+                    except (LookupError, OSError):
+                        return self.json({"error": "no such record"}, 404)
+                    return self.json({"name": name, "text": text})
                 if u.path == "/api/whatsnew":
                     return self.json(news.state())
                 m = re.fullmatch(r"/api/text/([\w.-]+)", u.path)
@@ -758,7 +829,7 @@ def make_handler(jobs):
                     lib, _, key = str(body.get("item") or "").rpartition("/")
                     lang = body.get("lang") if body.get("lang") in langs.LANGS else None
                     try:
-                        got = zotero.read(lib, key)
+                        got = zotero.read(lib, key, online=models.load_settings().get("pdf_online") is not False)
                         if "ref" in got:   # generated as a pasted link is (from the page, which asks for a model first)
                             pid = store.resolve(got["ref"])
                             zotero.link(lib, key, pid, got["title"], got["record"])
@@ -846,7 +917,10 @@ def make_handler(jobs):
                         if f:
                             saved["pdf"] = base64.b64encode(f.read_bytes()).decode()
                             saved["pdfjs"] = {"lib": (build.VENDOR / "pdfjs" / "pdf.min.mjs").read_text(encoding="utf-8"),
-                                              "worker": (build.VENDOR / "pdfjs" / "pdf.worker.min.mjs").read_text(encoding="utf-8")}
+                                              "worker": (build.VENDOR / "pdfjs" / "pdf.worker.min.mjs").read_text(encoding="utf-8"),
+                                              # its decoders (a scanned page's pictures), by the names PDF.js asks for
+                                              "wasm": {w.name: base64.b64encode(w.read_bytes()).decode()
+                                                       for w in sorted((build.VENDOR / "pdfjs" / "wasm").glob("*.wasm"))}}
                             if pid.startswith("pdf-"):   # a converted PDF: its paragraphs' places on the pages
                                 with RELAYOUT:
                                     try:
@@ -920,6 +994,33 @@ def make_handler(jobs):
                         return self.json(library.change(body))
                     except ValueError as e:
                         return self.json({"error": str(e)}, 400)
+                if u.path == "/api/record/templates":
+                    try:
+                        record.save_template(str(body.get("op") or "put"), str(body.get("id") or ""), body.get("name"), body.get("prompt"))
+                    except ValueError as e:
+                        return self.json({"error": str(e)}, 400)
+                    return self.json(record.templates(str(body.get("ui") or "en")))
+                if u.path == "/api/record/raw":
+                    try:
+                        name, text = record.raw(body.get("items"), str(body.get("ui") or "en"))
+                    except ValueError as e:
+                        return self.json({"error": str(e)}, 400)
+                    return self.json({"name": name, "text": text})
+                if u.path == "/api/record":
+                    kind, question, ui = body.get("kind") if body.get("kind") in ("ask", "template") else "digest", str(body.get("question") or ""), str(body.get("ui") or "en")
+                    template = str(body.get("template") or "")
+                    if kind == "template" and template == "recap":   # (the recap is the overview)
+                        kind = "digest"
+                    try:
+                        title = record.planned(body.get("items"), ui, kind, question, template)
+                    except (ValueError, LookupError) as e:
+                        return self.json({"error": str(e)}, 400)
+                    if kind in ("ask", "template"):
+                        try:
+                            models.ask_spec()
+                        except RuntimeError:   # a question, and no model to answer it: said at once
+                            return self.json({"error": "no-model"}, 503)
+                    return self.json(jobs.record(body.get("items"), ui, kind, question, title, template))
                 if u.path == "/api/ask/stop":
                     notes.stop(str(body.get("req") or "")[:40])
                     return self.json({"ok": True})
@@ -1037,6 +1138,8 @@ def make_handler(jobs):
                         s["use_thoughtdag_env"] = bool(body["use_thoughtdag_env"])
                     if body.get("pdf_tier") in engine.TIERS:
                         s["pdf_tier"] = body["pdf_tier"]
+                    if "pdf_online" in body:   # (off: a PDF is read from itself, not from the paper online it names: #89)
+                        s["pdf_online"] = bool(body["pdf_online"])
                     models.save_settings(s)
                     return self.json(models_payload())
                 if u.path == "/api/settings/test":
@@ -1108,7 +1211,7 @@ def serve(port=3017):
 
     def killed(signum, frame):
         # the desktop app's server.kill(): server.json goes, then the server, at once as before (stopping as ^C does
-        # would wait for the model calls under way, since Python's exit waits for a thread pool's work)
+        # would wait for an API's calls under way, since Python's exit waits for a thread pool's work)
         withdraw(f)
         signal.signal(signum, signal.SIG_DFL)
         os.kill(os.getpid(), signum)
@@ -1122,3 +1225,5 @@ def serve(port=3017):
         pass
     finally:
         withdraw(f)
+        for stop in list(jobs.stops.values()):   # (^C: the agents' calls under way end too, and Python's exit need not wait for them)
+            stop.set()

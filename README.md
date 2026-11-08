@@ -303,14 +303,15 @@ TextFold is a tool, and its license covers its code. When you share a file, foll
 
 ## What's new
 
+- **November 6, 2026:** your notes in one place, and recaps of them (beta); the original PDF zooms.
 - **November 2, 2026:** fix a PDF's text where you read it, and see what changed.
 - **October 30, 2026:** agents of your own, the PDF engine where you choose, and long PDFs keep their levels.
 - **October 28, 2026:** a button in your browser.
-- **October 27, 2026:** a label stays a label.
 
 <details>
 <summary>Each update in full, and earlier ones</summary>
 
+- **November 6, 2026: your notes in one place, and recaps of them (beta); the original PDF zooms.** **Notes**, at the bottom of the sidebar, gathers every highlight, note and question from all your texts, by text or on a calendar: pick a day or a month, or drag across a stretch of days, months apart if you like. The notes picked can be summarized as **A recap, text by text**, **Themes across texts** or **A paragraph for your paper**, or **+ Your own way**, a template you write once and use with one click; or ask them a question. What is written is a document of your library, in **Reading records**, shown in the sidebar while it is written, every sentence linking to the note or the section of the text it rests on, and it exports to Obsidian. **Export the notes as they are** takes the notes themselves, with no model. Beside the text, the original PDF zooms: **−** and **+** at its top, ⌘ or Ctrl and the wheel, or a pinch.
 - **November 2, 2026: fix a PDF's text where you read it, and see what changed.** Select the words a conversion got wrong and choose **Edit text**: the text opens at those words, and once it is saved only the sections you changed are generated again, your notes where they were. **Save only** keeps an edit without asking the model, so you can fix several places and generate once, from **Edited · Regenerate** in the top bar. **Edit history** marks every change on the page, words added underlined and words removed struck through: go from one to the next, undo one or edit it again, and regenerating accepts them all. After an update, TextFold now says what is new in it. The argument links of a very long text are asked for in parts, and a reply left half written when TextFold was stopped is asked for again rather than read. Thanks to [@Raing5Days](https://github.com/Raing5Days) and [@HamiltonZeng](https://github.com/HamiltonZeng).
 - **October 30, 2026: agents of your own, the PDF engine where you choose, and long PDFs keep their levels.** A program that starts Claude Code, Codex or Pi under another command, such as `mirasim claude`, can be added in **Settings** under **Agents on this computer**: write its command, choose which agent it runs as, and **Detect** lists its models. The PDF engine (MinerU, about 3.4 GB) goes beside your library, so on Windows it is no longer on C: when your library is on D:. You can also choose an empty folder for it in **Settings** before you install it. When a long PDF's levels are written but its argument links cannot be made, the levels are kept and it opens without the links. A relay that sends a whole reply under a stream's header is read too. Thanks to [@Gazerrr03](https://github.com/Gazerrr03), [@nasodaengineer](https://github.com/nasodaengineer) and [@HamiltonZeng](https://github.com/HamiltonZeng).
 - **October 28, 2026: a button in your browser.** In Chrome, Edge or Brave, one click sends the page you are reading to TextFold as you see it, signed in or subscribed, with what its scripts drew, and its reader opens beside the page. The article is found in the browser the way reading views find it, with its headings, figures, formulas and footnotes: a paper on ScienceDirect keeps its 32 headings and 9 figures. The app connects itself to the browser each time it starts, and the button is on its way to the Chrome Web Store. Each section of a paper also knows whether it is part of the appendix, from the paper's own marks. Thanks to [@minatomugino864-lgtm](https://github.com/minatomugino864-lgtm). [Works in your browser ↑](#works-in-your-browser)
@@ -379,8 +380,24 @@ TextFold is a tool, and its license covers its code. When you share a file, foll
 <a href="https://github.com/nasodaengineer" title="@nasodaengineer"><img src="https://github.com/nasodaengineer.png?size=80" width="40" height="40" alt="@nasodaengineer" /></a>
 <a href="https://github.com/Raing5Days" title="@Raing5Days"><img src="https://github.com/Raing5Days.png?size=80" width="40" height="40" alt="@Raing5Days" /></a>
 <a href="https://github.com/xieguaiwu" title="@xieguaiwu"><img src="https://github.com/xieguaiwu.png?size=80" width="40" height="40" alt="@xieguaiwu" /></a>
+<a href="https://github.com/ShiTan-677" title="@ShiTan-677"><img src="https://github.com/ShiTan-677.png?size=80" width="40" height="40" alt="@ShiTan-677" /></a>
+<a href="https://github.com/SockingPanda" title="@SockingPanda"><img src="https://github.com/SockingPanda.png?size=80" width="40" height="40" alt="@SockingPanda" /></a>
 
 Contributions are welcome: start with [CONTRIBUTING.md](https://github.com/chenxiachan/textfold/blob/main/CONTRIBUTING.md).
+
+## Cite
+
+If you use TextFold in your research, please cite it as:
+
+```bibtex
+@software{chen_textfold_2026,
+  author  = {Chen, Xia},
+  title   = {{TextFold}: Language Models as Reading Interfaces},
+  year    = {2026},
+  url     = {https://github.com/chenxiachan/textfold},
+  license = {Apache-2.0}
+}
+```
 
 <br>
 

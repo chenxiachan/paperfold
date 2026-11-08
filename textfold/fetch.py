@@ -115,6 +115,11 @@ def fetch(pid, root: Path, force=False):
     return d
 
 
+def image_name(src):
+    """The name a page's figure is kept under beside it (fetch_images)."""
+    return re.sub(r"[^\w.\-]", "_", src.split("/")[-1])
+
+
 def fetch_images(srcs, base_url, out_dir: Path):
     """Download figure images next to the built page, four at a time, each kept smaller (picture.py; one kept before
     that, as it came, stays as it is); returns {original src: local path}."""
@@ -125,7 +130,7 @@ def fetch_images(srcs, base_url, out_dir: Path):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def one(s):
-        name = re.sub(r"[^\w.\-]", "_", s.split("/")[-1])
+        name = image_name(s)
         f = next((g for g in (out_dir / name, out_dir / (name + ".webp")) if g.exists()), None)
         if f is None:
             data, kept = picture.compact(get(urllib.parse.urljoin(base_url, s))[0], name)

@@ -11,7 +11,8 @@ leaves the short levels meaningless. So:
             phrase is there verbatim, else the model's phrase as written
 Written words that also occur in the key sentences carry `m`, the index of
 that source token, so the morph can slide the word instead of swapping it.
-One model call per chunk (a heading and the units under it).
+One model call per chunk (a heading and the units under it); a long one in parts (PART_UNITS), and its own line then
+from its units' takeaways, in one more call.
 """
 import bisect
 import difflib
@@ -120,7 +121,12 @@ SCHEMA = {
     "required": ["section", "units"],
 }
 
+SECTION_SCHEMA = {"type": "object", "properties": {"section": SCHEMA["properties"]["section"]}, "required": ["section"]}
+
 KIND = {"para": "paragraph", "item": "list item", "abstract": "abstract", "caption": "caption"}
+# a section's units asked in one call at most: the reply writes the same lines for each, a short one too, so its length
+# goes with their number (#98: a book's chapter of 351 paragraphs outran the model's output)
+PART_UNITS = 40
 
 
 def _cjk_share(text):
@@ -176,6 +182,30 @@ def tables_of(doc, chunk, limit=1500, most=3):
     return out[:most]
 
 
+def parts(chunk):
+    """A section's units in as few runs of at most PART_UNITS as there must be, of about equal length."""
+    us = chunk["units"]
+    k = max(1, -(-len(us) // PART_UNITS))
+    n = max(1, -(-len(us) // k))
+    return [us[i:i + n] for i in range(0, len(us), n)]
+
+
+def _abstract(doc):
+    U, A = doc["units"], doc["atoms"]
+    return " ".join(plain(U[u]["toks"], A) for u in doc["chunks"][0]["units"]) if doc["chunks"] and doc["chunks"][0]["id"] == "abstract" else ""
+
+
+def _section_rule(doc):
+    """What a section's own line is to say, as its prompt asks it."""
+    b = budgets_for(doc)
+    cjk = b is CJK_BUDGET
+    count = "characters" if cjk else "words"
+    job = ("stating what this section establishes in the paper and what it does there (fixes the terms, surveys the rules, "
+           "measures the gap, compares a foreign regime, proposes a remedy); a line that only says what the section covers "
+           "is not a summary.") if cjk else "stating what this section establishes in the paper;"
+    return f"For the section: takeaway, ONE sentence of at most {b['section']} {count} {job} topic, at most {b['topic']} {count} copied verbatim from that takeaway."
+
+
 def prompt_for(doc, chunk):
     U, A = doc["units"], doc["atoms"]
     b = budgets_for(doc)
@@ -194,10 +224,7 @@ Each line is read on its own, out of order, by someone deciding whether to zoom 
 - Keep every number the point depends on, each with its anchor: what it counts, in which year, for whom.
 - A process is who acts, through which channel, to whom. A bare sequence of steps is not a takeaway.
 - The reason sentence gives the mechanism or the consequence, not where the claim comes from: not "supported by X", not "as Y shows", unless the source itself is the finding.""" if cjk else ""
-    job = ("stating what this section establishes in the paper and what it does there (fixes the terms, surveys the rules, "
-           "measures the gap, compares a foreign regime, proposes a remedy); a line that only says what the section covers "
-           "is not a summary.") if cjk else "stating what this section establishes in the paper;"
-    abstract = " ".join(plain(U[u]["toks"], A) for u in doc["chunks"][0]["units"]) if doc["chunks"] and doc["chunks"][0]["id"] == "abstract" else ""
+    abstract = _abstract(doc)
     blocks = []
     for n, uid in enumerate(chunk["units"]):
         u = U[uid]
@@ -236,12 +263,42 @@ For each unit:
 - evidence: the numbers of the 1 or 2 sentences (3 only when the unit has 7 or more) whose verbatim text best backs the takeaway, ascending; prefer sentences that state a result, a definition or a decision over sentences that only set up or list.
 - A unit that is not a passage of the text (a label, a heading read as a line of text, an author's note or address, a date), or that is already as short as its takeaway would be, stays as written: give its takeaway, topic and reason as "".{rules}
 
-For the section: takeaway, ONE sentence of at most {b['section']} {count} {job} topic, at most {b['topic']} {count} copied verbatim from that takeaway.
+{_section_rule(doc)}
 
 Style: no em or en dashes as punctuation, use commas or colons (hyphenated terms such as "zero-shot" are fine). Units show math as $...$; when a symbol is essential to a takeaway or reason, copy its $...$ exactly as it appears in the unit, otherwise avoid math. No citations; no figure or table numbers except in a caption's own lines.
 
 Return JSON: {{"section": {{"takeaway": "...", "topic": "..."}}, "units": [{{"id": "U0", "role": "...", "takeaway": "...", "topic": "...", "reason": "...", "evidence": [0]}}, ...]}} with exactly one entry per unit, in order.""", doc["meta"])
     if cjk:   # the style rules above are written for English punctuation
+        prompt = prompt.replace("no em or en dashes as punctuation, use commas or colons",
+                                "use the punctuation of the text's own language")
+    return prompt
+
+
+def section_prompt(doc, chunk):
+    """A section asked in parts: its own line, from the takeaways its units were given (those that came back)."""
+    U, A = doc["units"], doc["atoms"]
+    takes = [plain(l["brief"][:l["tn"]], A) for uid in chunk["units"] if (l := U[uid].get("lad")) and l.get("tn")]
+    head = f"{chunk['num']} {chunk['title']}".strip()
+    prompt = kinds.adapt(f"""Paper: {doc['meta']['title']}
+
+Paper abstract, for context:
+{_abstract(doc)}
+
+Outline (▶ marks this section):
+{outline(doc, chunk['id'])}
+
+This section: {head}
+
+The takeaways of its units, in reading order:
+
+{chr(10).join("- " + t for t in takes)}
+
+{_section_rule(doc)}
+
+Style: no em or en dashes as punctuation, use commas or colons. No citations.
+
+Return JSON: {{"section": {{"takeaway": "...", "topic": "..."}}}}""", doc["meta"])
+    if budgets_for(doc) is CJK_BUDGET:
         prompt = prompt.replace("no em or en dashes as punctuation, use commas or colons",
                                 "use the punctuation of the text's own language")
     return prompt
@@ -712,56 +769,87 @@ def section_ladder(o, topic_budget=3, doc=None, chunk=None):
 
 def build(doc, cfg, cache_dir, jobs=4, log=print, progress=None, force=False, stop=None):
     chunks = [c for c in doc["chunks"] if c["units"]]
+    tasks = [(c, us) for c in chunks for us in parts(c)]   # (a section of PART_UNITS or fewer is one: its prompt as before)
     cost, warnings, errors = 0.0, [], []
     model = llm.label(cfg)
     b = budgets_for(doc)
     cjk = b is CJK_BUDGET
+    system = llm.system_for(doc["meta"])
 
-    def run(c):
+    def run(task):
+        c, us = task
         if stop is not None and stop.is_set():   # stopped: the chunks not yet sent are skipped
-            return c, None, llm.Stopped()
+            return task, None, llm.Stopped()
         try:
-            return c, llm.call(prompt_for(doc, c), SCHEMA, cfg, cache_dir, force, system=llm.system_for(doc["meta"])), None
+            with llm.stoppable(stop):   # (stopped while it runs: the agent's call ends there)
+                return task, llm.call(prompt_for(doc, {**c, "units": us}), SCHEMA, cfg, cache_dir, force, system=system), None
         except Exception as e:  # one failed chunk falls back to local ladders, the rest still build
-            return c, None, e
+            return task, None, e
 
+    def read(c, us, rec):
+        """A reply's units in (each its levels); the section's line it brings. A reply of a shape not foreseen: its
+        units fall back, as for a failed call."""
+        out = rec["out"] if isinstance(rec["out"], dict) else {}
+        try:
+            by_id = {x.get("id"): x for x in llm.units_of(out)}
+            for n, uid in enumerate(us):
+                o = by_id.get(f"U{n}")
+                u = doc["units"][uid]
+                u["lad"] = assemble(u, o, doc["atoms"], model, cjk) if o else local(u, doc["atoms"], cjk)
+                if not o:
+                    warnings.append(f"{uid}: missing from reply")
+                elif words(u["lad"]["brief"][:u["lad"]["tn"]]) > b["takeaway"] + (4 if not cjk else 15):
+                    warnings.append(f"{uid}: long takeaway ({words(u['lad']['brief'][:u['lad']['tn']])} {'characters' if cjk else 'words'})")
+            return True, out.get("section")
+        except Exception as e:
+            errors.append(RuntimeError(f"{model}: a reply TextFold could not read ({type(e).__name__}: {e})"))
+            log(f"  ! {c['id']}: {errors[-1]}")
+            llm.forget(rec)
+            for uid in us:
+                doc["units"][uid].pop("lad", None)
+            return False, None
+
+    def section(c):
+        """The line of a section asked in parts, from its units' takeaways."""
+        nonlocal cost
+        try:
+            with llm.stoppable(stop):
+                rec, cached = llm.call(section_prompt(doc, c), SECTION_SCHEMA, cfg, cache_dir, force, system=system)
+        except llm.Stopped:
+            raise
+        except Exception as e:
+            warnings.append(f"{c['id']}: its own line: {e}")
+            return None
+        cost += 0 if cached else (rec.get("cost") or 0)
+        return (rec["out"] if isinstance(rec["out"], dict) else {}).get("section")
+
+    back = {}   # a section's parts come back: (read, its line, cached)
     if progress:
-        progress(0, len(chunks))
-    with ThreadPoolExecutor(jobs) as ex:   # (each section as its reply comes: what is done with one reads only its own)
-        for n_done, (c, res, err) in enumerate(llm.as_answered(ex, run, chunks, log, model), 1):
+        progress(0, len(tasks))
+    with ThreadPoolExecutor(jobs) as ex:   # (each section once all its parts are in: what is done with one reads only its own)
+        for n_done, ((c, us), res, err) in enumerate(llm.as_answered(ex, run, tasks, log, model), 1):
             if progress:
-                progress(n_done, len(chunks))
+                progress(n_done, len(tasks))
             if stop is not None and stop.is_set():
                 raise llm.Stopped()
+            k = len(parts(c))
             if err:
                 errors.append(err)
-                log(f"  ! {c['id']}: {err}")
+                log(f"  ! {c['id']}{' part' if k > 1 else ''}: {err}")
+                got = (False, None, False)
+            else:
+                rec, cached = res
+                cost += 0 if cached else (rec.get("cost") or 0)
+                got = (*read(c, us, rec), cached)
+            back.setdefault(c["id"], []).append(got)
+            if len(back[c["id"]]) < k or not any(ok for ok, _, _ in back[c["id"]]):
                 continue
-            rec, cached = res
-            cost += 0 if cached else (rec.get("cost") or 0)
-            out = rec["out"] if isinstance(rec["out"], dict) else {}
-            try:
-                by_id = {x.get("id"): x for x in llm.units_of(out)}
-                for n, uid in enumerate(c["units"]):
-                    o = by_id.get(f"U{n}")
-                    u = doc["units"][uid]
-                    u["lad"] = assemble(u, o, doc["atoms"], model, cjk) if o else local(u, doc["atoms"], cjk)
-                    if not o:
-                        warnings.append(f"{uid}: missing from reply")
-                    elif words(u["lad"]["brief"][:u["lad"]["tn"]]) > b["takeaway"] + (4 if not cjk else 15):
-                        warnings.append(f"{uid}: long takeaway ({words(u['lad']['brief'][:u['lad']['tn']])} {'characters' if cjk else 'words'})")
-                c["lad"] = section_ladder(out.get("section"), 3, doc, c)
-                fold_background(c, doc)   # what the section shows at Takeaway, once its units are folded
-                dress(c, doc)             # the sentence a page break cut in half; the background Brief leaves out
-            except Exception as e:   # a reply of a shape not foreseen: this chunk's units fall back, as for a failed call
-                errors.append(RuntimeError(f"{model}: a reply TextFold could not read ({type(e).__name__}: {e})"))
-                log(f"  ! {c['id']}: {errors[-1]}")
-                llm.forget(rec)
-                for uid in c["units"]:
-                    doc["units"][uid].pop("lad", None)
-                continue
-            log(f"  {'·' if cached else '✓'} {c['id']:<14} {len(c['units']):>2} units")
-    if chunks and len(errors) == len(chunks):  # nothing came back: a backend problem, not a paper problem
+            c["lad"] = section_ladder(back[c["id"]][0][1] if k == 1 else section(c), 3, doc, c)
+            fold_background(c, doc)   # what the section shows at Takeaway, once its units are folded
+            dress(c, doc)             # the sentence a page break cut in half; the background Brief leaves out
+            cached = all(x for _, _, x in back[c["id"]])
+            log(f"  {'·' if cached else '✓'} {c['id']:<14} {len(c['units']):>2} units{f' in {k} parts' if k > 1 else ''}")
+    if tasks and len(errors) == len(tasks):  # nothing came back: a backend problem, not a paper problem
         raise RuntimeError(str(errors[0]))
     for u in doc["units"].values():
         u.setdefault("lad", local(u, doc["atoms"], cjk))

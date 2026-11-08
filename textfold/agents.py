@@ -264,6 +264,60 @@ def child_env():
     return env
 
 
+def run(args, *, stop=None, timeout=None, input=None, **kw):
+    """subprocess.run for an agent's call, which the reader's Stop ends at once: stop (a threading.Event; else the one
+    this thread's calls are made under, llm.stoppable) set while it runs ends the call's whole process tree (an agent
+    starts its own: node, a sandbox) and raises llm.Stopped. What that call had written is lost; the calls already
+    answered stay in the cache. With no stop at all, subprocess.run as it is. (After #70, Shuhao Li's: the input from
+    a file and the process watched, the tree its own process group; on Windows taskkill /T, as the desktop app ends
+    the server.)"""
+    from .llm import Stopped, stop_now
+    stop = stop or stop_now()
+    if stop is None:
+        return subprocess.run(args, input=input, timeout=timeout, **kw)
+    if stop.is_set():
+        raise Stopped()
+    if kw.pop("capture_output", False):
+        kw["stdout"] = kw["stderr"] = subprocess.PIPE
+    with tempfile.TemporaryFile() as source:   # (a file, not a pipe: nothing to feed while the process is watched)
+        if input is not None:
+            source.write(input.encode(kw.get("encoding") or "utf-8", kw.get("errors") or "strict") if isinstance(input, str) else input)
+            source.seek(0)
+        p = subprocess.Popen(args, stdin=source if input is not None else None, **({} if WIN else {"start_new_session": True}), **kw)
+        deadline = None if timeout is None else time.monotonic() + timeout
+        try:
+            while True:
+                try:
+                    out, err = p.communicate(timeout=.25)
+                    return subprocess.CompletedProcess(args, p.returncode, out, err)
+                except subprocess.TimeoutExpired:
+                    if stop.is_set():
+                        raise Stopped()
+                    if deadline is not None and time.monotonic() > deadline:
+                        raise subprocess.TimeoutExpired(args, timeout)
+        except BaseException:
+            _end_tree(p)
+            raise
+
+
+def _end_tree(p):
+    if p.poll() is None:
+        if WIN:
+            subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        else:
+            try:
+                os.killpg(p.pid, 9)   # (SIGKILL: the group start_new_session made, its id the process's own)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if p.poll() is None:
+            p.kill()
+    try:
+        p.communicate(timeout=5)   # (reaped, its pipes closed)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def locate(binary, extra=()):
     for d in [os.path.expanduser(x) for x in extra] + search_dirs():
         for ext in EXTS:
@@ -520,8 +574,14 @@ def _rpc(args, requests, timeout=30, cwd=None):
     return got
 
 
+# Codex without its plugins and apps, which TextFold never uses: each start of a Codex with them fetches the remote
+# plugin catalog anew (Codex 0.163: megabytes a start, and a document starts one a passage, #120). As -c, not --disable:
+# a Codex that does not know one of these features ignores it, where --disable stops at once.
+CODEX_LEAN = [x for f in ("plugins", "remote_plugin", "apps") for x in ("-c", f"features.{f}=false")]
+
+
 def _codex_models(path, cmd=None):
-    got = _rpc([*(cmd or argv(path)), "app-server"], [
+    got = _rpc([*(cmd or argv(path)), *CODEX_LEAN, "app-server"], [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize",
          "params": {"clientInfo": {"name": "textfold", "title": "TextFold", "version": "0.4"}, "capabilities": None}},
         {"jsonrpc": "2.0", "method": "initialized"},
@@ -779,18 +839,23 @@ def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=N
         sf, of = Path(tmp) / "schema.json", Path(tmp) / "out.txt"
         sf.write_text(json.dumps(_strict(schema)), encoding="utf-8")
         # (tools: its web search too; the sandbox stays read-only)
-        args = [*cmd, *(["--search"] if tools else []), "exec", "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
+        args = [*cmd, *(["--search"] if tools else []), "exec", *CODEX_LEAN, "--ephemeral", "--skip-git-repo-check", "-s", "read-only",
                 "-m", model, "--output-schema", str(sf), "-o", str(of)]
         # off is "none" (gpt-5.5 takes it, and refuses "minimal"); a model that refuses "none" runs at "low"
         for level in (["none", "low"] if effort == "off" else [effort]):
-            r = subprocess.run(args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"], input=f"{system}\n\n{prompt}",
-                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=timeout, env=child_env(), cwd=tmp)
-            if not r.returncode and of.exists():
-                break
-        if r.returncode or not of.exists():
-            raise RuntimeError(f"codex exec exited {r.returncode}: {(r.stderr or r.stdout)[-800:]}")
-        return parse_json(of.read_text(encoding="utf-8")), None
+            of.unlink(missing_ok=True)
+            # Codex can panic when its CLI writes to a full nonblocking pipe. Regular files avoid pipe backpressure.
+            with tempfile.TemporaryFile(dir=tmp) as stdout, tempfile.TemporaryFile(dir=tmp) as stderr:
+                r = run(args + (["-c", f"model_reasoning_effort={level}"] if level else []) + ["-"], input=f"{system}\n\n{prompt}",
+                        stdout=stdout, stderr=stderr, text=True, encoding="utf-8", errors="replace",
+                        timeout=timeout, env=child_env(), cwd=tmp)
+                if not r.returncode and of.exists():
+                    return parse_json(of.read_text(encoding="utf-8")), None
+                stream = stderr if stderr.seek(0, os.SEEK_END) else stdout
+                size = stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, size - 3200))
+                detail = stream.read().decode("utf-8", errors="replace")[-800:]
+        raise RuntimeError(f"codex exec exited {r.returncode}: {detail}")
 
 
 def run_pi(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
@@ -843,11 +908,11 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
     env = env_for(path)
     signed_out = lambda r: "Authentication required" in r.stdout + r.stderr   # (it says so at once, exit 0, and does not wait)
     with tempfile.TemporaryDirectory() as tmp:   # a scratch cwd: no project, nothing to read
-        r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=timeout, env=env, cwd=tmp)
+        r = run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=timeout, env=env, cwd=tmp)
         if signed_out(r) and env.pop("CODEBUDDY_CONFIG_DIR", None):   # not in WorkBuddy's settings: CodeBuddy's own sign-in
-            r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=timeout, env=env, cwd=tmp)
+            r = run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    timeout=timeout, env=env, cwd=tmp)
     said = (r.stderr or r.stdout)[-800:]
     if signed_out(r) and workbuddy_lite(path):
         raise RuntimeError(LITE_SIGNED_OUT)
@@ -857,6 +922,8 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
     try:
         got = json.loads(r.stdout)
     except ValueError:
+        if r.returncode == 0 and r.stdout.strip():   # (finished, its output cut short: #99)
+            raise RuntimeError(f"codebuddy -p: its output is not whole JSON, cut off after: {r.stdout[-300:]}")
         raise RuntimeError(f"codebuddy -p exited {r.returncode}: {said}")
     rows = got if isinstance(got, list) else [got]
     res = next((x for x in reversed(rows) if isinstance(x, dict) and x.get("type") == "result"), None)
@@ -872,8 +939,8 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
 
 def _pi_once(args, body, schema, timeout):
     with tempfile.TemporaryDirectory() as tmp:
-        r = subprocess.run(args, input=body, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=timeout, env=child_env(), cwd=tmp)
+        r = run(args, input=body, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=timeout, env=child_env(), cwd=tmp)
     text, cost = None, None
     for line in r.stdout.splitlines():
         try:

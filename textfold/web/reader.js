@@ -212,8 +212,24 @@
     return out;
   }
 
-  // an atom is kept on one line, except a citation, which may list many works and breaks between them
-  const atCls = (t) => (t.a ? (A[t.a].wrap ??= A[t.a].html.includes('ltx_cite')) ? ' at wrap' : ' at' : t.x ? ' at' : '');
+  // A citation joins the paragraph's line boxes. Other links can still wrap inside their own box.
+  const atCls = (t) => {
+    if (!t.a) return t.x ? ' at' : '';
+    const a = A[t.a];
+    if (a.kind === 'cite') return ' at wrap citation';
+    return a.kind === 'ref' ? ' at wrap' : ' at';
+  };
+  // The animation can draw a paragraph at its measured width when a citation spans multiple lines.
+  function splitCitation(tx) {
+    if (!tx) return false;
+    for (const el of tx.querySelectorAll('.tk.citation')) {
+      const rects = el.getClientRects(), first = rects[0];
+      if (first && [...rects].some((r) => Math.abs(r.top - first.top) > first.height / 2)) {
+        return tx.getClientRects().length === 1;
+      }
+    }
+    return false;
+  }
   // a piece's highlight (pieces(): hl): marked at Full or Brief, the same more lightly (another language), marked at
   // Key, marked at Takeaway
   const HL = ['', ' hl', ' hl hls', ' hl hlk', ' hl hlt'];
@@ -395,7 +411,11 @@
       try { return katexLib.renderToString(attrText(src[1]), { displayMode: /\bdisplay="block"/.test(attrs), throwOnError: false }); } catch { return m; }
     });
   }
-  for (const a of Object.values(A)) if (a.kind === 'math') a.html = drawTex(a.html);
+  for (const a of Object.values(A)) {
+    if (a.kind !== 'math') continue;
+    const html = drawTex(a.html);
+    a.html = html === a.html ? `<span class="inline-math">${html}</span>` : html;
+  }
   for (const b of D.blocks) { if (b.html) b.html = drawTex(b.html); if (b.title) b.title = drawTex(b.title); }   // (a box's title too)
   // a section's title keeps its MathML, which mathify reads for the formulas of its translations: drawn as it is shown
   const drawnTitles = new Map();
@@ -795,7 +815,8 @@
     const styles = new Map();   // one computed style per (container, class): pieces of a unit share their looks
     for (const box of docEl.querySelectorAll(BOXES)) {
       if (!near(visibleRect(box), M)) continue;
-      const items = box.matches('[data-id]') ? [box] : box.querySelectorAll('[data-id]');
+      const whole = splitCitation(box._tx) ? box._tx : null;
+      const items = whole ? [whole] : box.matches('[data-id]') ? [box] : box.querySelectorAll('[data-id]');
       for (const el of items) {
         const r = visibleRect(el);
         if (!near(r, M)) continue;
@@ -806,7 +827,14 @@
           st = { font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} / ${cs.lineHeight} ${cs.fontFamily}`, color: cs.color, bg: cs.backgroundColor };
           styles.set(key, st);
         }
-        snap.set(el, { r, ...st });
+        const record = { r, ...st };
+        if (whole) {
+          const copy = el.cloneNode(true);
+          copy.dataset.l = box.dataset.l;
+          for (const child of copy.querySelectorAll('[id]')) child.removeAttribute('id');
+          record.copy = copy;
+        }
+        snap.set(el, record);
       }
     }
     return snap;
@@ -838,7 +866,7 @@
     const after = new Map(), arrived = [], anims = [];
     for (const box of docEl.querySelectorAll(BOXES)) {
       if (!near(visibleRect(box), M)) continue;
-      if (box._mode === 'txt') { arrived.push(box._tx); continue; }   // drawn as text: it fades in whole
+      if (box._mode === 'txt' || splitCitation(box._tx)) { arrived.push(box._tx); continue; }   // drawn as text: it fades in whole
       const items = box.matches('[data-id]') ? [box] : box.querySelectorAll('[data-id]');
       for (const el of items) { const r = visibleRect(el); if (near(r, M)) after.set(el, r); }
     }
@@ -873,7 +901,7 @@
     for (const [el, a] of before) {
       if (after.has(el)) continue;   // (no rect read here: it would force a layout after the animations start)
       if (!near(a.r, 0) || ghosts > 600) continue;
-      const g = el.cloneNode(true);
+      const g = a.copy || el.cloneNode(true);
       g.removeAttribute('data-id');
       Object.assign(g.style, { left: `${a.r.left}px`, top: `${a.r.top}px`, width: `${a.r.width}px`, height: `${a.r.height}px`, font: a.font, color: a.color, backgroundColor: a.bg, transform: 'none', overflow: 'hidden' });
       frag.append(g); ghosts++;
@@ -1212,7 +1240,12 @@
       if (!inRange(r)) continue;
       U.set(uid, rectOf(r));
       deco(u, `d:u:${uid}`, uid, `u|${u.className}`);
-      for (const el of u.querySelectorAll('[data-id]')) piece(el, el.dataset.id, uid, el.classList.contains('dot') ? 'b' : 't', u.className);
+      const tx = u._tx;
+      const whole = splitCitation(tx);
+      if (whole) piece(tx, `cite:${L}:${uid}`, uid, 'b', u.className);
+      for (const el of u.querySelectorAll('[data-id]')) {
+        if (!whole || !tx.contains(el)) piece(el, el.dataset.id, uid, el.classList.contains('dot') ? 'b' : 't', u.className);
+      }
     }
     for (const sec of root.querySelectorAll('section.chunk')) deco(sec, `d:c:${sec.id}`, `h:${sec.id}`, `c|${sec.className}`);
     for (const bx of root.querySelectorAll('.box')) { const f = bx.querySelector('.u'); deco(bx, `d:b:${bx.id}`, f && f.dataset.u, `b|${bx.className}`); }
@@ -1258,6 +1291,7 @@
         el.style.cssText = `${p.st.css};width:${p.w}px;height:${p.h}px;opacity:0`;
       } else {
         el = p.take ? p.el : p.el.cloneNode(true);
+        if (el.classList.contains('tx')) el.dataset.l = p.el.closest('.u').dataset.l;
         el.removeAttribute('data-id'); el.removeAttribute('id');
         for (const x of el.querySelectorAll('[id]')) x.removeAttribute('id');
         el.classList.remove('flash');
@@ -2223,7 +2257,7 @@
     selbar.innerHTML = `<button type="button" data-act="hl">${esc(t.n_highlight)}</button>${swatches('hl', toneOf({ anchor: anchors[0] }), 0, lastShade)}` +
       `<button type="button" data-act="note">${esc(t.n_note)}</button>` +
       `<button type="button" data-act="ask">${esc(t.n_ask)}</button>` +
-      // the author's words, in a document whose text can be put right (a PDF read wrong: app.js, editText)
+      // the author's words, which the reader can put right in any document (app.js, editText)
       (window.DRApp && window.DRApp.editText && anchors[0].tokens ? `<button type="button" data-act="edit">${esc(t.ed_fix)}</button>` : '');
     selbar.hidden = false;
     const r = getSelection().getRangeAt(0).getBoundingClientRect(), w = selbar.offsetWidth;
@@ -3458,9 +3492,13 @@
   svdlg.addEventListener('submit', (e) => { e.preventDefault(); doSave(); });
   savebtn.addEventListener('click', (e) => { e.stopPropagation(); openSave(); });
   // where a file goes, the reader chooses: the app's own save dialog, or the browser's (Chrome's file picker); a browser
-  // without one keeps it in its downloads. make() gives the file's text once the place is chosen; null when cancelled
+  // without one keeps it in its downloads. make() gives the file's text (a picture: a Blob) once the place is chosen;
+  // null when cancelled
   async function saveAs(name, make, type) {
-    if (window.desktop && window.desktop.saveFile) return window.desktop.saveFile(name, await make());
+    if (window.desktop && window.desktop.saveFile) {
+      const data = await make();   // (a picture: its bytes)
+      return window.desktop.saveFile(name, data instanceof Blob ? await data.arrayBuffer() : data);
+    }
     if (window.showSaveFilePicker) {
       let handle = null;
       try {
@@ -3716,18 +3754,35 @@ math { font-size: 1.05em; }
     const keep = unitAtReading();
     const pane = h('aside', 'pdfpane'), bar = h('div', 'pp-bar'), title = h('span', 'pp-t'), count = h('span', 'pp-n');
     const x = h('button', 'pp-x', '×'), scroller = h('div', 'pp-scroll');
+    const zo = h('button', 'pp-z', '−'), zl = h('button', 'pp-zl'), zi = h('button', 'pp-z', '+');
+    for (const [b, t] of [[zo, T[ui].nb_zoom_out], [zl, T[ui].pp_fit], [zi, T[ui].nb_zoom_in]]) { b.type = 'button'; b.title = t; b.setAttribute('aria-label', t); }
     x.type = 'button';
     x.setAttribute('aria-label', T[ui].close);
     pane.setAttribute('aria-label', T[ui].compare_tip);
     const src = { pmc: 'PubMed Central', ppr: 'Preprint', biorxiv: 'bioRxiv', medrxiv: 'medRxiv' }[D.meta.id.match(/^[a-z]+/)?.[0]];
     const own = D.meta.id.startsWith('pdf-');   // a PDF read through the engine: the file itself, not one fetched for it
     title.textContent = own ? (D.meta.label || 'PDF') : src ? `${src} · PDF` : `arXiv · PDF ${D.meta.version || ''}`.trim();
-    bar.append(title, count, x);
+    bar.append(title, zo, zl, zi, count, x);
     pane.append(bar, scroller, gripFor(pane));
     if (keptWidth()) setPdfWidth(keptWidth());
     document.body.append(pane);
-    cmp = { pane, scroller, count, pages: [], words: [], grams: null, spans: new Map(), current: null, follow: null, epoch: 0 };
+    cmp = { pane, scroller, count, pages: [], words: [], grams: null, spans: new Map(), current: null, follow: null, epoch: 0, zoom: 1, zl };
     x.addEventListener('click', closeCompare);
+    zo.addEventListener('click', () => zoomPdf(cmp.zoom / 1.25));
+    zi.addEventListener('click', () => zoomPdf(cmp.zoom * 1.25));
+    zl.addEventListener('click', () => zoomPdf(1));
+    zoomLabel();
+    // ⌘/Ctrl and the wheel, or a pinch, over the pages: the PDF zooms around the pointer, not the text's levels
+    pane.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault(); e.stopPropagation();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+      zoomPdf(cmp.zoom * Math.exp(-e.deltaY * unit * 0.004), { x: e.clientX, y: e.clientY });   // (a notch of a mouse wheel: about half again)
+    }, { passive: false });
+    let pz = 1;   // (Safari's pinch)
+    pane.addEventListener('gesturestart', (e) => { e.preventDefault(); e.stopPropagation(); pz = cmp.zoom; });
+    pane.addEventListener('gesturechange', (e) => { e.preventDefault(); e.stopPropagation(); zoomPdf(pz * e.scale, { x: e.clientX, y: e.clientY }); });
+    pane.addEventListener('gestureend', (e) => { e.preventDefault(); e.stopPropagation(); });
     scroller.addEventListener('scroll', () => requestAnimationFrame(pageCount), { passive: true });
     scroller.addEventListener('click', onPageClick);
     document.documentElement.classList.add('compare');
@@ -3749,27 +3804,37 @@ math { font-size: 1.05em; }
     msg.textContent = T[ui].pdf_loading;
     cmp.scroller.replaceChildren(msg);
     try {
-      let lib, data;
-      if (D.pdf && D.pdfjs) {   // a saved page: PDF.js and the file from inside it
+      // wasm: where PDF.js finds its decoders (pdfjs/wasm/: JBIG2 and CCITT, the pictures of scanned pages; JPEG 2000;
+      // colour profiles). Without them those pictures are left out of the page, which then shows blank (#108)
+      let lib, data, wasm;
+      const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      if (D.pdf && D.pdfjs) {   // a saved page: PDF.js, its decoders and the file from inside it
         const js = (text) => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
         lib = await import(js(D.pdfjs.lib));
         lib.GlobalWorkerOptions.workerSrc = js(D.pdfjs.worker);
-        data = Uint8Array.from(atob(D.pdf), (c) => c.charCodeAt(0));
+        data = bytes(D.pdf);
+        const inPage = D.pdfjs.wasm || {};
+        wasm = { BinaryDataFactory: class { async fetch({ kind, filename }) {   // (PDF.js asks for each by its name)
+          if (kind !== 'wasmUrl' || !inPage[filename]) throw new Error(`not in this page: ${filename}`);
+          return bytes(inPage[filename]);
+        } } };
       } else if (D.pdfAt) {   // a gallery's page: the file and PDF.js next to it
         const at = (p) => new URL(p, location.href).href;
         lib = await import(at(`${D.pdfAt.pdfjs}pdf.min.mjs`));
         lib.GlobalWorkerOptions.workerSrc = at(`${D.pdfAt.pdfjs}pdf.worker.min.mjs`);
+        wasm = { wasmUrl: at(`${D.pdfAt.pdfjs}wasm/`) };
         const r = await fetch(at(D.pdfAt.file));
         if (!r.ok) throw Object.assign(new Error('no pdf'), { open: D.meta.abs_url });
         data = new Uint8Array(await r.arrayBuffer());
       } else {
         lib = await import('/static/vendor/pdfjs/pdf.min.mjs');
         lib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
+        wasm = { wasmUrl: new URL('/static/vendor/pdfjs/wasm/', location.href).href };
         const r = await fetch(`/api/pdf/${encodeURIComponent(D.meta.id)}`);
         if (!r.ok) throw Object.assign(new Error('no pdf'), { open: (await r.json().catch(() => ({}))).open });
         data = new Uint8Array(await r.arrayBuffer());
       }
-      const loading = lib.getDocument({ data, isEvalSupported: false });
+      const loading = lib.getDocument({ data, isEvalSupported: false, ...wasm });
       const doc = await loading.promise;
       if (!cmp || cmp.pane !== pane) { loading.destroy(); return; }
       Object.assign(cmp, { lib, doc, loading, pages: [], spans: new Map() });
@@ -3850,7 +3915,7 @@ math { font-size: 1.05em; }
   }
   function sizePages() {
     const width = cmp.scroller.clientWidth - 24, widest = Math.max(...cmp.pages.map((p) => p.vp.width));
-    cmp.scale = Math.max(0.3, width / widest);
+    cmp.scale = Math.max(0.3, width / widest) * (cmp.zoom || 1);   // (1: the pane's width; zoomed in, the pages scroll sideways too)
     cmp.epoch++;
     for (const p of cmp.pages) {
       p.el.style.width = `${Math.round(p.vp.width * cmp.scale)}px`;
@@ -3870,6 +3935,29 @@ math { font-size: 1.05em; }
     p.task = null;
     paintMarks(p);
   }
+  // the PDF zoomed (1: fit the pane's width; from half to four times that), around a point of the pane (else its
+  // middle): the pages take their new size at once, stretched, and are drawn again sharp once the zoom rests
+  function zoomPdf(z, at) {
+    if (!cmp) return;
+    z = Math.max(0.5, Math.min(4, z));
+    if (Math.abs(z - cmp.zoom) < 0.002 || !cmp.pages.length) { cmp.zoom = cmp.pages.length ? cmp.zoom : z; zoomLabel(); return; }
+    const sc = cmp.scroller, r = sc.getBoundingClientRect();
+    const ax = at ? at.x - r.left : sc.clientWidth / 2, ay = at ? at.y - r.top : sc.clientHeight / 2;
+    const fx = (sc.scrollLeft + ax) / sc.scrollWidth, fy = (sc.scrollTop + ay) / sc.scrollHeight;
+    cmp.zoom = z;
+    cmp.pane.classList.toggle('zoomed', z > 1.001);
+    sizePages();
+    sc.scrollLeft = fx * sc.scrollWidth - ax;
+    sc.scrollTop = fy * sc.scrollHeight - ay;
+    zoomLabel();
+    pageCount();
+    clearTimeout(cmp.zoomTimer);
+    cmp.zoomTimer = setTimeout(() => {
+      if (!cmp) return;
+      for (const p of cmp.pages) if (p.el.offsetTop < sc.scrollTop + sc.clientHeight + 800 && p.el.offsetTop + p.el.offsetHeight > sc.scrollTop - 800) drawPage(p);
+    }, 180);
+  }
+  function zoomLabel() { if (cmp && cmp.zl) cmp.zl.textContent = `${Math.round(cmp.zoom * 100)}%`; }
   function pageCount() {
     if (!cmp || !cmp.pages.length) return;
     const top = cmp.scroller.scrollTop + cmp.scroller.clientHeight * 0.3;
@@ -4208,13 +4296,69 @@ math { font-size: 1.05em; }
 
   // ── a figure, enlarged: a click on its picture opens it over the page with its caption (as the reader sees it now:
   //    this language, this level); Esc, a click beside it or × closes it. A picture larger than the screen opens to
-  //    fit, and a click on it shows it at full size, to scroll ──
+  //    fit, and a click on it shows it at full size, to scroll. Beside ×, its picture is copied or saved ──
   const lightbox = h('div', 'lightbox');
   lightbox.hidden = true;
   lightbox.setAttribute('role', 'dialog');
   lightbox.setAttribute('aria-modal', 'true');
   document.body.append(lightbox);
-  let lightboxFrom = null;
+  let lightboxFrom = null, captionPress = false;
+  const LB_ICONS = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    save: '<path d="M12 3v12m-5-5 5 5 5-5M5 20h14"/>',
+  };
+  const PIC_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
+  const asDataUrl = (blob) => new Promise((ok, no) => { const f = new FileReader(); f.onload = () => ok(f.result); f.onerror = no; f.readAsDataURL(blob); });
+  async function fetched(src) {
+    const r = await fetch(new URL(src, document.baseURI));
+    if (!r.ok) throw new Error(`${r.status}`);
+    return r.blob();
+  }
+  // the picture as PNG: an image at its own size; a drawing (<svg>) at twice the size it has in the text, on white as
+  // it is shown, drawn by itself (so the pictures inside it go in with it)
+  async function picPng(pic) {
+    const drawing = pic.tagName.toLowerCase() === 'svg';
+    let img = pic, w = pic.naturalWidth, ht = pic.naturalHeight;
+    if (drawing) {
+      const r = pic.getBoundingClientRect(), k = Math.max(2, devicePixelRatio), svg = pic.cloneNode(true);
+      if (!svg.hasAttribute('viewBox')) svg.setAttribute('viewBox', `0 0 ${pic.width.baseVal.value || r.width} ${pic.height.baseVal.value || r.height}`);
+      w = Math.round(r.width * k); ht = Math.round(r.height * k);
+      svg.setAttribute('width', w); svg.setAttribute('height', ht);
+      for (const im of svg.querySelectorAll('img, image')) {
+        const at = im.localName === 'img' ? 'src' : im.hasAttribute('href') ? 'href' : 'xlink:href', src = im.getAttribute(at);
+        if (src && !src.startsWith('data:')) im.setAttribute(at, await asDataUrl(await fetched(src)));
+      }
+      img = new Image();
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+      await img.decode();
+    }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = ht;
+    const g = c.getContext('2d');
+    if (drawing) { g.fillStyle = '#fff'; g.fillRect(0, 0, w, ht); }
+    g.drawImage(img, 0, 0, w, ht);
+    return new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('png'))), 'image/png'));
+  }
+  // copied as PNG (the picture made while the clipboard is asked: the click lets it be written); saved as the file it
+  // is (a drawing, as PNG), named by the text and the figure
+  async function copyPic(pic) {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': picPng(pic) })]);
+  }
+  async function savePic(pic, fig) {
+    let blob = pic.tagName.toLowerCase() === 'svg' ? null : await fetched(pic.currentSrc || pic.src).catch(() => null);
+    if (!blob || !PIC_EXT[blob.type]) blob = await picPng(pic);
+    const label = (fig && (fig.querySelector('figcaption .flabel')?.textContent.trim() || fig.id)) || 'figure';
+    const name = `${D.meta.id} ${label}`.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90).trim();
+    return saveAs(`${name}.${PIC_EXT[blob.type]}`, () => blob, blob.type);
+  }
+  function lbButton(icon, label, run) {
+    const b = h('button', 'lb-action', `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${LB_ICONS[icon]}</svg>`);
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', (e) => { e.stopPropagation(); run(); });
+    return b;
+  }
   function openLightbox(pic) {
     const fig = pic.closest('figure.fig'), cap = fig && fig.querySelector('figcaption');
     const shown = pic.cloneNode(true);
@@ -4226,15 +4370,24 @@ math { font-size: 1.05em; }
     const x = h('button', 'lb-x', '×');
     x.type = 'button';
     x.setAttribute('aria-label', T[ui].close);
-    lightbox.replaceChildren(stage, x);
+    const said = h('div', 'lb-said'), bar = h('div', 'lb-actions');
+    said.setAttribute('role', 'status');
+    const say = (s) => { said.textContent = s; clearTimeout(said._t); said._t = setTimeout(() => { said.textContent = ''; }, 2400); };
+    bar.append(lbButton('copy', T[ui].lb_copy, () => copyPic(pic).then(() => say(T[ui].lb_copied), () => say(T[ui].lb_failed))),
+      lbButton('save', T[ui].lb_save, () => savePic(pic, fig).catch(() => say(T[ui].lb_failed))), x);
+    lightbox.replaceChildren(stage, bar, said);
     if (cap) {
       const label = cap.querySelector('.flabel'), text = cap._tx ? cap._tx.innerText.trim() : '';
       const c = h('div', 'lb-cap');
       c.textContent = [label && label.textContent.trim(), text].filter(Boolean).join(' ');
-      if (c.textContent) lightbox.append(c);
+      if (c.textContent) {
+        c.tabIndex = 0;
+        lightbox.append(c);
+      }
       lightbox.setAttribute('aria-label', c.textContent || 'Figure');
     }
     lightbox.classList.remove('lb-full');
+    captionPress = false;
     lightbox.hidden = false;
     document.documentElement.classList.add('lb-open');
     lightboxFrom = document.activeElement;
@@ -4246,7 +4399,15 @@ math { font-size: 1.05em; }
     document.documentElement.classList.remove('lb-open');
     if (lightboxFrom && lightboxFrom.focus) lightboxFrom.focus({ preventScroll: true });
   }
+  lightbox.addEventListener('pointerdown', (e) => {
+    if (e.isPrimary) captionPress = !!e.target.closest('.lb-cap');
+  });
+  lightbox.addEventListener('pointercancel', (e) => { if (e.isPrimary) captionPress = false; });
   lightbox.addEventListener('click', (e) => {
+    // A selection can start on the caption and end on the backdrop.
+    const fromCaption = e.detail > 0 && captionPress;
+    captionPress = false;
+    if (fromCaption || e.target.closest('.lb-cap')) return;
     const pic = e.target.closest('.lb-pic');
     if (pic && pic.tagName.toLowerCase() === 'img') {   // larger than the screen: full size, to scroll; and back
       const fits = pic.naturalWidth <= pic.clientWidth + 2 && pic.naturalHeight <= pic.clientHeight + 2;

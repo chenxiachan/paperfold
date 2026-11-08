@@ -22,6 +22,9 @@ from pathlib import Path
 from . import store
 
 VERSION = "4.0.10"
+# the libraries MinerU VERSION allows to move on (docvortex<1) that have since changed what it calls: kept at a version
+# it converts with. docvortex 0.6 (2026-10-22) did, and an engine installed since then could not convert at all (#107)
+PINS = {"docvortex": "0.5.16"}
 TIERS = {"fast": "flash", "accurate": "advanced"}
 MARK = "installed.txt"   # written last: an engine folder without it is an install that did not finish
 # the files it reads besides PDFs (MinerU's own list, mineru/filetypes.py), by their extension, with the name a reader
@@ -207,13 +210,44 @@ def install(progress=lambda *a: None, log=lambda *a: None, stop=None):
     if not _bin(e, "python").exists():
         _run([uv, "venv", e / "venv", "--python", "3.12", "--python-preference", "only-managed"], env, log, stop)
     progress("engine-packages", 2, steps)
-    _run([uv, "pip", "install", "--python", _bin(e, "python"), f"mineru=={VERSION}"], env, log, stop)
+    _run([uv, "pip", "install", "--python", _bin(e, "python"), f"mineru=={VERSION}", *(f"{k}=={v}" for k, v in PINS.items())],
+         env, log, stop)
     progress("engine-models", 3, steps)
     _run([_bin(e, "mineru-kit"), "models", "download", "--tier", "standard"], env, log, stop)
     shutil.rmtree(e / ".uv-cache", ignore_errors=True)
-    (e / MARK).write_text(f"mineru=={VERSION}\n{time.strftime('%Y-%m-%d %H:%M:%S')}\n", encoding="utf-8")
+    pins = "".join(f"{k}=={v}\n" for k, v in PINS.items())
+    (e / MARK).write_text(f"mineru=={VERSION}\n{pins}{time.strftime('%Y-%m-%d %H:%M:%S')}\n", encoding="utf-8")
     progress("engine-models", steps, steps)
     return status()
+
+
+def _minor(version):
+    return tuple(int(x) for x in re.findall(r"\d+", version)[:2])
+
+
+def _past_pins(e):
+    """The libraries of PINS an engine has at a later version than its pin's (installed by a TextFold before the pin):
+    each as the pin to install. One at an earlier version is left as it is, as it converted when it was installed."""
+    lib = e / "venv" / ("Lib" if sys.platform == "win32" else "lib")
+    sites = [lib / "site-packages"] if sys.platform == "win32" else list(lib.glob("python*/site-packages"))
+    return [f"{name}=={want}" for name, want in PINS.items()
+            if any(_minor(d.name[len(name) + 1:-len(".dist-info")]) > _minor(want)
+                   for site in sites for d in site.glob(f"{name}-*.dist-info"))]
+
+
+def _repin(e, log, stop):
+    """Put back once the libraries of PINS an engine has moved past (a few MB); not reachable, the engine is used as it
+    is, and says what fails."""
+    past = _past_pins(e)
+    if not past:
+        return
+    log(f"the engine's {', '.join(p.split('==')[0] for p in past)} is newer than MinerU {VERSION} works with: {', '.join(past)}")
+    try:
+        _run([_uv(e, log, stop), "pip", "install", "--python", _bin(e, "python"), *past], _env(e), log, stop)
+    except RuntimeError as err:
+        log(f"could not install {', '.join(past)}: {err}")
+    finally:
+        shutil.rmtree(e / ".uv-cache", ignore_errors=True)
 
 
 def uninstall():
@@ -256,6 +290,7 @@ def convert(pdf, out, tier="fast", progress=lambda *a: None, log=lambda *a: None
         if m and int(m.group("total")):
             progress("convert", int(m.group("done")), int(m.group("total")))
 
+    _repin(e, log, stop)
     tier = tier_for(pdf, tier)
     cmd = [_bin(e, "mineru-kit"), "parse", pdf, "-o", z, "--format", "zip", "--tier", TIERS.get(tier, tier)]
     if TIERS.get(tier, tier) == "advanced":

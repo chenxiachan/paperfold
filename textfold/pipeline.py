@@ -3,8 +3,8 @@
 translated: asked for, it is the ladder.
 
 Every step reports through `progress(stage, done, total)`; the server turns that into a progress bar. A set `stop`
-(a threading.Event) ends it with llm.Stopped at the next step: what the model has already written stays in the cache,
-so the same generation started again goes on from there. The argument links are an extra: when their call fails (one
+(a threading.Event) ends it with llm.Stopped: an agent's calls under way end at once (agents.run), an API's once they
+return. What the model answered before stays in the cache, so the same generation started again goes on from there. The argument links are an extra: when their call fails (one
 call over every takeaway, or the parts of a text too long for one), the levels are stored without them (and not asked
 for again unless the text is folded again).
 

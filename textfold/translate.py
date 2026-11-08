@@ -4,11 +4,12 @@ Every sentence is translated one to one, so Key stays an exact subset of the tra
 Full text (the ladder's evidence indices still apply), and the roles and links stay the
 same. Brief, Takeaway and Topic are rewritten in the target language from the ladder's. Formulas, citations and cross-references travel through the translation as markers
 ⟦a12⟧ and come back as the very same atoms, so they stay clickable and slide when the
-reader switches language. One call per section; a long section is translated in parts (PART_CHARS of English each),
-because a reply that long comes back with its last paragraphs missing (seen without reasoning), and the parts run in
-parallel. The section's own lines come with the first part. What comes back without a translation (a call that
-failed, a paragraph the model left out) is asked for once more, the paragraphs alone; a translation stored with gaps
-still (gaps) has them asked for the next time its language is generated (fill), the rest kept.
+reader switches language. One call per section; a long section is translated in parts (PART_CHARS of English each,
+its sentences and their levels), because a reply that long comes back with its last paragraphs missing (seen without
+reasoning), and the parts run in parallel. The section's own lines come with the first part. What comes back without
+a translation (a call that failed, a paragraph the model left out) is asked for once more, the paragraphs alone; a
+translation stored with gaps still (gaps) has them asked for the next time its language is generated (fill), the rest
+kept.
 """
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -90,13 +91,21 @@ Rules:
 Return JSON {{"section": {{"title": "...", "takeaway": "...", "topic": "..."}}, "units": [{{"id": "U0", "sentences": ["...", ...], "takeaway": "...", "reason": "...", "topic": "..."}}, ...]}} with exactly one entry per unit, in order.""", doc["meta"])
 
 
-PART_CHARS = 5000
+PART_CHARS = 6500
+
+
+def size(doc, uid):
+    """The English a unit's entry in the reply translates: its sentences and the levels written for it. Many short
+    paragraphs have more of the levels than of the text (#99)."""
+    u, A = doc["units"][uid], doc["atoms"]
+    lad = u.get("lad") or {}
+    return len(plain(u["toks"], A)) + len(plain(lad.get("brief") or [], A)) + len(plain(lad.get("topic") or [], A))
 
 
 def parts(doc, chunk):
-    """A section's units in as few runs as keep each near PART_CHARS of English, the runs of about equal length."""
-    U, A = doc["units"], doc["atoms"]
-    sizes = [len(plain(U[uid]["toks"], A)) for uid in chunk["units"]]
+    """A section's units in as few runs as keep each near PART_CHARS of English to translate (size), the runs of about
+    equal length."""
+    sizes = [size(doc, uid) for uid in chunk["units"]]
     k = max(1, -(-sum(sizes) // PART_CHARS))
     if k == 1:
         return [list(chunk["units"])]
@@ -181,7 +190,8 @@ def _ask(doc, lang, tasks, cfg, cache_dir, jobs, log, tick, force, stop, again=F
         if stop is not None and stop.is_set():   # stopped: the parts not yet sent are skipped
             return task, None, llm.Stopped()
         try:
-            return task, llm.call(prompt_for(doc, {**c, "units": us}, lang), SCHEMA, cfg, cache_dir, force, system=llm.system_for(doc["meta"])), None
+            with llm.stoppable(stop):   # (stopped while it runs: the agent's call ends there)
+                return task, llm.call(prompt_for(doc, {**c, "units": us}, lang), SCHEMA, cfg, cache_dir, force, system=llm.system_for(doc["meta"])), None
         except Exception as e:
             return task, None, e
 

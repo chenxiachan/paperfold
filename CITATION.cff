@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use TextFold in your research, please cite it as below."
+title: "TextFold: Language Models as Reading Interfaces"
+type: software
+authors:
+  - family-names: "Chen"
+    given-names: "Xia"
+repository-code: "https://github.com/chenxiachan/textfold"
+url: "https://chenxiachan.github.io/textfold/"
+license: Apache-2.0
+keywords:
+  - human-AI interaction
+  - reading interface
+  - StretchText
+  - semantic zoom
+  - levels of detail
+  - cognitive load
+  - large language models
+abstract: >-
+  TextFold treats a language model as a reading interface rather than a
+  summarizer. In the spirit of Nelson's StretchText, it folds a text into five
+  levels of detail, from the full text down to a topic of a few words, and the
+  reader moves between them to hold only as much of the text in mind as the
+  task needs. The model decides what each level leaves out. The Brief level
+  keeps the author's sentences verbatim, the written levels cite the sentences
+  they rest on, and every paragraph opens back to the source. TextFold reads
+  papers, web pages, PDFs, Office files, EPUB, Markdown and the replies of AI
+  agents, and keeps the reader's highlights, notes and questions anchored to
+  the passages they concern.

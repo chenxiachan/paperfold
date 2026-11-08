@@ -208,6 +208,7 @@ html.morphing .dot, html.morphing div.legend i { animation: none !important; }
 /* the sandbox a keyframe is laid out in: in the flow of nothing, never painted */
 .zsand { position: fixed; top: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; contain: layout style paint; }
 #ghosts > * { position: fixed; margin: 0; white-space: nowrap; transform-origin: 0 0; }
+#ghosts > .tx { white-space: normal; }
 
 /* ── document column ────────────────────────────────────── */
 .doc { position: relative; max-width: var(--col); margin: 0 auto; padding: 8px 24px 160px; }
@@ -227,13 +228,31 @@ html.compare { --colmax: 100vw; }   /* (beside the PDF the notes are in the colu
 html[data-font="sans"] { --text: var(--sans); }
 @media print { :root { --fs: 1 !important; --lh: 1 !important; --colw: 700px !important; } }
 .doc[data-level="0"] { max-width: 1280px; }
-.tk { display: inline-block; transform-origin: 0 0; white-space: pre-wrap; }
+.tk { display: inline-block; max-width: 100%; overflow-wrap: anywhere; transform-origin: 0 0; white-space: pre-wrap; }
 .tk.at { white-space: nowrap; }
-.tk.at.wrap { white-space: normal; max-width: 100%; }
-.wg { white-space: nowrap; }
+/* MathML and KaTeX scroll inside themselves; other unbreakable HTML needs an outer scroll box. Each of these boxes in a
+   line scrolls across and never up and down: overflow-x alone makes overflow-y auto as well, and a formula a few pixels
+   taller than its box then drew a scrollbar beside it wherever scrollbars take room, as on Windows and Linux (#117). */
+.tk.at:not(.wrap):not(:has(math, .katex)) { display: inline-flex; overflow-x: auto; overflow-y: hidden; align-items: baseline; }
+.tk.at.wrap { white-space: normal; }
+.wg { display: inline-block; max-width: 100%; white-space: normal; }
+.tk.at.citation, .wg:has(> .tk.citation) { display: inline; }
+/* An unusually long inline formula scrolls as a formula too. Scrolling an outer inline-block would move the
+   baseline of every ordinary formula; keep the scroll box on the MathML (and its inline zoom copy). */
+:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+/* (KaTeX ends a sub- or superscript in a 2 px strut past its own box, katex.css .vlist-s against .vlist-t2's -2px: room
+   for it, or each x_i would scroll by 2 px) */
+:is(.u .tx, .zp.tx, :where(#ghosts) > .tx) .katex-html, .zp.zi .katex-html { display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden; align-items: baseline; padding-right: 2px; }
+.u img { max-width: 100%; height: auto; }
 [data-id] { transform-origin: 0 0; }
 
-.paper-head { margin: 28px 0 34px; position: relative; }
+/* WebKit leaves native MathML at its intrinsic width. An inline flex box scrolls it
+   while aligning short formulas to the surrounding text. */
+.inline-math { display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden; align-items: baseline; }
+.inline-math > math { flex: none; }
+
+.paper-head { margin: 28px 0 34px; position: relative; overflow-wrap: anywhere; }
+.hd { overflow-wrap: anywhere; }
 .paper-head h1 { font-family: var(--sans); font-size: calc(34px * var(--fs)); line-height: 1.15; letter-spacing: -.025em; font-weight: 700; margin: 0 0 12px; text-wrap: balance; }
 .paper-head .authors { color: var(--muted); font-size: calc(15px * var(--fs)); }
 .paper-head .orig { color: var(--muted); font-size: calc(15px * var(--fs)); font-style: italic; margin: -4px 0 8px; font-family: var(--text); }
@@ -257,8 +276,8 @@ html[data-font="sans"] { --text: var(--sans); }
 .doc.cjk[data-level="3"] .stake { display: block; }
 
 /* ── units ──────────────────────────────────────────────── */
-.u { position: relative; transition: background-color .35s, border-color .35s, color .35s; border: 1px solid transparent; }
-.u .tx { margin: 0; }
+.u { position: relative; min-width: 0; max-width: 100%; transition: background-color .35s, border-color .35s, color .35s; border: 1px solid transparent; }
+.u .tx, .zp.tx, #ghosts > .tx { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--beat); opacity: 0; transition: opacity .3s; --beat: var(--r-context); }
 .u.r-gap .dot { --beat: var(--r-gap); } .u.r-claim .dot { --beat: var(--r-claim); }
 .u.r-method .dot { --beat: var(--r-method); } .u.r-setup .dot { --beat: var(--r-setup); }
@@ -272,19 +291,19 @@ html[data-font="sans"] { --text: var(--sans); }
 /* L4 Full and L3 Key: the author's words */
 .u[data-l="4"], .u[data-l="3"] { font-family: var(--text); font-size: calc(18.5px * var(--fs)); line-height: calc(1.62 * var(--lh, 1)); color: var(--ink-2); margin: 0 0 calc(14px * var(--fs)); }
 html[data-font="sans"] .u[data-l="4"], html[data-font="sans"] .u[data-l="3"] { font-size: calc(17px * var(--fs)); line-height: calc(1.68 * var(--lh, 1)); }
-.u[data-l="4"] .tk.lead, .u[data-l="3"] .tk.lead, .u[data-l="4"] .tr.lead, .u[data-l="3"] .tr.lead { color: var(--ink); }
+:is(.u, .tx)[data-l="4"] .tk.lead, :is(.u, .tx)[data-l="3"] .tk.lead, .u[data-l="4"] .tr.lead, .u[data-l="3"] .tr.lead { color: var(--ink); }
 .tk.gap, .tr.gap { color: var(--faint) !important; padding: 0 .1em; }
 .u.abstract[data-l="4"], .u.abstract[data-l="3"] { font-size: calc(17.5px * var(--fs)); }
 .u.local-open { background: var(--card); border-color: var(--line); border-radius: 10px; padding: 10px 14px; margin-left: -15px; margin-right: -15px; box-shadow: 0 8px 28px -18px rgba(40, 30, 10, .35); }
 
 /* L2 Brief: takeaway + reason, written */
 .u[data-l="2"] { font-family: var(--sans); font-size: calc(16.5px * var(--fs)); line-height: calc(1.55 * var(--lh, 1)); color: var(--muted); margin: 0 0 calc(12px * var(--fs)); padding-left: 18px; }
-.u[data-l="2"] .tk.lead, .u[data-l="2"] .tr.lead { color: var(--ink); font-weight: 560; }
+:is(.u, .tx)[data-l="2"] .tk.lead, .u[data-l="2"] .tr.lead { color: var(--ink); font-weight: 560; }
 .u[data-l="2"] .dot { left: 0; top: .62em; opacity: 1; }
 
 /* L1 Takeaway: one line per unit on a spine */
 .u[data-l="1"] { font-family: var(--sans); font-size: calc(15.5px * var(--fs)); line-height: calc(1.45 * var(--lh, 1)); color: var(--ink-2); padding: 3px 0 3px 22px; margin: 0; }
-.u[data-l="1"] .tk.lead, .u[data-l="1"] .tr.lead { color: var(--ink); font-weight: 600; }
+:is(.u, .tx)[data-l="1"] .tk.lead, .u[data-l="1"] .tr.lead { color: var(--ink); font-weight: 600; }
 .u[data-l="1"] .dot { left: 0; top: .72em; opacity: 1; box-shadow: 0 0 0 3px var(--surface); }
 .doc[data-level="1"] .chunk .body { position: relative; }
 .doc[data-level="1"] .chunk .body::before { content: ""; position: absolute; left: 3px; top: 10px; bottom: 10px; width: 1px; background: var(--line); }
@@ -335,7 +354,7 @@ li.u[data-l="2"] .mk.mk-labeled, li.u[data-l="1"] .mk.mk-labeled, li.u[data-l="0
 li.u.numbered[data-l="2"] .tx, li.u.numbered[data-l="1"] .tx, li.u.numbered[data-l="0"] .tx { display: inline; }
 
 /* ── figures, tables, equations ─────────────────────────── */
-figure.fig { margin: 26px 0; }
+figure.fig { max-width: 100%; margin: 26px 0; }
 figure.fig .fbody { text-align: center; overflow-x: auto; transition: opacity .3s; }
 figure.fig .fbody img { max-width: 100%; height: auto; display: inline-block; }
 /* a picture LaTeXML sized both ways in its style (a width and a height, in em): its height follows its width, which the
@@ -366,17 +385,26 @@ figure.fig:not([data-l="4"]):not([data-l="3"]) .fig-pdf { display: none; }
 .lightbox svg.lb-pic { width: min(94vw, 1200px); height: 76vh; }
 .lightbox.lb-full .lb-stage { overflow: auto; align-self: stretch; justify-content: flex-start; align-items: flex-start; flex: 1; }
 .lightbox.lb-full .lb-pic { max-width: none; max-height: none; margin: auto; cursor: zoom-out; }
-.lightbox .lb-cap { max-width: min(760px, 92vw); max-height: 16vh; overflow-y: auto; color: #EDE9E3; font: 14px/1.5 var(--sans); text-align: center; }
+.lightbox .lb-cap { max-width: min(760px, 92vw); max-height: 16vh; overflow-y: auto; color: #EDE9E3; font: 14px/1.5 var(--sans); text-align: center; user-select: text; cursor: text; }
 .lightbox .lb-x { position: absolute; top: 12px; right: 14px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .12);
   color: #fff; font: 400 24px/1 var(--sans); cursor: pointer; }
 .lightbox .lb-x:hover, .lightbox .lb-x:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }
+.lightbox .lb-actions { position: absolute; z-index: 1; top: 12px; right: 14px; display: flex; gap: 6px; }
+.lightbox .lb-actions .lb-x { position: static; }
+.lightbox .lb-action { width: 38px; height: 38px; border: 0; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255, 255, 255, .12); color: #fff; cursor: pointer; }
+.lightbox .lb-action svg { width: 19px; height: 19px; }
+.lightbox .lb-action:hover, .lightbox .lb-action:focus-visible { background: rgba(255, 255, 255, .24); outline: none; }
+.lightbox .lb-said { position: absolute; top: 58px; right: 14px; padding: 5px 12px; border-radius: 12px; background: #24211C;
+  color: #EDE9E3; font: 13px/1.4 var(--sans); pointer-events: none; }
+.lightbox .lb-said:empty { display: none; }
 html.lb-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .lightbox { animation: none; } }
 figure.fig figcaption.u { font-family: var(--sans); }
 figure.fig figcaption.u[data-l="4"], figure.fig figcaption.u[data-l="3"] { font-family: var(--sans); font-size: calc(14.5px * var(--fs)); line-height: calc(1.5 * var(--lh, 1)); margin: 10px 0 0; }
 .flabel { display: none; font-family: var(--sans); font-weight: 650; color: var(--ink); margin-right: .4em; white-space: nowrap; }
 figure.fig[data-l="3"] .fbody { max-width: 82%; margin: 0 auto; }
-figure.fig[data-l="2"] { display: grid; grid-template-columns: 168px 1fr; gap: 14px; align-items: start; margin: 8px 0 14px; }
+figure.fig[data-l="2"] { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 14px; align-items: start; margin: 8px 0 14px; }
 figure.fig[data-l="2"] .fbody { order: 0; }
 figure.fig[data-l="2"] figcaption.u { padding-left: 0; margin: 0; }
 figure.fig[data-l="2"] figcaption .dot, figure.fig[data-l="1"] figcaption .dot { display: none; }
@@ -417,7 +445,13 @@ figure.fig[data-l="0"] .flabel { font-weight: 600; color: var(--muted); }
 .fbody .ltx_transformed_inner { transform: none !important; }
 
 .eq { overflow-x: auto; margin: 6px 0 16px; font-size: calc(17px * var(--fs)); }
-.raw { margin: 0 0 calc(14px * var(--fs)); font-family: var(--text); color: var(--ink-2); }
+.raw { max-width: 100%; overflow-x: auto; margin: 0 0 calc(14px * var(--fs)); font-family: var(--text); color: var(--ink-2); }
+/* A title-page picture may be outside a figure. It follows the column too; a table or formula kept as raw HTML
+   keeps its own width and scrolls inside that block, including beside the PDF. */
+.raw img { max-width: 100%; height: auto !important; }
+.raw svg.ltx_picture[viewBox], .raw .ltx_picture > svg[viewBox] { max-width: 100%; height: auto; }
+/* Zoom copies already have measured pixel widths and may live in a zero-width positioned group. */
+.zp.tk, .zp.raw { max-width: none; }
 .raw pre { font-family: var(--mono); font-size: calc(13px * var(--fs)); line-height: 1.55; overflow-x: auto; margin: 0; padding: 10px 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
 /* a diagram written in Mermaid, drawn (reader.js drawDiagrams): centred, as wide as its drawing or the column */
@@ -452,6 +486,7 @@ math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em
 .eq .katex-display { margin: 0; }
 .ltx_tabular { border-collapse: collapse; display: inline-table; font-family: var(--sans); font-size: calc(13px * var(--fs)); line-height: 1.4; }
 .ltx_tabular.ltx_centering { display: table; margin-inline: auto; }
+.ltx_tabular .ltx_underline { text-decoration: underline; }
 .ltx_thead, .ltx_tbody, .ltx_tfoot { display: table-row-group; }
 .ltx_tr { display: table-row; }
 .ltx_td, .ltx_th { display: table-cell; padding: .2em .6em; }
@@ -477,12 +512,6 @@ math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em
 .ltx_rule { display: none; }
 .ltx_note_outer { display: none; }
 
-/* Markdown display math may arrive as a raw block, not an .eq. Keep it
-   scrollable locally instead of widening the mobile layout and its fixed bar. */
-@media screen and (max-width: 720px) {
-  .doc .raw { max-width: 100%; overflow-x: auto; }
-}
-
 @media (max-width: 640px) {
   .tagline, div.legend, .hint { display: none !important; }
   .doc { padding: 4px 16px 170px; }
@@ -491,7 +520,7 @@ math { font-family: 'Latin Modern Math', 'STIX Two Math', math; font-size: 1.1em
   html[data-font="sans"] .u[data-l="4"], html[data-font="sans"] .u[data-l="3"] { font-size: calc(16px * var(--fs)); }
   .zoombar button { padding: 6px 9px; font-size: 13px; }
   .zoombar .sep { display: none; }
-  figure.fig[data-l="2"] { grid-template-columns: 96px 1fr; }
+  figure.fig[data-l="2"] { grid-template-columns: 96px minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
@@ -923,7 +952,7 @@ html.morphing .chatbtn { pointer-events: none; }
 .license a:hover { color: var(--muted); }
 /* "keep my highlights": the reader's passages, kept as the paper zooms out, in the author's type */
 .tk.kept, .tr.kept { font-family: var(--serif); font-weight: 400; color: var(--ink-2); }
-.u[data-l="1"] .tk.kept, .u[data-l="1"] .tr.kept { font-size: .95em; }
+:is(.u, .tx)[data-l="1"] .tk.kept, .u[data-l="1"] .tr.kept { font-size: .95em; }
 .keepbtn { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px var(--sans); color: var(--muted); background: none;
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px 4px 6px; cursor: pointer; margin-right: 6px; }
 .keepbtn i { width: 22px; height: 13px; border-radius: 999px; background: var(--line); position: relative; transition: background-color .2s; }
@@ -973,13 +1002,19 @@ html.compare { --pdfw: min(46vw, 860px); }
 /* (html.app.compare: over app.css's html.app rules, which come later) */
 html.compare body, html.app.compare body { padding-left: calc(var(--rail, 0px) + var(--pdfw)); }
 html.compare footer.zoom, html.app.compare footer.zoom { left: calc(var(--rail, 0px) + var(--pdfw)); }
-.pdfpane { position: fixed; z-index: 15; top: 0; bottom: 0; left: var(--rail, 0px); width: var(--pdfw); display: flex; flex-direction: column;
+/* The PDF owns the split boundary when the reader moves past it. */
+.pdfpane { position: fixed; z-index: 21; top: 0; bottom: 0; left: var(--rail, 0px); width: var(--pdfw); display: flex; flex-direction: column;
   background: var(--line-2); border-right: 1px solid var(--line); font-family: var(--sans); }
 .pp-bar { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 16px; font-size: 12.5px; font-weight: 550; color: var(--muted); }
 .pp-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-n { font-variant-numeric: tabular-nums; }
 .pp-x { width: 28px; height: 28px; border: 0; border-radius: 7px; background: none; font: 400 20px/1 var(--sans); color: var(--muted); cursor: pointer; }
 .pp-x:hover { background: var(--line); color: var(--ink); }
+.pp-z, .pp-zl { height: 26px; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer; font: 550 14px/1 var(--sans); }
+.pp-z { width: 26px; font-size: 17px; }
+.pp-zl { min-width: 46px; padding: 0 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pp-z:hover, .pp-zl:hover { background: var(--line); color: var(--ink); }
+.pdfpane.zoomed .pp-scroll { align-items: flex-start; }   /* (wider than the pane: from its left edge, so all of it scrolls into view) */
 /* its width, at its right edge (reader.js, gripFor): as the sidebar's (app.css, .sb-resize) */
 .pp-grip { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; cursor: col-resize; touch-action: none; z-index: 1; }
 .pp-grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: var(--accent); opacity: 0; transition: opacity .15s; }

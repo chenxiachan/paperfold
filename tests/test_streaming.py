@@ -181,5 +181,31 @@ class WorkBuddy(unittest.TestCase):
         self.assertEqual(llm_openai.auth("https://workbuddy.host.example.com/v1", "sk"), {"Authorization": "Bearer sk"})
 
 
+class SaysItIsTextFold(unittest.TestCase):
+    """Every request to a provider, its /models and a completion, carries TextFold's user agent: a front such as
+    Cloudflare's refuses Python's own (#115)."""
+
+    def test_models_and_completions(self):
+        seen = []
+
+        def urlopen(req, timeout=None):
+            seen.append(req)
+            r = mock.MagicMock()
+            r.__enter__.return_value.read.return_value = b'{"data": [{"id": "m"}]}'
+            r.__enter__.return_value.headers = {"Content-Type": "application/json"}
+            return r
+
+        with mock.patch("urllib.request.urlopen", urlopen):
+            providers.probe("https://api.example.com/v1", "sk")
+            try:
+                llm_openai._post("https://api.example.com/v1/chat/completions", {"model": "m"}, {"Authorization": "Bearer sk"}, 5)
+            except Exception:   # (the reply's shape is not what this is about)
+                pass
+        self.assertEqual(len(seen), 2)
+        for req in seen:
+            self.assertTrue(req.get_header("User-agent", "").startswith("TextFold/"), req.full_url)
+            self.assertEqual(req.get_header("Authorization"), "Bearer sk")
+
+
 if __name__ == "__main__":
     unittest.main()

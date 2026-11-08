@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" class="app landing notes-page">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 44 44%27%3E%3Crect width=%2744%27 height=%2744%27 rx=%2710%27 fill=%27%23FAF9F7%27/%3E%3Crect x=%278%27 y=%2711%27 width=%2728%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27/%3E%3Crect x=%278%27 y=%2720%27 width=%2719%27 height=%275%27 rx=%272.5%27 fill=%27%236B5CE7%27 opacity=%270.4%27/%3E%3Crect x=%278%27 y=%2729%27 width=%2710%27 height=%275%27 rx=%272.5%27 fill=%27%23E08A3C%27/%3E%3C/svg%3E">
+<title>TextFold</title>
+{{HEAD}}
+<link rel="stylesheet" href="/static/reader.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/notes.css">
+</head>
+<body>
+<aside id="sidebar"></aside>
+<header class="nb-top">
+  <div class="nb-wrap nb-head">
+    <h1 id="nb-title"></h1>
+    <input type="search" id="nb-q" autocomplete="off" spellcheck="false">
+    <div class="nb-seg" id="nb-kinds" role="radiogroup"></div>
+    <div class="nb-seg nb-views" id="nb-views" role="radiogroup"></div>
+    <div class="ui-top">
+  <button type="button" class="ui-help" id="ui-help"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.5 1.65c-.5.22-.8.6-.8 1.15v.35"/><circle cx="8" cy="11.4" r=".4" fill="currentColor"/></svg><span id="ui-help-t"></span></button>
+  <label class="ui-lang" id="ui-lang-box"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M1.8 8h12.4M8 1.8c1.7 1.8 2.5 3.9 2.5 6.2S9.7 12.4 8 14.2C6.3 12.4 5.5 10.3 5.5 8S6.3 3.6 8 1.8z"/></svg><select id="ui-lang"></select></label>
+  </div>
+  </div>
+</header>
+<main class="nb-wrap nb-main" id="nb-main">
+  <section id="nb-cal" class="nb-cal" hidden></section>
+  <div class="nb-right">
+    <div id="nb-ask" class="nb-ask" aria-live="polite"></div>
+    <div id="nb-listhead" class="nb-listhead"></div>
+    <div id="nb-list" class="nb-rows" aria-live="polite"></div>
+  </div>
+</main>
+<div class="nb-toast" id="nb-toast" role="status" hidden></div>
+<div class="nb-tip" id="nb-tip" role="tooltip" hidden></div>
+<script id="boot" type="application/json">{{BOOT}}</script>
+<script src="/static/i18n.js"></script>
+<script src="/static/tutorial.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/notes.js"></script>
+</body>
+</html>

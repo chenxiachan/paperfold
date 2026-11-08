@@ -47,6 +47,8 @@ elif "--help" in args:
         print("  --model <model>     Model for the current session. Currently supported: (auto, glm-5.1, kimi-k2.7)")
 elif "-p" in args and (os.environ.get("FAKE_SIGNED_OUT") or (os.environ.get("FAKE_SIGNED_OUT_WB") and os.environ.get("CODEBUDDY_CONFIG_DIR"))):
     print("Authentication required. Please use /login command to sign in to your account")
+elif "-p" in args and os.environ.get("FAKE_CUT"):   # finished, its output cut short (#99)
+    print('[{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "{\\"units\\": [{\\"id\\": \\"U64\\"')
 elif "-p" in args:
     bad = bool(os.environ.get("FAKE_ERROR"))
     print(json.dumps([{"type": "message", "role": "user", "content": []},
@@ -99,6 +101,7 @@ class CodeBuddy(unittest.TestCase):
             self.addCleanup(p.stop)
         os.environ.pop("WORKBUDDY_CONFIG_DIR", None)
         os.environ.pop("FAKE_ERROR", None)
+        os.environ.pop("FAKE_CUT", None)
         os.environ.pop("FAKE_SIGNED_OUT", None)
         os.environ.pop("FAKE_SLOW_ONCE", None)
         os.environ.pop("FAKE_SIGNED_OUT_WB", None)
@@ -227,6 +230,13 @@ class CodeBuddy(unittest.TestCase):
             with self.assertRaises(RuntimeError) as e:
                 agents.run_codebuddy("auto", "Fold this.", {"type": "object"}, "s", None, 30)
         self.assertIn("quota exceeded", str(e.exception))
+
+    def test_an_output_cut_short_says_so(self):
+        with mock.patch.object(agents, "path_of", return_value=str(self.cli)), mock.patch.dict(os.environ, {"FAKE_CUT": "1"}):
+            with self.assertRaises(RuntimeError) as e:
+                agents.run_codebuddy("auto", "Fold this.", {"type": "object"}, "s", None, 30)
+        self.assertIn("not whole JSON", str(e.exception))
+        self.assertIn("U64", str(e.exception))   # (where it stopped)
 
     def test_signed_in_on_codebuddys_own_when_workbuddys_settings_have_none(self):
         with mock.patch.object(agents, "path_of", return_value=str(self.cli)), mock.patch.dict(os.environ, {"FAKE_SIGNED_OUT_WB": "1"}):

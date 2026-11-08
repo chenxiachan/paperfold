@@ -228,6 +228,10 @@ class Generate(Fake):
         (c,) = self.calls()
         self.assertEqual((c["sub"], c["args"][0], c["args"][c["args"].index("-m") + 1]), ("codex", "exec", "gpt-5.5"))
         self.assertTrue(c["stdin"].endswith("Fold this."))
+        # without its plugins and apps, whose catalog each start fetched anew (#120); as -c, which an older Codex ignores
+        overrides = {c["args"][i + 1] for i, a in enumerate(c["args"]) if a == "-c"}
+        self.assertLessEqual({"features.plugins=false", "features.remote_plugin=false", "features.apps=false"}, overrides)
+        self.assertNotIn("--disable", c["args"])
 
     def test_pi(self):
         with tempfile.TemporaryDirectory() as cache:

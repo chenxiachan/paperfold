@@ -126,6 +126,13 @@ class ReadingView(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows process liveness must not send a signal')
+    def test_server_liveness_never_signals_the_running_windows_process(self):
+        url = 'http://127.0.0.1:12345'
+        (self.data / 'server.json').write_text(json.dumps({'url': url, 'pid': os.getpid()}), encoding='utf-8')
+        with mock.patch.object(os, 'kill', side_effect=AssertionError('signal sent by a liveness probe')):
+            self.assertEqual(capture._server_url(), url)
+
     def test_which_reading(self):
         self.assertEqual(webpage.view_of(READ)[0], "defuddle")
         many = dict(READ, readability={"html": "<p>x</p>", "words": 240})   # (Defuddle took too much away)

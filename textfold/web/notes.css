@@ -1,0 +1,262 @@
+/* The notes page (/notes, notes.js): every note of the library in rows, a text a row as in the sidebar, folded; beside
+   them, as the calendar, the months one under another. Few words on it: the layout says what things are, and a tip
+   names each icon. */
+html.notes-page, .notes-page body { background: var(--surface); }
+.notes-page body { margin: 0; color: var(--ink); font: 15px/1.55 var(--sans); }
+.nb-wrap { max-width: 1320px; margin: 0 auto; padding: 0 28px; box-sizing: border-box; }
+.nb-top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line-2); }
+.nb-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; padding-top: 14px; padding-bottom: 14px; }
+.nb-home { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); text-decoration: none; font: 600 13px var(--sans); }
+.nb-home svg { width: 16px; height: 16px; }
+.nb-home:hover { color: var(--ink); text-decoration: none; }
+.nb-head h1 { margin: 0 8px 0 0; font: 650 20px var(--sans); letter-spacing: -.01em; }
+.notes-page .ui-top { position: static; margin-left: auto; }   /* (the landing's, in the bar) */
+.notes-page #nb-q { max-width: 520px; }
+#nb-q { flex: 1 1 240px; min-width: 0; font: 14px var(--sans); color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 9px; padding: 7px 12px; }
+#nb-q:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.nb-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--card); }
+.nb-seg button { border: 0; background: none; font: 550 13px var(--sans); color: var(--ink-2); padding: 6px 11px; cursor: pointer;
+  display: inline-flex; align-items: center; }
+.nb-seg button + button { border-left: 1px solid var(--line-2); }
+.nb-seg button[aria-checked="true"] { background: var(--accent-soft); color: var(--accent-deep); }
+.nb-seg button.nb-gap { border-left: 1px solid var(--line); }
+.nb-views button { padding: 6px 9px; }
+.nb-views svg { width: 17px; height: 17px; }
+
+.nb-main { padding-top: 18px; padding-bottom: 80px; }
+.nb-main:not(.nb-split) .nb-right { max-width: 900px; margin: 0 auto; }
+.nb-main.nb-split { display: grid; grid-template-columns: 340px minmax(0, 1fr); column-gap: 32px; align-items: start; }   /* the calendar, then the questions over the rows */
+.nb-listhead { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; padding: 0 12px; color: var(--muted); font-size: 12.5px; min-height: 24px; }
+.nb-listhead:empty { display: none; }
+.nb-cnt { display: inline-block; min-width: 18px; text-align: center; font: 620 11.5px/18px var(--sans); color: var(--ink-2);
+  background: var(--line-2); border-radius: 9px; padding: 0 6px; font-variant-numeric: tabular-nums; box-sizing: border-box; }
+
+/* rows: a text a row, as in the sidebar; open, a note a row; a note open, all of it */
+.nb-rows { background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; }
+.nb-rows:empty { display: none; }
+.nb-rows.nb-bare { background: none; border: 0; }
+.nb-n.open .nb-ntext { white-space: normal; }
+.nb-t + .nb-t { border-top: 1px solid var(--line-2); }
+.nb-trow, .nb-nrow { display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 42px; }
+.nb-trow:hover, .nb-nrow:hover { background: var(--surface); }
+.nb-check { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); flex: none; cursor: pointer; }
+.nb-ttitle, .nb-nline { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; border: 0; background: none; padding: 10px 0;
+  text-align: left; color: var(--ink); cursor: pointer; font: inherit; }
+.nb-ttitle { font: 600 14.5px var(--sans); }
+.nb-ttitle > span, .nb-nline .nb-ntext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-chev { width: 14px; height: 14px; flex: none; color: var(--muted); transition: transform .15s var(--ease); }
+.open > .nb-trow .nb-chev, .open > .nb-nrow .nb-chev { transform: rotate(90deg); }
+.nb-sumico { display: inline-flex; color: var(--accent); }
+.nb-sumico svg { width: 14px; height: 14px; }
+.nb-tdate { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+.nb-ns { border-top: 1px solid var(--line-2); background: color-mix(in srgb, var(--surface) 55%, var(--card)); }
+.nb-n + .nb-n { border-top: 1px solid var(--line-2); }
+.nb-nrow { padding-left: 36px; min-height: 38px; }
+.nb-n.picked > .nb-nrow { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+.nb-nline { font: 14px var(--sans); padding: 8px 0; }
+.nb-nline time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; flex: none; min-width: 34px; }
+.nb-nline.k-hl .nb-ntext { font-family: var(--serif); color: var(--ink-2); }
+.nb-nline.k-hl .nb-ntext::before { content: ""; display: inline-block; width: 3px; height: 1em; background: var(--hl); border-radius: 2px;
+  margin-right: 7px; vertical-align: -2px; }
+.nb-nline.k-ask .nb-ntext { font-weight: 620; }
+.nb-icons { display: inline-flex; gap: 2px; flex: none; }
+.nb-icons > :not(.nb-used) { opacity: 0; transition: opacity .12s; }   /* (the summaries a note went into always show) */
+.nb-nrow:hover .nb-icons > *, .nb-nrow:focus-within .nb-icons > *, .nb-trow:hover .nb-icons > *, .nb-trow:focus-within .nb-icons > * { opacity: 1; }
+@media (hover: none) { .nb-icons > * { opacity: 1; } }
+.nb-ico { border: 0; background: none; padding: 3px; color: var(--muted); cursor: pointer; display: inline-flex; border-radius: 6px; text-decoration: none; }
+.nb-ico svg { width: 15px; height: 15px; }
+.nb-ico:hover { color: var(--accent); background: var(--line-2); text-decoration: none; }
+.nb-ico.nb-trash:hover { color: var(--r-limitation); }
+.nb-ico.nb-used { color: var(--accent); }
+.nb-ndetail { padding: 2px 16px 14px 92px; }
+.nb-text { margin: 0; font: 15px/1.6 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
+.nb-q { margin: 4px 0 0; font-weight: 620; }
+.nb-a { margin: 2px 0 0; color: var(--ink-2); }
+.nb-quote { margin: 8px 0 0; padding: 3px 10px 3px 12px; border-left: 3px solid var(--hl); font: 15px/1.6 var(--serif);
+  color: var(--ink-2); overflow-wrap: anywhere; border-radius: 0 6px 6px 0; cursor: pointer; }
+.nb-quote:hover, .nb-quote[aria-expanded="true"] { background: var(--surface); }
+.nb-quote:not([role]) { cursor: default; background: none; }
+.nb-quote .nb-written { display: block; font: 11.5px var(--sans); color: var(--muted); margin-top: 2px; }
+.nb-ctx { margin-top: 6px; padding: 10px 12px; border-radius: 9px; background: var(--surface); }
+.nb-ctx .nb-sec { font: 600 12px var(--sans); color: var(--muted); }
+.nb-ctx .nb-sec span { font-weight: 450; }
+.nb-ctx .nb-para { margin: 6px 0 0; font: 15px/1.6 var(--serif); color: var(--ink); }
+.nb-ctx mark { background: var(--hl); color: inherit; border-radius: 2px; padding: 0 1px; }
+.nb-empty { margin: 60px 0; text-align: center; color: var(--muted); }
+
+/* the calendar: the months one under another, scrolled on their own; zoomed out, each a small square map, side by
+   side; the deeper a day, the more notes on it */
+.nb-cal { position: sticky; top: 76px; height: calc(100vh - 96px); display: flex; flex-direction: column; user-select: none; }
+.nb-cal[hidden] { display: none; }
+.nb-calbar { display: flex; align-items: center; gap: 2px; padding: 0 2px 8px; }
+.nb-calbar .nb-zoom { margin-left: auto; display: inline-flex; gap: 2px; }
+.nb-today { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); font: 600 12.5px var(--sans); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.nb-today:hover { border-color: var(--accent); color: var(--accent-deep); }
+.nb-calbar .nb-ico:disabled { opacity: .3; cursor: default; background: none; }
+.nb-months { flex: 1; overflow-y: auto; padding: 0 4px 24px 0; scrollbar-width: thin; }
+.nb-m { margin-bottom: 22px; }
+.nb-mname { display: inline-flex; align-items: baseline; gap: 7px; border: 0; background: none; padding: 3px 8px; margin: 0 0 8px -8px;
+  border-radius: 8px; color: var(--ink); cursor: pointer; }
+.nb-mname b { font: 650 17px var(--sans); letter-spacing: -.01em; }
+.nb-mname span { font: 500 12.5px var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
+.nb-mname:hover { background: var(--line-2); }
+.nb-mname.nb-on { background: var(--accent-soft); color: var(--accent-deep); }
+.nb-wds, .nb-mgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; max-width: 440px; }
+.nb-wds { margin-bottom: 6px; }
+.nb-wds span { text-align: center; font: 600 11.5px var(--sans); color: var(--faint); }
+.lv0 { --lv: transparent; } .lv1 { --lv: color-mix(in srgb, var(--accent) 22%, var(--card)); }
+.lv2 { --lv: color-mix(in srgb, var(--accent) 42%, var(--card)); } .lv3 { --lv: color-mix(in srgb, var(--accent) 66%, var(--card)); }
+.lv4 { --lv: var(--accent); }
+.nb-d { position: relative; aspect-ratio: 1; border: 0; border-radius: 10px; background: var(--lv); font: 600 15px var(--sans); color: var(--ink);
+  cursor: pointer; padding: 0; font-variant-numeric: tabular-nums; transition: box-shadow .12s, background .12s; }
+.nb-d.lv0 { color: var(--muted); font-weight: 500; }
+.nb-d.lv3, .nb-d.lv4 { color: #fff; }
+.nb-d:hover { box-shadow: inset 0 0 0 1.5px var(--line); }
+.nb-d.out { visibility: hidden; }
+.nb-d.today::after { content: ""; position: absolute; left: 50%; bottom: 14%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--warm); }
+/* the days picked stand out by the others fading, a long stretch as much as one day (no ring on each) */
+.nb-months.picking .nb-d:not(.nb-on) { opacity: .32; }
+.nb-d.nb-on.lv0 { background: var(--accent-soft); color: var(--accent-deep); }
+.nb-months[data-zoom="year"] { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 18px 16px; align-content: start; }
+.nb-months[data-zoom="year"] .nb-m { margin: 0; }
+.nb-months[data-zoom="year"] .nb-mname { margin-bottom: 4px; gap: 5px; }
+.nb-months[data-zoom="year"] .nb-mname b { font-size: 13px; }
+.nb-months[data-zoom="year"] .nb-mname span { font-size: 11px; }
+.nb-months[data-zoom="year"] .nb-d.lv0 { --lv: var(--line-2); }
+.nb-months[data-zoom="year"] .nb-mgrid { grid-template-columns: repeat(7, 13px); gap: 3px; }
+.nb-months[data-zoom="year"] .nb-d { width: 13px; height: 13px; aspect-ratio: auto; border-radius: 3px; font-size: 0; }
+.nb-months[data-zoom="year"] .nb-d.today { box-shadow: inset 0 0 0 1.5px var(--warm); }
+.nb-months[data-zoom="year"] .nb-d.today::after { display: none; }
+.nb-months[data-zoom="year"] .nb-d.nb-on { outline: 0; }   /* (zoomed out, the days picked stand out by the others fading) */
+.nb-months[data-zoom="year"].picking .nb-d:not(.nb-on) { opacity: .28; }
+
+/* the questions, over the rows: what they are asked of (the days, or what is ticked), the four, the answer */
+.nb-ask { margin-bottom: 14px; }
+.nb-ask:empty { display: none; }
+.nb-scope { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 8px; }
+.nb-scopel { font: 650 16px var(--sans); letter-spacing: -.01em; }
+.nb-scopebtn { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 2px 6px 2px 0; font: 650 16px var(--sans); color: var(--ink); cursor: pointer; }
+.nb-scopebtn[aria-expanded="true"] .nb-chev { transform: rotate(90deg); }
+.nb-picks { background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; margin-bottom: 10px; padding: 4px 0; max-height: 260px; overflow-y: auto; }
+/* once something is picked: Summarize notes, which opens the four questions and a question of one's own */
+.nb-sumbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--btn); color: var(--on-btn);
+  font: 620 13.5px var(--sans); border-radius: 999px; padding: 7px 14px 7px 12px; cursor: pointer; }
+.nb-sumbtn svg { width: 15px; height: 15px; }
+.nb-sumbtn:hover { background: var(--btn-hover); }
+.nb-sumbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-deep); }
+.nb-panel { background: color-mix(in srgb, var(--accent-soft) 35%, var(--card)); border: 1px solid var(--line-2); border-radius: 14px; padding: 14px; margin-bottom: 6px; }
+.nb-panel .nb-qs { align-items: center; }
+.nb-qs button.nb-panelx { margin-left: auto; border: 0; background: none; padding: 4px; color: var(--muted); border-radius: 6px; }
+.nb-qs button.nb-panelx:hover { background: var(--line-2); color: var(--ink); }
+.nb-askform { display: flex; gap: 8px; margin-top: 12px; }
+.nb-askq { flex: 1; min-width: 0; font: 14.5px var(--sans); color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.nb-askq:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.nb-askform .nb-go { padding: 8px 18px; }
+/* what is asked is made a document: a line saying so, to open it from here or from the sidebar */
+.nb-made { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; background: var(--card);
+  border: 1px solid var(--line-2); border-radius: 10px; font: 600 14px var(--sans); color: var(--ink); }
+.nb-made > svg { width: 16px; height: 16px; color: var(--accent); }
+.nb-made > span:not(.nb-said):not(.nb-spin) { flex: 1; min-width: 180px; }
+.nb-made.bad { color: var(--r-limitation); font-weight: 550; }
+a.nb-btn { text-decoration: none; display: inline-flex; align-items: center; }
+.nb-made .nb-said { flex-basis: 100%; }
+.nb-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: nb-spin .8s linear infinite; }
+@keyframes nb-spin { to { transform: rotate(360deg); } }
+.nb-sug:disabled, .nb-askform :disabled { opacity: .5; cursor: progress; }
+.nb-panel .nb-sugs { margin-top: 10px; }
+.nb-panel .nb-askform { margin-top: 0; }
+.nb-sugs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.nb-sug { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); font: 550 13.5px var(--sans); border-radius: 999px; padding: 6px 13px; cursor: pointer; }
+.nb-sug:hover { border-color: var(--accent); color: var(--accent-deep); }
+.nb-sug.nb-sug1 { border-color: var(--accent); color: var(--accent-deep); font-weight: 650; }
+.nb-sug.nb-own { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; }
+.nb-tpled { display: inline-flex; padding: 1px; border-radius: 4px; color: var(--faint); }
+.nb-tpled svg { width: 13px; height: 13px; }
+.nb-tpled:hover { color: var(--accent); background: var(--line-2); }
+.nb-lead { font: 600 12.5px var(--sans); color: var(--muted); margin-right: 2px; }
+.nb-sug.nb-addtpl { color: var(--accent-deep); border-style: dashed; border-color: var(--accent); background: none; }
+.nb-tplform { margin-top: 10px; padding: 12px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; display: grid; gap: 8px; }
+.nb-tplname, .nb-tplprompt { font: 14px/1.5 var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+.nb-tplname:focus, .nb-tplprompt:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.nb-tplnote { margin: 0; font-size: 12.5px; color: var(--muted); }
+.nb-tplacts { display: flex; gap: 8px; justify-content: flex-end; }
+.nb-tplacts .nb-tpldel { margin-right: auto; }
+.nb-tplacts .nb-tpldel:hover { color: var(--r-limitation); border-color: currentColor; }
+.nb-rawbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--muted);
+  font: 550 13px var(--sans); padding: 6px 4px; cursor: pointer; }   /* (no model: the notes as they are, to a file) */
+.nb-rawbtn svg { width: 15px; height: 15px; }
+.nb-rawbtn:hover { color: var(--accent-deep); }
+.nb-rawsaid:not(:empty) { margin-top: 6px; }
+.nb-cite.nb-sec { background: var(--line-2); color: var(--ink-2); }
+.nb-cite.nb-sec:hover { background: var(--ink-2); color: var(--card); }
+.nb-qa1 { position: relative; }
+.nb-qa1 .nb-qax { position: absolute; top: 8px; right: 8px; opacity: 0; }
+.nb-qa1:hover .nb-qax, .nb-qax:focus-visible { opacity: 1; }
+.nb-md p { margin: 6px 0 0; font: 15px/1.6 var(--sans); }
+.nb-md ul { margin: 6px 0 0; padding-left: 20px; }
+.nb-md li { margin: 3px 0; font: 15px/1.6 var(--sans); }
+.nb-cite { display: inline-block; min-width: 16px; margin: 0 1px; padding: 0 4px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-deep);
+  font: 650 11px/16px var(--sans); text-align: center; text-decoration: none; vertical-align: 1px; }
+.nb-cite:hover { background: var(--accent); color: var(--on-btn); text-decoration: none; }
+.nb-by { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.nb-wait.bad { color: var(--r-limitation); }
+.nb-panel .nb-aacts { border-top: 0; margin-top: 10px; padding: 0; }
+.nb-qs { display: flex; flex-wrap: wrap; gap: 8px; }
+.nb-qs button { border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 14px var(--sans); border-radius: 999px;
+  padding: 8px 16px; cursor: pointer; transition: border-color .12s, background .12s; }
+.nb-qs button:hover { border-color: var(--accent); }
+.nb-qs button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
+.nb-answer { margin-top: 12px; background: var(--card); border: 1px solid var(--line-2); border-radius: 12px; padding: 6px 0 0; }
+.nb-arow { padding: 10px 16px; }
+.nb-arow + .nb-arow { border-top: 1px solid var(--line-2); }
+.nb-atitle { font: 620 14.5px var(--sans); color: var(--ink); text-decoration: none; }
+a.nb-atitle:hover { color: var(--accent); }
+.nb-ameta { margin-left: 10px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nb-ameta .nb-cnt { margin-right: 6px; }
+.nb-aline { margin: 3px 0 0; color: var(--ink-2); font: 14.5px/1.55 var(--serif); }
+.nb-src { display: inline-block; margin-top: 4px; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.nb-src:hover { color: var(--accent); }
+.nb-asec { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.nb-asec b { color: var(--ink-2); font-weight: 620; }
+a.nb-aquote { display: block; margin-top: 6px; text-decoration: none; color: var(--ink-2); }
+a.nb-aquote:hover { color: var(--ink); background: var(--surface); }
+.nb-wait { margin: 0; padding: 14px 16px; color: var(--muted); font-size: 13.5px; }
+.nb-aacts { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line-2); margin-top: 6px; }
+.nb-aacts .nb-said { flex: 1; padding: 0 4px; }
+.nb-tg + .nb-tg { border-top: 1px solid var(--line-2); }
+.nb-tgh { display: flex; align-items: center; gap: 6px; padding: 8px 8px 4px 14px; font: 620 12.5px var(--sans); color: var(--ink); }
+.nb-tgh span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-ti { display: flex; align-items: center; gap: 4px; padding: 3px 8px 3px 22px; font-size: 13px; color: var(--ink-2); }
+.nb-ti span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-ti.k-hl span { font-family: var(--serif); }
+.nb-ti.k-ask span { font-weight: 600; }
+.nb-ti .nb-ico, .nb-tgh .nb-ico { opacity: 0; padding: 2px; }
+.nb-ti:hover .nb-ico, .nb-tgh:hover .nb-ico, .nb-ti .nb-ico:focus-visible, .nb-tgh .nb-ico:focus-visible { opacity: 1; }
+@media (hover: none) { .nb-ti .nb-ico, .nb-tgh .nb-ico { opacity: 1; } }
+.nb-ico svg { width: 15px; height: 15px; }
+.nb-said { color: var(--muted); font-size: 12.5px; }
+.nb-said:empty { display: none; }
+.nb-said.bad { color: var(--r-limitation); }
+.nb-btn { border: 1px solid var(--line); background: none; color: var(--ink-2); font: 550 13px var(--sans); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.nb-btn:hover { background: var(--surface); }
+.nb-btn.nb-del:hover { color: var(--r-limitation); border-color: currentColor; }
+.nb-go { border: 0; background: var(--btn); color: var(--on-btn); font: 620 13.5px var(--sans); border-radius: 8px; padding: 9px 18px; cursor: pointer; }
+.nb-go:hover { background: var(--btn-hover); }
+.nb-go:disabled, .nb-btn:disabled { opacity: .55; cursor: progress; }
+.nb-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 7; background: var(--ink); color: var(--surface);
+  border-radius: 10px; padding: 9px 10px 9px 16px; font-size: 13.5px; display: flex; gap: 12px; align-items: center; box-shadow: var(--pop); }
+.nb-toast button { border: 0; background: none; color: var(--accent-soft); font: 650 13.5px var(--sans); cursor: pointer; padding: 2px 6px; }
+.nb-tip { position: fixed; z-index: 9; pointer-events: none; background: var(--ink); color: var(--surface); font: 550 12px/1.35 var(--sans);
+  padding: 5px 8px; border-radius: 6px; white-space: nowrap; box-shadow: var(--pop); }
+
+@media (max-width: 1000px) {   /* narrower: the calendar above the questions and the rows */
+  .nb-main.nb-split { display: block; }
+  .nb-cal { position: static; height: auto; max-height: 52vh; margin-bottom: 16px; }
+}
+@media (max-width: 560px) {
+  .nb-wrap { padding: 0 16px; }
+  .nb-tdate { min-width: 0; }
+  .nb-ndetail { padding-left: 36px; }
+}

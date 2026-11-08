@@ -22,6 +22,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import __version__
+
+# every request to a provider says it is TextFold's (its /models too: providers.probe): a front such as Cloudflare's
+# refuses Python's own "Python-urllib/3.x" (error 1010, as Atlas Cloud's does, #115)
+UA = {"User-Agent": f"TextFold/{__version__}"}
 _WORKED = {}   # (base, model, level) -> index of the request shape that was accepted
 WAITS = (5, 15, 30, 45)   # seconds before asking again when rate-limited (free models: 20 requests a minute)
 
@@ -43,7 +48,7 @@ def auth(base, api_key):
 
 
 def _post(url, body, headers, timeout):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={**UA, **headers})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         kind = r.headers.get("Content-Type") or ""
         raw = r.read()
@@ -121,7 +126,9 @@ def reasoning(base, level):
         own = [{"reasoning": {"effort": level}}] if on else [{"reasoning": {"enabled": False}}, {"reasoning": {"effort": "low"}}]
     elif any(h in host for h in ("bigmodel.cn", "z.ai")):   # GLM: a level by reasoning_effort, off by the toggle (where it exists)
         own, generic = ([], generic + [toggle]) if on else ([toggle], generic)
-    elif any(h in host for h in ("deepseek.com", "moonshot.", "kimi.com")):
+    elif "deepseek.com" in host:   # on by the toggle, at its level by reasoning_effort: toggled on alone, it thinks at high
+        own = [{**toggle, "reasoning_effort": level}, toggle] if on else [toggle]
+    elif any(h in host for h in ("moonshot.", "kimi.com")):
         own = [toggle]
     elif "dashscope" in host:   # Qwen
         own = [{"enable_thinking": on, **({"thinking_budget": {"low": 2048, "medium": 8192}[level]} if level in ("low", "medium") else {})}]
