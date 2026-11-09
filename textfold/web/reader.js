@@ -3105,29 +3105,11 @@
     store.set(TYPE_KEY, JSON.stringify(type));
     applyType(); capEpoch++; warmSoon();
   }
-  // Aa can wrap to the left of the bar. Keep the menu on the reader's side of the divider.
-  function placeTypeMenu() {
-    const bar = typePick.parentElement.getBoundingClientRect(), inset = 8;
-    typeMenu.style.setProperty('--type-menu-max', `${Math.max(0, bar.width - 2 * inset)}px`);
-    const { right } = typePick.getBoundingClientRect(), { width } = typeMenu.getBoundingClientRect();
-    const anchor = right - width;
-    const left = Math.max(bar.left + inset, Math.min(anchor, bar.right - inset - width));
-    typeMenu.style.translate = left === anchor ? '' : `${left - anchor}px`;
-  }
-  const typeMenuResize = new ResizeObserver(placeTypeMenu);
-  function closeTypeMenu() {
-    typeMenuResize.disconnect();
-    typeMenu.hidden = true; typeBtn.setAttribute('aria-expanded', 'false');
-    typeMenu.style.translate = '';
-    typeMenu.style.removeProperty('--type-menu-max');
-  }
+  function closeTypeMenu() { typeMenu.hidden = true; typeBtn.setAttribute('aria-expanded', 'false'); }
   typeBtn.addEventListener('click', () => {
     if (!typeMenu.hidden) return closeTypeMenu();
     closeLangMenu();
     renderTypeMenu(); typeMenu.hidden = false; typeBtn.setAttribute('aria-expanded', 'true');
-    placeTypeMenu();
-    typeMenuResize.observe(typePick.parentElement);
-    typeMenuResize.observe(typeMenu);
   });
   typeMenu.addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -3174,6 +3156,22 @@
     notesChanged([...notesOf.keys()]);
   });
   (document.querySelector('.langpick') || document.getElementById('langbtn')).before(npick, typePick);
+
+  // The bar's menus (the notes, Aa, the language) open under their button, leftward from its right edge. Beside the
+  // PDF the bar is narrow and a button can wrap to its left edge: its menu would cross the divider, under the PDF pane
+  // (#126). An open menu is kept within the bar, as wide as the bar at most; a ResizeObserver sees one open (from no
+  // size to its own), its content change, and the bar resize as the divider moves.
+  const topbar = document.querySelector('.topbar');
+  function fitMenu(m) {
+    m.style.translate = m.style.minWidth = m.style.maxWidth = '';
+    if (m.hidden) return;
+    const bar = topbar.getBoundingClientRect(), inset = 8, room = Math.max(0, bar.width - 2 * inset);
+    if (m.offsetWidth > room) { m.style.minWidth = '0'; m.style.maxWidth = `${room}px`; }
+    const r = m.getBoundingClientRect(), left = Math.max(bar.left + inset, Math.min(r.left, bar.right - inset - r.width));
+    if (left !== r.left) m.style.translate = `${left - r.left}px`;
+  }
+  const menuFit = new ResizeObserver((rs) => rs.forEach((r) => (r.target === topbar ? topbar.querySelectorAll('.langmenu') : [r.target]).forEach(fitMenu)));
+  [topbar, ...topbar.querySelectorAll('.langmenu')].forEach((el) => menuFit.observe(el));
   function updateNotesBtn() {
     const t = T[ui], n = notes.filter((x) => shown(x.anchor)).length;
     nbtn.hidden = false;   // always there: the exports (the paper as PDF too) are in its menu
