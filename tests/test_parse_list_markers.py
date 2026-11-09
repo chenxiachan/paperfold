@@ -1,6 +1,14 @@
+"""A label (a list's marker, a section's number, a figure's label) and a link's text are read as the page shows them:
+a formula's annotations, its LaTeX or content MathML, are not drawn (RetrieveVGGT's markers read "∙\\bullet", #128).
+
+Run from the repo root:
+    python3 -m unittest tests.test_parse_list_markers
+"""
 import unittest
 
 from textfold.parse import parse
+
+DOT = r'<math><semantics><mo>∙</mo><annotation encoding="application/x-tex">\bullet</annotation></semantics></math>'
 
 
 class ParseListMarkersTest(unittest.TestCase):
@@ -32,3 +40,20 @@ class ParseListMarkersTest(unittest.TestCase):
                 atom, = doc["atoms"].values()
                 self.assertEqual(unit["marker"], expected)
                 self.assertEqual(atom["alt"], r"\bullet")
+
+    def test_a_number_a_label_and_a_link_as_shown(self):
+        doc = parse(rf'''
+            <article class="ltx_document">
+            <section class="ltx_section" id="S1"><h2 class="ltx_title ltx_title_section"><span class="ltx_tag ltx_tag_section">{DOT}1 </span>Results</h2>
+            <div class="ltx_para"><p class="ltx_p">As in <a class="ltx_ref" href="#S1"><span class="ltx_text ltx_ref_title">{DOT} Results</span></a>,
+              see <cite class="ltx_cite">Smith {DOT} Lee</cite>.</p></div>
+            <figure class="ltx_figure" id="F1"><img src="x.png"/>
+              <figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_figure">Figure 1{DOT}: </span>A figure.</figcaption></figure>
+            </section>
+            </article>
+        ''', {"id": "2601.00001", "title": "Labels"})
+        self.assertEqual(doc["chunks"][0]["num"], "∙1")
+        texts = sorted((a["kind"], a["text"]) for a in doc["atoms"].values() if a["kind"] in ("ref", "cite"))
+        self.assertEqual(texts, [("cite", "Smith ∙ Lee"), ("ref", "∙ Results")])
+        fig, = (b for b in doc["blocks"] if b["k"] == "fig")
+        self.assertEqual(fig["label"], "Figure 1∙")

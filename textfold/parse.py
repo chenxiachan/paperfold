@@ -13,6 +13,7 @@ paragraph keeps its id, and the notes and links on it, when the text
 around it is edited. An id written into the page when it was stored
 (data-u on a paragraph, data-s on a section: ids.py) comes first.
 """
+import copy
 import hashlib
 import re
 
@@ -109,6 +110,20 @@ def text_of(el):
     return "".join(text_of(c) for c in el.children)
 
 
+ANNOTATIONS = ("annotation", "annotation-xml")
+
+
+def shown(el, strip=False):
+    """An element's text as the page shows it. A formula's annotations (its LaTeX, its content MathML) are not drawn,
+    and get_text reads them too: a list marker of MathML read "∙\\bullet" (#128), a figure's label, a section's number or
+    a link with a formula in it would repeat their LaTeX the same way."""
+    if el.find(ANNOTATIONS):
+        el = copy.copy(el)
+        for a in el.find_all(ANNOTATIONS):
+            a.decompose()
+    return el.get_text("", strip=strip)
+
+
 def font_of(el, inherited):
     fonts = [c for c in el.get("class", []) if c.startswith("ltx_font_")]
     if el.name in ("em", "i") and not fonts:
@@ -134,9 +149,9 @@ def flatten(node, doc, toks, font=None):
         if ch.name == "math":
             atom(doc, toks, ch, "math", alt=math_alt(ch))
         elif ch.name == "cite":
-            atom(doc, toks, ch, "cite", text=ch.get_text(""))
+            atom(doc, toks, ch, "cite", text=shown(ch))
         elif ch.name == "a":
-            atom(doc, toks, ch, "ref", text=ch.get_text(""))
+            atom(doc, toks, ch, "ref", text=shown(ch))
         elif ch.name == "br":
             if toks:
                 toks[-1]["s"] = 1
@@ -221,7 +236,7 @@ def heading(el):
     if not h:
         return "", "", ""
     tag = h.find(class_="ltx_tag")
-    num = tag.get_text("", strip=True) if tag else ""
+    num = shown(tag, strip=True) if tag else ""
     if tag:
         tag.extract()
     html = h.decode_contents().strip()
@@ -261,11 +276,7 @@ def items(el):
     if el.name != "dl":
         for li in el.find_all("li", recursive=False):
             tag = li.find(class_="ltx_tag", recursive=False)
-            if tag:
-                # The marker is plain text. MathML annotations describe its glyphs but are not displayed.
-                for annotation in tag.select("math annotation, math annotation-xml"):
-                    annotation.extract()
-            yield (tag.get_text("", strip=True) if tag else "•"), li, tag
+            yield (shown(tag, strip=True) if tag else "•"), li, tag
         return
     for dt in el.find_all("dt", recursive=False):
         dd = dt.find_next_sibling("dd")
@@ -306,7 +317,7 @@ def figure(el, doc):
     label = ""
     if cap:
         tag = cap.find(class_="ltx_tag")
-        label = tag.get_text("", strip=True).rstrip(":").strip() if tag else ""
+        label = shown(tag, strip=True).rstrip(":").strip() if tag else ""
         if tag:  # the label is shown on its own at every level, so a caption cut to its key sentences keeps it
             tag.extract()
         cap_uid = add_unit(doc, cap, "caption", uid=fid + ".cap", of=fid)
