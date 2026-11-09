@@ -3103,11 +3103,29 @@
     store.set(TYPE_KEY, JSON.stringify(type));
     applyType(); capEpoch++; warmSoon();
   }
-  function closeTypeMenu() { typeMenu.hidden = true; typeBtn.setAttribute('aria-expanded', 'false'); }
+  // Aa can wrap to the left of the bar. Keep the menu on the reader's side of the divider.
+  function placeTypeMenu() {
+    const bar = typePick.parentElement.getBoundingClientRect(), inset = 8;
+    typeMenu.style.setProperty('--type-menu-max', `${Math.max(0, bar.width - 2 * inset)}px`);
+    const { right } = typePick.getBoundingClientRect(), { width } = typeMenu.getBoundingClientRect();
+    const anchor = right - width;
+    const left = Math.max(bar.left + inset, Math.min(anchor, bar.right - inset - width));
+    typeMenu.style.translate = left === anchor ? '' : `${left - anchor}px`;
+  }
+  const typeMenuResize = new ResizeObserver(placeTypeMenu);
+  function closeTypeMenu() {
+    typeMenuResize.disconnect();
+    typeMenu.hidden = true; typeBtn.setAttribute('aria-expanded', 'false');
+    typeMenu.style.translate = '';
+    typeMenu.style.removeProperty('--type-menu-max');
+  }
   typeBtn.addEventListener('click', () => {
     if (!typeMenu.hidden) return closeTypeMenu();
     closeLangMenu();
     renderTypeMenu(); typeMenu.hidden = false; typeBtn.setAttribute('aria-expanded', 'true');
+    placeTypeMenu();
+    typeMenuResize.observe(typePick.parentElement);
+    typeMenuResize.observe(typeMenu);
   });
   typeMenu.addEventListener('click', (e) => {
     const b = e.target.closest('button');
