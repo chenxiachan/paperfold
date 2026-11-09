@@ -261,6 +261,10 @@ def items(el):
     if el.name != "dl":
         for li in el.find_all("li", recursive=False):
             tag = li.find(class_="ltx_tag", recursive=False)
+            if tag:
+                # The marker is plain text. MathML annotations describe its glyphs but are not displayed.
+                for annotation in tag.select("math annotation, math annotation-xml"):
+                    annotation.extract()
             yield (tag.get_text("", strip=True) if tag else "•"), li, tag
         return
     for dt in el.find_all("dt", recursive=False):
