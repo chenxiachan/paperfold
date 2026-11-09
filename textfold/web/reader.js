@@ -338,7 +338,7 @@
     }
     const pcs = pieces(uid, L), frag = document.createDocumentFragment();
     const cuts = lang === 'th' ? thaiCuts(pcs) : null;
-    let group = null;
+    let group = null, mathGroup = null;
     pcs.forEach((p, n) => {
       let s = map.get(p.id);
       if (!s) { s = document.createElement('span'); s.dataset.id = p.id; map.set(p.id, s); }
@@ -348,9 +348,21 @@
       const last = n === pcs.length - 1;
       const space = !last && (p.gap || (p.tok && p.tok.s) || pcs[n + 1].gap);
       const glue = !last && !space && glued(p, pcs[n + 1], cuts && cuts.has(n));
-      if (glue) { if (!group) { group = document.createElement('span'); group.className = 'wg'; frag.appendChild(group); } group.appendChild(s); }
-      else if (group) { group.appendChild(s); group = null; }
-      else frag.appendChild(s);
+      if (glue && !group) { group = h('span', 'wg'); frag.appendChild(group); }
+      const nextText = glue ? pcs[n + 1].tok.t : '';
+      const closing = nextText?.length === 1 && CLOSE.test(nextText);
+      if (closing && (p.tok.x || A[p.tok.a]?.kind === 'math')) {
+        mathGroup = h('span', 'math-punctuation');
+        // Opening marks already in the same group need space on the formula's line as well.
+        for (let i = n - 1; group.lastChild && OPEN.test(pcs[i]?.tok?.t || ''); i--) {
+          mathGroup.prepend(group.lastChild);
+        }
+        group.appendChild(mathGroup);
+      }
+      const parent = mathGroup || group || frag;
+      parent.appendChild(s);
+      if (!closing) mathGroup = null;
+      if (!glue) group = null;
       if (space) {   // a space inside a highlight is highlighted too
         const both = p.hl && !last && pcs[n + 1].hl, found = p.fd && !last && pcs[n + 1].fd, put = p.rv !== undefined && !last && pcs[n + 1].rv === p.rv;
         frag.appendChild(both ? h('span', `hlsp${p.hl === pcs[n + 1].hl && p.sh === pcs[n + 1].sh ? hlCls(p).replace(' hl', '') : ''}`, ' ')
