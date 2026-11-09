@@ -433,9 +433,11 @@ figure.fig[data-l="1"]:has(.ltx_flex_cell + .ltx_flex_cell) .fbody { width: auto
 figure.fig[data-l="1"] .ltx_flex_cell img { max-height: 48px; width: auto !important; }
 figure.fig[data-l="0"] { display: inline-flex; margin: 0 4px 5px 0; }
 figure.fig[data-l="0"] .fbody { display: none; }
-figure.fig.fig-table[data-l="2"], figure.fig.fig-table[data-l="1"] { display: block; }
-figure.fig.fig-table[data-l="2"] .fbody, figure.fig.fig-table[data-l="1"] .fbody { display: none; }
-figure.fig.fig-table[data-l="2"] figcaption.u { padding-left: 18px; }
+/* a table, and a figure with no picture in it, show their caption alone at Key and Takeaway: the column beside the caption
+   is a picture's thumbnail, and words do not shrink into one (#119) */
+figure.fig:is(.fig-table, .fig-nopicture)[data-l="2"], figure.fig:is(.fig-table, .fig-nopicture)[data-l="1"] { display: block; }
+figure.fig:is(.fig-table, .fig-nopicture)[data-l="2"] .fbody, figure.fig:is(.fig-table, .fig-nopicture)[data-l="1"] .fbody { display: none; }
+figure.fig:is(.fig-table, .fig-nopicture)[data-l="2"] figcaption.u { padding-left: 18px; }
 figure.fig .flabel { display: inline; }
 figure.fig[data-l="4"] .flabel::after, figure.fig[data-l="3"] .flabel::after { content: "."; }
 figure.fig[data-l="4"] figcaption.u, figure.fig[data-l="3"] figcaption.u { display: block; }

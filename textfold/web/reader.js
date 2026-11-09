@@ -596,7 +596,10 @@
         target.append(unitNode(b.u, 'div'));
       } else if (b.k === 'fig') {
         list = null;
-        const f = h('figure', `fig fig-${b.kind}`); f.dataset.l = level;
+        // a captioned figure with no picture in it is laid out as a table is (reader.css: fig-nopicture): words alone (a
+        // table an engine gave as a list, #119; a box of text), or nothing (a teaser whose picture arXiv set apart)
+        const bare = b.cap && b.kind !== 'table' && !/<(img|svg|canvas|video)\b|pf-mermaid/i.test(b.html || '');
+        const f = h('figure', `fig fig-${b.kind}${bare ? ' fig-nopicture' : ''}`); f.dataset.l = level;
         if (b.id) f.id = b.id;
         if (!b.cap) { bareFigs.push(f); lvBlocks.push(f); }
         const fb = h('div', 'fbody', b.html); fb.dataset.id = `fb:${b.id}`;
