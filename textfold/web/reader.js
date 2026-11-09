@@ -268,18 +268,17 @@
   const rvDel = (d) => `<span class="rvdel${d.k === review.cur ? ' rvc' : ''}" data-was="${esc(d.was)}"></span>`;
 
   // where a line may break between two pieces written without a space: between Chinese characters yes (except
-  // before closing or after opening punctuation), inside a Latin word or formula group no
+  // before closing or after opening punctuation), after a Chinese stop or closing mark yes, whatever comes next (a
+  // formula, a Latin word, a number: "定义为：$x$", #127), inside a Latin word or formula group no
   const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;   // Han and kana break anywhere
   const CLOSE = /^[，。、；：！？）」』”’》%,.;:!?)\]]/;
   const OPEN = /[（「『“‘《([]$/;
-  const CJK_STOP = /^[，。、；：！？]$/;
+  const CJK_AFTER = /[，。、；：！？）」』》]$/;
   const textOf = (p) => p.gap ? '…' : (p.tok.t || 'A');
   function glued(p, q, cut) {
     const a = textOf(p), b = textOf(q);
     if (CLOSE.test(b) || OPEN.test(a)) return true;
-    // A stop in unspaced prose can introduce a formula. Keep math inside compounds such as d-dimensional.
-    if (CJK_STOP.test(a) && (q.tok?.x || A[q.tok?.a]?.kind === 'math')) return false;
-    return !(CJK.test(a) || CJK.test(b) || cut);
+    return !(CJK.test(a) || CJK_AFTER.test(a) || CJK.test(b) || cut);
   }
 
   // Thai is written without spaces and its tokens are syllables (tokens.py): a line may break only where the browser's
