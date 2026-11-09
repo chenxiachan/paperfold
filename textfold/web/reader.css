@@ -237,6 +237,10 @@ html[data-font="sans"] { --text: var(--sans); }
 .tk.at.wrap { white-space: normal; }
 .wg { display: inline-block; max-width: 100%; white-space: normal; }
 .tk.at.citation, .wg:has(> .tk.citation) { display: inline; }
+/* Start with the punctuation width, then give the formula the rest. Only the marks can force a wrap. */
+.math-punctuation { display: inline-flex; max-width: 100%; flex-wrap: wrap; align-items: baseline; }
+.math-punctuation > .tk { flex: none; }
+.math-punctuation > .tk.at { flex: 1 1 0; min-width: 1px; }
 /* An unusually long inline formula scrolls as a formula too. Scrolling an outer inline-block would move the
    baseline of every ordinary formula; keep the scroll box on the MathML (and its inline zoom copy). */
 :is(.u .tx, .zp.tx, :where(#ghosts) > .tx) math:not(.katex-mathml math), .zp.zi math:not(.katex-mathml math) { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
