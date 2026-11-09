@@ -272,10 +272,13 @@
   const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;   // Han and kana break anywhere
   const CLOSE = /^[，。、；：！？）」』”’》%,.;:!?)\]]/;
   const OPEN = /[（「『“‘《([]$/;
+  const CJK_STOP = /^[，。、；：！？]$/;
   const textOf = (p) => p.gap ? '…' : (p.tok.t || 'A');
   function glued(p, q, cut) {
     const a = textOf(p), b = textOf(q);
     if (CLOSE.test(b) || OPEN.test(a)) return true;
+    // A stop in unspaced prose can introduce a formula. Keep math inside compounds such as d-dimensional.
+    if (CJK_STOP.test(a) && (q.tok?.x || A[q.tok?.a]?.kind === 'math')) return false;
     return !(CJK.test(a) || CJK.test(b) || cut);
   }
 
