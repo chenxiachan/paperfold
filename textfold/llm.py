@@ -19,7 +19,6 @@ import hashlib
 import json
 import os
 import re
-import tempfile
 import threading
 from pathlib import Path
 
@@ -228,7 +227,7 @@ def _claude(prompt, schema, model, effort, timeout, system=SYSTEM, tools=False, 
     # The reader's own Claude Code settings and CLAUDE.md stay out (instructions for their work, ~900 tokens a call,
     # and a default effort meant for coding); a scratch folder has no project ones. Where Claude Code needs the user
     # settings to sign in, the call is made again with them.
-    with tempfile.TemporaryDirectory() as tmp:   # (looking it up on the web: with the user's own settings at once)
+    with agents.scratch() as tmp:   # (looking it up on the web: with the user's own settings at once)
         r = agents.run(cmd + ([] if tools else ["--setting-sources", "project,local"]), input=prompt, capture_output=True, text=True,
                        encoding="utf-8", errors="replace", timeout=timeout, env=env, cwd=tmp)
         if r.returncode and not tools:
@@ -236,7 +235,9 @@ def _claude(prompt, schema, model, effort, timeout, system=SYSTEM, tools=False, 
                            timeout=timeout, env=env, cwd=tmp)
     if r.returncode:
         raise RuntimeError(f"claude -p exited {r.returncode}: {(r.stderr or r.stdout)[-1500:]}")
-    d = json.loads(r.stdout)
+    d = agents.result_of(json.loads(r.stdout))
+    if d is None:
+        raise RuntimeError(f"claude -p: no result in its output: {r.stdout[-800:]}")
     if d.get("is_error"):
         raise RuntimeError(f"claude -p error: {str(d.get('result'))[:1500]}")
     out = d.get("structured_output")

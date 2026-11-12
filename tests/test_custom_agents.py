@@ -45,7 +45,7 @@ if sub == "claude":
         print("  --effort <level>    Effort level for the session (low, medium, high)")
     elif "-p" in args:
         record(sys.stdin.read())
-        print(json.dumps({"is_error": False, "result": "", "structured_output": {"takeaway": "Folded"}, "total_cost_usd": 0.01}))
+        print(json.dumps({"type": "result", "is_error": False, "result": "", "structured_output": {"takeaway": "Folded"}, "total_cost_usd": 0.01}))
 elif sub == "codex":
     if "--version" in args:
         print("codex-cli 0.50.0")

@@ -55,7 +55,9 @@ class Parts(unittest.TestCase):
         self.pid = local.import_text(f"# A book\n\n## Long\n\n{long}\n\n## Short\n\nOne line here. And one more.\n\nA second one.\n")
 
     def build(self, model):
-        doc = store.assemble(self.pid)
+        # parsed, as a generation reads it (pipeline.generate): no unit has levels yet. (store.assemble gives every one
+        # its own first, so a part that failed hid its units' missing levels from the folding after it: #130)
+        doc = store.parsed(self.pid)
         with mock.patch.object(llm, "call", model):
             ladder.build(doc, CFG, self.tmp / "cache", jobs=3, log=lambda *a: None)
         return doc, {c["title"]: c for c in doc["chunks"]}

@@ -629,7 +629,8 @@ def fold_background(chunk, doc):
     """
     U, section = doc["units"], chunk.get("lad")
     lads = [(uid, U[uid].get("lad") or {}) for uid in chunk["units"]]
-    text = "".join(tk.get("t") or "" for _, l in lads for tk in l["brief"][:l.get("tn") or 0])
+    # (a unit of a part whose call failed has no levels yet: its own are made once every section is in, #130)
+    text = "".join(tk.get("t") or "" for _, l in lads for tk in (l.get("brief") or [])[:l.get("tn") or 0])
     if not cjk_doc(doc) or _cjk_share(text) <= 0.2:
         return      # an English paper folds exactly as it did before: these thresholds were set on Chinese theses
     first = next((i for i, (_, l) in enumerate(lads) if l.get("brief") and l.get("tn")), None)

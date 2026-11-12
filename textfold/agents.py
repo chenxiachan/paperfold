@@ -21,6 +21,7 @@ tools, its own system prompt with ours after it, and nothing that changes a file
 and WebFetch alone, no MCP server; Pi: its extensions' tools, none of its own; Codex: its web search, in the read-only
 sandbox it always runs in, where it may read but writes nothing). Still no session, and the scratch directory to start in.
 """
+import contextlib
 import glob
 import json
 import os
@@ -803,6 +804,29 @@ def parse_json(text, schema=None):
     raise RuntimeError("no JSON in reply" if "{" not in text else "the reply's JSON does not parse")
 
 
+@contextlib.contextmanager
+def scratch():
+    """A scratch folder for one call, the agent's working directory there (no project, nothing to read or edit),
+    removed after. On Windows a folder that a process still has as its working directory cannot be removed
+    (WinError 32): one the agent started and left running, or one its ended tree has not let go of yet. It is then
+    left to the system's own cleaning of its temp folder, and the call ends as it would have: its reply read, or its
+    own error, where the folder's error stood in for both (#130)."""
+    tmp = tempfile.mkdtemp()
+    try:
+        yield tmp
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def result_of(got):
+    """The result of claude -p --output-format json (CodeBuddy's too): the one object, or, where the run is verbose,
+    every message of it, the result last. Claude Code is verbose where its user turned Verbose output on in /config:
+    a setting of theirs, which a scratch folder and --setting-sources leave on (#130); CodeBuddy always is. None:
+    no result there."""
+    rows = got if isinstance(got, list) else [got]
+    return next((x for x in reversed(rows) if isinstance(x, dict) and x.get("type") == "result"), None)
+
+
 def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=None):
     """(cmd: the command that starts it, a custom agent's; else the Codex found here)"""
     if cmd is None:
@@ -810,7 +834,7 @@ def run_codex(model, prompt, schema, system, effort, timeout, tools=False, cmd=N
         if not path:
             raise RuntimeError("Codex was not found on this computer")
         cmd = argv(path)
-    with tempfile.TemporaryDirectory() as tmp:  # a scratch cwd: no repository, nothing to edit
+    with scratch() as tmp:  # a scratch cwd: no repository, nothing to edit
         sf, of = Path(tmp) / "schema.json", Path(tmp) / "out.txt"
         sf.write_text(json.dumps(_strict(schema)), encoding="utf-8")
         # (tools: its web search too; the sandbox stays read-only)
@@ -882,7 +906,7 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
         args += ["--effort", "minimal" if effort == "off" else effort]   # (no level off: the least)
     env = env_for(path)
     signed_out = lambda r: "Authentication required" in r.stdout + r.stderr   # (it says so at once, exit 0, and does not wait)
-    with tempfile.TemporaryDirectory() as tmp:   # a scratch cwd: no project, nothing to read
+    with scratch() as tmp:   # a scratch cwd: no project, nothing to read
         r = run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=timeout, env=env, cwd=tmp)
         if signed_out(r) and env.pop("CODEBUDDY_CONFIG_DIR", None):   # not in WorkBuddy's settings: CodeBuddy's own sign-in
@@ -900,8 +924,7 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
         if r.returncode == 0 and r.stdout.strip():   # (finished, its output cut short: #99)
             raise RuntimeError(f"codebuddy -p: its output is not whole JSON, cut off after: {r.stdout[-300:]}")
         raise RuntimeError(f"codebuddy -p exited {r.returncode}: {said}")
-    rows = got if isinstance(got, list) else [got]
-    res = next((x for x in reversed(rows) if isinstance(x, dict) and x.get("type") == "result"), None)
+    res = result_of(got)
     if res is None:
         raise RuntimeError(f"codebuddy -p exited {r.returncode} with no result: {said}")
     if res.get("is_error"):
@@ -913,7 +936,7 @@ def run_codebuddy(model, prompt, schema, system, effort, timeout, tools=False):
 
 
 def _pi_once(args, body, schema, timeout):
-    with tempfile.TemporaryDirectory() as tmp:
+    with scratch() as tmp:
         r = run(args, input=body, capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=timeout, env=child_env(), cwd=tmp)
     text, cost = None, None
