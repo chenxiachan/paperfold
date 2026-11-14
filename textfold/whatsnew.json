@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.10.52",
+    "en": [
+      ["Antigravity as a local agent (experimental)", "If Google's Antigravity CLI (agy) is on your computer and signed in, TextFold finds it and lists its models in Settings, as it does Claude Code and Codex."],
+      ["Claude Code with Verbose output", "With Verbose output turned on in Claude Code's /config, every generation used to fail. TextFold now reads its replies either way."]
+    ],
+    "zh": [
+      ["Antigravity 成为本机 Agent（试验）", "电脑上装了 Google 的 Antigravity 命令行（agy）并已登录的话，TextFold 会自动找到它，在设置里列出它的模型，和 Claude Code、Codex 一样。"],
+      ["Claude Code 打开 Verbose 也能用", "以前在 Claude Code 的 /config 里打开 Verbose output，每次生成都会失败。现在两种输出 TextFold 都能读。"]
+    ]
+  },
+  {
     "version": "0.10.47",
     "en": [
       ["🚀 Your notes, all in one place (beta)", "Every highlight, note and question you've left in your texts now gathers under Notes, at the bottom of the sidebar. Wondering \"What did I read today?\" or \"What have I been chewing on this month?\" Click a day or a month on the calendar, or drag across a stretch of days, and there it is."],
