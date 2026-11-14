@@ -190,7 +190,7 @@ def _once(prompt, schema, spec, timeout, system):
                 raise RuntimeError(f"{spec['agent']}: {spec['command'].split()[0]} was not found on this computer")
             if spec["protocol"] == "claude-code":
                 return _claude(prompt, schema, spec["model"], effort, timeout, system, tools, cmd=found[0])
-            run = agents.run_codex if spec["protocol"] == "codex" else agents.run_pi
+            run = {"codex": agents.run_codex, "agy": agents.run_agy}.get(spec["protocol"], agents.run_pi)
             return run(spec["model"], prompt, schema, system, effort, timeout, tools, cmd=found[0])
         if spec["runtime"] == "claude-code":
             return _claude(prompt, schema, spec["model"], effort, timeout, system, tools)
@@ -198,6 +198,8 @@ def _once(prompt, schema, spec, timeout, system):
             return agents.run_codex(spec["model"], prompt, schema, system, effort, timeout, tools)
         if spec["runtime"] == "codebuddy":
             return agents.run_codebuddy(spec["model"], prompt, schema, system, effort, timeout, tools)
+        if spec["runtime"] == "agy":
+            return agents.run_agy(spec["model"], prompt, schema, system, effort, timeout, tools)
         return agents.run_pi(spec["model"], prompt, schema, system, effort, timeout, tools)
     if spec["protocol"] == "anthropic":
         return _anthropic(prompt, schema, spec, timeout, system)
