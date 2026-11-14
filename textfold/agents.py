@@ -1040,8 +1040,7 @@ def run_agy(model, prompt, schema, system, effort, timeout, tools=False, cmd=Non
                 got["result"] = d
         return got["finish"] is not None or got["result"] is not None
 
-    tmp = tempfile.mkdtemp()   # (a scratch cwd, no project; removed with what is left in it: 3.9 has no ignore_cleanup_errors)
-    try:
+    with scratch() as tmp:   # a scratch cwd, no project
         folder = Path(tmp) / ".agents" / "agents"
         folder.mkdir(parents=True)
         (folder / "textfold.md").write_text(agent, encoding="utf-8")
@@ -1056,8 +1055,6 @@ def run_agy(model, prompt, schema, system, effort, timeout, tools=False, cmd=Non
             answered(last=True)
             err.seek(0)
             said = err.read().decode("utf-8", errors="replace").strip()[-800:]
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
     res = got["result"] or {}
     if got["finish"] is not None:
         return got["finish"], None

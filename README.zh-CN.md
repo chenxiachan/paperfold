@@ -160,7 +160,7 @@ TextFold 用你已有的模型，不需要注册账号。启动时它会自己�
 
 | 你有 | 怎么做 |
 |---|---|
-| Claude Code、Codex、Pi 或 WorkBuddy | 什么都不用做，TextFold 会自动找到并使用。WorkBuddy（试验）用你登录的账号和它的模型；单独安装的 CodeBuddy 命令行也可以。 |
+| Claude Code、Codex、Pi、WorkBuddy 或 Antigravity | 什么都不用做，TextFold 会自动找到并使用。WorkBuddy（试验）用你登录的账号和它的模型；单独安装的 CodeBuddy 命令行也可以。Antigravity 的命令行 agy（试验）用你的 Google 账号。 |
 | ChatGPT 订阅 | 点 **使用我的 ChatGPT 订阅**。电脑上会启动一个小的本地桥，用你的账号登录（需要 Node.js）。 |
 | 什么都还没有 | 点 **OpenRouter 一键授权**。授权一次，免费模型马上可用。 |
 | 一个 API key | **设置 › 添加供应商**：Anthropic、OpenAI、DeepSeek、通义千问、智谱 GLM、Kimi、MiniMax、Google、Ollama，或任何 OpenAI 兼容接口。 |
@@ -382,6 +382,7 @@ TextFold 只是一个工具，它的许可证只管代码。分享文件时，�
 <a href="https://github.com/xieguaiwu" title="@xieguaiwu"><img src="https://github.com/xieguaiwu.png?size=80" width="40" height="40" alt="@xieguaiwu" /></a>
 <a href="https://github.com/ShiTan-677" title="@ShiTan-677"><img src="https://github.com/ShiTan-677.png?size=80" width="40" height="40" alt="@ShiTan-677" /></a>
 <a href="https://github.com/SockingPanda" title="@SockingPanda"><img src="https://github.com/SockingPanda.png?size=80" width="40" height="40" alt="@SockingPanda" /></a>
+<a href="https://github.com/Ekuboh" title="@Ekuboh"><img src="https://github.com/Ekuboh.png?size=80" width="40" height="40" alt="@Ekuboh" /></a>
 
 欢迎贡献：先看 [CONTRIBUTING.md](https://github.com/chenxiachan/textfold/blob/main/CONTRIBUTING.md)。
 

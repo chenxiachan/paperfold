@@ -160,7 +160,7 @@ TextFold uses a model you already have, and there is no account to create. It lo
 
 | You have | What to do |
 |---|---|
-| Claude Code, Codex, Pi or WorkBuddy | Nothing. TextFold finds it and uses it. WorkBuddy (experimental) brings its models, on your WorkBuddy sign-in; CodeBuddy's own CLI works too. |
+| Claude Code, Codex, Pi, WorkBuddy or Antigravity | Nothing. TextFold finds it and uses it. WorkBuddy (experimental) brings its models, on your WorkBuddy sign-in; CodeBuddy's own CLI works too. Antigravity's CLI, agy (experimental), runs on your Google sign-in. |
 | A ChatGPT plan | Click **Use my ChatGPT plan**. A small bridge starts on your computer and signs in with your account (needs Node.js). |
 | Nothing yet | Click **OpenRouter in one click**. Authorize once, and free models are ready. |
 | An API key | **Settings › Add provider**: Anthropic, OpenAI, DeepSeek, Qwen, Zhipu GLM, Kimi, MiniMax, Google, Ollama, or any OpenAI-compatible endpoint. |
@@ -382,6 +382,7 @@ TextFold is a tool, and its license covers its code. When you share a file, foll
 <a href="https://github.com/xieguaiwu" title="@xieguaiwu"><img src="https://github.com/xieguaiwu.png?size=80" width="40" height="40" alt="@xieguaiwu" /></a>
 <a href="https://github.com/ShiTan-677" title="@ShiTan-677"><img src="https://github.com/ShiTan-677.png?size=80" width="40" height="40" alt="@ShiTan-677" /></a>
 <a href="https://github.com/SockingPanda" title="@SockingPanda"><img src="https://github.com/SockingPanda.png?size=80" width="40" height="40" alt="@SockingPanda" /></a>
+<a href="https://github.com/Ekuboh" title="@Ekuboh"><img src="https://github.com/Ekuboh.png?size=80" width="40" height="40" alt="@Ekuboh" /></a>
 
 Contributions are welcome: start with [CONTRIBUTING.md](https://github.com/chenxiachan/textfold/blob/main/CONTRIBUTING.md).
 

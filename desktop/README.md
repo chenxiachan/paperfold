@@ -1,7 +1,7 @@
 # TextFold as an app
 
 The same local server and reader in one window, with its own Python, so a reader needs nothing installed. Agents
-on the computer (Claude Code, Codex, Pi, WorkBuddy), the ChatGPT bridge and API providers work as they do in the browser.
+on the computer (Claude Code, Codex, Pi, WorkBuddy, Antigravity), the ChatGPT bridge and API providers work as they do in the browser.
 What you read is kept where `python3 -m textfold serve` keeps it, so the two share one library: on a Mac
 `~/Library/Application Support/TextFold/`, on Windows `%LOCALAPPDATA%\TextFold\`. Settings and keys are in
 `~/.textfold/`. `TEXTFOLD_DATA` points the app at another folder, as it does the server.
